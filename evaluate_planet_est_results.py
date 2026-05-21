@@ -13,20 +13,38 @@ from examples.use_cases.DC18_classes import DC18Answers
 
 def get_results():
     results = []
-    log_files = glob.glob('temp_output/W*/WFIRST*.log')
+    log_files = glob.glob('temp_output/W*/WFIRST.*.log')
+    #log_files = glob.glob('temp_output/W004/WFIRST.004.log')
+    failed = []
+    hm = []
+    print('\nTotal Fits:', len(log_files), '\n')
     for log_file in log_files:
-        print(log_file)
+        lc_num = int(os.path.basename(log_file).split('.')[1])
+        print(lc_num, log_file)
         with open(log_file) as f:
             for line in reversed(f.readlines()):
+                #print(line)
+                #print(line.startswith("Estimated binary params"))
                 if line.startswith("Estimated binary params"):
                     dict_str = line.split(": ", 1)[1]  # Split on first ": " only
                     dict_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', dict_str)
+                    #print(dict_str)
                     params = ast.literal_eval(dict_str)
-                    params['idx'] = int(os.path.basename(log_file).split('.')[1]) - 1
+                    params['idx'] = lc_num - 1
+                    params['t_0'] -= 2458234.
                     # idx = lc_num - 1
                     results.append(params)
                     break
 
+                if line.strip().endswith("high_mag"):
+                    hm.append(lc_num)
+                    break
+            else:
+                failed.append(lc_num)
+
+    print('\nclassified as hm:', sorted(hm))
+    print('Total: ', len(hm), '\n')
+    print('\nest_binary_params failed: ', sorted(failed), '\nTotal: ', len(failed), '\n')
     return pd.DataFrame(results)
 
 
@@ -47,7 +65,10 @@ class EvaluateResults():
         print_columns = ['idx', 't_0', 't0_true', 'u_0', 'u0_true', 't_E', 'tE_true', 'rho', 'rhos_true',
                          's', 's_true', 'q', 'q_true', 'alpha', 'alpha_true']
 
-        print(self.results[print_columns].sort_values('idx'))
+        print('\nsucceeded:', len(self.results))
+        with pd.option_context('display.width', None):
+              print(self.results[print_columns].sort_values('idx'))
+
 
     def _make_scatter_plot(self, key, log=False):
         if key == 'rho':
@@ -65,25 +86,43 @@ class EvaluateResults():
         if log:
             delta = np.log10(fit_value) - np.log10(true_value)
             value = np.log10(true_value)
-            xlabel = f'log {key}_true'
-            ylabel = f'Delta log {key}'
+            xlabel = f'log ({key}_true)'
+            ylabel = f'log ({key} - True)'
+            ylim = (-1.5, 1.5)
+
         else:
             delta = fit_value - true_value
             value = true_value
             xlabel = f'{key}_true'
-            ylabel = f'Delta {key}'
+            ylabel = f'{key} - True'
+            ylim = None
 
         colors = np.where(self.results['s_true'] < 1, 'darkorange', 'darkcyan')
         facecolors = np.where(self.results['q_true'] < 0.03, colors, 'none')
-        low_mag = self.results['u0_true'] > 0.05
+        low_mag = self.results['u0_true'].abs() > 0.05
 
-        for mask, marker in zip([low_mag, ~low_mag], ['o', '^']):
+        for mask, marker in zip([low_mag, ~low_mag], ['o', 'd']):
             plt.scatter(
                 value[mask], delta[mask] / value[mask],
-                c=colors[mask], facecolors=facecolors[mask], marker=marker)
+                c=colors[mask], facecolors=facecolors[mask], marker=marker,
+                clip_on=False, zorder=3,)
+
+        if log:
+            # Define masks for each out-of-range direction
+            mask_above = delta > ylim[1]
+            mask_below = delta < ylim[0]
+
+            # Plot out-of-range points as triangles at the plot edge
+            plt.scatter(value[mask_above], np.full(mask_above.sum(), ylim[1]),
+                        marker='^', c=colors[mask_above], facecolors=facecolors[mask_above],
+                        clip_on=False, zorder=3,)
+            plt.scatter(value[mask_below], np.full(mask_below.sum(), ylim[0]),
+                        marker='v', c=colors[mask_below], facecolors=facecolors[mask_below],
+                        clip_on=False, zorder=3,)
 
         plt.xlabel(xlabel)
         plt.ylabel(ylabel)
+        plt.ylim(ylim)
         plt.minorticks_on()
         plt.tight_layout()
 
