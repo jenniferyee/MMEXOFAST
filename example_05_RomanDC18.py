@@ -54,8 +54,12 @@ big_wide_planets = [4, 62]
 close_planets = [32, 40, 50, 74, 92, 95, 87,  186, 227]
 big_close_planets = [27, 120, 124, 128, 172]
 
-lc_nums = close_planets
+#lc_nums = wide_planets[-1:]
 for lc_num in np.sort(lc_nums):
+    output_dir = os.path.join(base_dir, 'W{0:03}'.format(lc_num))
+    if os.path.exists(output_dir):
+        continue
+
     print('\n...Fitting light curve {0}...'.format(lc_num))
     try:
         results = fit_lc(lc_num, verbose=True)
