@@ -1,12 +1,13 @@
 import os.path
-import exozippy
 import numpy as np
 import pandas as pd
-import MulensModel as mm
 from astropy.coordinates import SkyCoord
 import matplotlib.pyplot as plt
 
-dir_ = os.path.join(exozippy.MULENS_DATA_PATH, "../2018DataChallenge")
+import MulensModel as mm
+from mmexofast.config import DATA_PATH
+
+dir_ = os.path.join(DATA_PATH, "../2018DataChallenge")
 
 event_info = np.genfromtxt(
     os.path.join(dir_, 'event_info.txt'), dtype=None, encoding='utf-8',

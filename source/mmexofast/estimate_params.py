@@ -1138,12 +1138,23 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
 
 
 class ClosePlanetGridSearchEstimator(WidePlanetGridSearchEstimator, ClosePlanetParameterEstimator):
-    pass
+
+    @property
+    def s_values(self):
+        """Close planets need a wider range of possible s values because of non-caustic crossing values"""
+        if self._s_grid is not None:
+            return self._s_grid
+
+        d_s = self.d_s if self.d_s is not None else 0.05 * self.s
+        n_s = self.n_s if self.n_s is not None else 7
+        s_offset = np.arange(n_s) - (n_s - 1) / 2
+        s_values = self.s + s_offset * d_s
+        return s_values[s_values < 1.]
 
 
 def model_pspl_mag_at_pl(params):
     """
-    Gets the magnification at second lense time assuming point lense model.
+    Gets the magnification at anomaly time assuming point lens model.
 
     Arguments :
         params: *dictionary*

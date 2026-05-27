@@ -4,14 +4,16 @@ Analyze a planet light curve from the 2018 Data Challenge. Minimal user effort.
 import os.path
 import glob
 import numpy as np
-import exozippy
 import traceback
 
+
+from mmexofast.config import MODULE_PATH
+import mmexofast as mmexo
 from examples.DC18_classes import dir_, TestDataSet
 
 
 base_dir = os.path.join(
-            exozippy.MODULE_PATH, 'EXOZIPPy', '../DC18Test', 'temp_output', 'no_par')
+            MODULE_PATH, 'EXOZIPPy', '../DC18Test', 'temp_output', 'no_par')
 
 
 def fit_lc(lc_num, verbose=False):
@@ -20,14 +22,14 @@ def fit_lc(lc_num, verbose=False):
     os.makedirs(output_dir, exist_ok=True)
 
     file_prefix = 'WFIRST.{0:03}'.format(lc_num)
-    fitter = exozippy.mmexofast.mmexofast.fit(
+    mmexo.mmexofast.fit(
         files=[data.file_w149, data.file_z087], coords=data.coords, fit_type='binary_lens',
         verbose=verbose, renormalize_errors=False,
         no_parallax=True,
         log_file=os.path.join(output_dir, file_prefix + '.log'),
         restart_file=os.path.join(output_dir, file_prefix + '.pkl'),
         stop_after='fit_binary_lens:est_binary_params',
-        output_config=exozippy.mmexofast.OutputConfig(
+        output_config=mmexo.OutputConfig(
             output_dir=output_dir, file_prefix=file_prefix, save_plots=True, save_table=True,
             save_exozippy_init=False)
     )
@@ -55,27 +57,10 @@ big_wide_planets = [4, 62]
 close_planets = [32, 40, 50, 74, 92, 95, 87,  186, 227]
 big_close_planets = [27, 120, 124, 128, 172]
 slow_parallax = [124, 128, 217] # 66 is broke
+dip_anom = [47, 74, 95, 103]
 
-# Missing events:
-#print(len(lc_nums))
-#print(lc_nums)
-#keep = []
-#for i, lc_num in enumerate(lc_nums):
-#    output_dir = os.path.join(base_dir, 'W{0:03}'.format(lc_num))
-#    if not os.path.exists(output_dir):
-#        keep.append(lc_num)
-#
-#print(len(keep))
-#print(keep)
-
-#lc_nums = wide_planets[-1:]
-#lc_nums = [47, 62, 69, 78, 103, 163]
-#lc_nums = slow_parallax
+lc_nums = dip_anom
 for lc_num in np.sort(lc_nums):
-    #output_dir = os.path.join(base_dir, 'W{0:03}'.format(lc_num))
-    #if not os.path.exists(output_dir):
-    #    continue
-
     print('\n...Fitting light curve {0}...'.format(lc_num))
     try:
         results = fit_lc(lc_num, verbose=True)
