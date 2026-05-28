@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-from examples.use_cases.DC18_classes import DC18Answers
+from examples.DC18_classes import DC18Answers
 
 
 def get_results():

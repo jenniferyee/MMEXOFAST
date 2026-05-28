@@ -10,6 +10,8 @@ from itertools import product
 import pandas as pd
 import numpy as np
 from scipy.optimize import minimize
+from scipy.signal import find_peaks
+import scipy.stats
 from matplotlib.gridspec import GridSpec
 import matplotlib.pyplot as plt
 import warnings
@@ -1253,7 +1255,9 @@ class AnomalyPropertyEstimator():
     # TODO: The old version revised the PSPL parameters after masking the anomaly.
     # Could consider whether it would be a good idea to reimplement that.
 
-    def __init__(self, datasets=None, pspl_params=None, af_results=None, coords=None, mask_type='t_eff', n_mask=3):
+    def __init__(self,
+                 datasets=None, pspl_params=None, af_results=None, coords=None, mask_type='t_eff', n_mask=3,
+                 importance_threshold=0.2):
         if isinstance(datasets, MulensModel.MulensData):
             datasets = [datasets]
 
@@ -1262,6 +1266,7 @@ class AnomalyPropertyEstimator():
         self.af_results = af_results
         self.coords = coords
         self.n_mask = n_mask
+        self.importance_threshold = importance_threshold
 
         self.anom_t_range_af = self.af_results['t_0'] + self.n_mask * np.array(
             [-1, 1]) * self.af_results['t_eff']
@@ -1270,6 +1275,7 @@ class AnomalyPropertyEstimator():
         self._peak_dflux = None
         self._t_start = None
         self._t_stop = None
+        self.all_peaks = None
 
         self._pspl_event = None
         self._source_flux = None
@@ -1332,8 +1338,9 @@ class AnomalyPropertyEstimator():
                 return 'negative'
 
     def set_anom_prop(self):
-        self._peak_dflux, self._peak_index, self._t_start, self._t_stop = self.find_extremum(
-            method='rolling')
+        if self._peak_dflux is None:
+            self._peak_dflux, self._peak_index, self._t_start, self._t_stop = self.find_extremum(
+                method='rolling')
 
     def get_anom_prop(self):
         if (self.peak_dflux is None) or (self.t_start is None) or (self.t_stop is None):
@@ -1374,28 +1381,81 @@ class AnomalyPropertyEstimator():
         #print('points', n_pts, 'window', window_size)
         return window_size
 
+    def _find_all_extrema(self, res_rolling_mean, prominence):
+        """Find all local extrema in the smoothed residuals, returning a list
+        of dicts with peak_index and peak_dflux."""
+        pos_indices, _ = find_peaks(res_rolling_mean, prominence=prominence)
+        neg_indices, _ = find_peaks(-res_rolling_mean, prominence=prominence)
+
+        peaks = []
+        for idx in pos_indices:
+            peaks.append({'peak_index': idx, 'peak_dflux': res_rolling_mean[idx]})
+        for idx in neg_indices:
+            peaks.append({'peak_index': idx, 'peak_dflux': res_rolling_mean[idx]})
+
+        if len(peaks) == 0:
+            # Fallback for monotonic signal: use global extremum
+            max_idx = np.argmax(res_rolling_mean)
+            min_idx = np.argmin(res_rolling_mean)
+            if abs(res_rolling_mean[max_idx]) >= abs(res_rolling_mean[min_idx]):
+                peaks.append({'peak_index': max_idx, 'peak_dflux': res_rolling_mean[max_idx]})
+            else:
+                peaks.append({'peak_index': min_idx, 'peak_dflux': res_rolling_mean[min_idx]})
+
+        return peaks
+
+    def _select_dominant_peak(self, peaks):
+        """Select the dominant peak using importance_threshold to handle mixed-sign cases.
+
+        Cases:
+            1. All positive peaks: return biggest positive
+            2. All negative peaks: return biggest negative
+            3. Mixed:
+                a. |biggest_neg| > importance_threshold * |biggest_pos|: both important,
+                   return biggest by absolute amplitude
+                b. |biggest_neg| <= importance_threshold * |biggest_pos|: neg unimportant,
+                   return biggest positive
+        """
+        pos_peaks = [p for p in peaks if p['peak_dflux'] > 0]
+        neg_peaks = [p for p in peaks if p['peak_dflux'] < 0]
+
+        if len(pos_peaks) == 0:
+            # Case 2: all negative
+            return max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
+        elif len(neg_peaks) == 0:
+            # Case 1: all positive
+            return max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
+        else:
+            # Case 3: mixed
+            biggest_pos = max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
+            biggest_neg = max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
+            if abs(biggest_neg['peak_dflux']) <= self.importance_threshold * abs(biggest_pos['peak_dflux']):
+                # Case 3b: negative unimportant
+                return biggest_pos
+            else:
+                # Case 3a: negative important
+                return biggest_neg
+
     def _find_extremum_with_rolling_mean(self):
         window_size = self._get_window_size()
         kernel = np.ones(window_size) / window_size
-        #print('points:', np.sum(t_index), 'window:', window_size,
-        #      'half window:', int(window_size / 2))
 
         if (window_size > 0) and (window_size < np.sum(self.anom_index)):
-            chi2_rolling_mean = np.convolve(self.chi2s, kernel, mode='same')
-            peak_index = np.argmax(chi2_rolling_mean)
-
             res_rolling_mean = np.convolve(self.residuals, kernel, mode='same')
-            #print('rolling mean:', len(res_rolling_mean))
 
-            peak_dflux = res_rolling_mean[peak_index]
-            # start_dflux = res_rolling_mean[half_window]
-            # end_dflux = res_rolling_mean[-half_window]
+            noise = scipy.stats.median_abs_deviation(self.residuals)
+            prominence = 3. * noise
+
+            self.all_peaks = self._find_all_extrema(res_rolling_mean, prominence=prominence)
+            dominant_peak = self._select_dominant_peak(self.all_peaks)
+
+            peak_index = dominant_peak['peak_index']
+            peak_dflux = dominant_peak['peak_dflux']
 
             if peak_dflux > 0:
                 half_anomaly = res_rolling_mean > (peak_dflux / 2.)
             else:
                 half_anomaly = res_rolling_mean < (peak_dflux / 2.)
-                # raise NotImplementedError('negative perturbations not implemented')
 
             t_start = np.min(self.sorted_times[half_anomaly])
             t_stop = np.max(self.sorted_times[half_anomaly])
@@ -1421,6 +1481,16 @@ class AnomalyPropertyEstimator():
         plt.axvline(self.peak_time, color='darkgray', zorder=10, linestyle=':')
         plt.axvline(self.t_start, color='darkgray')
         plt.axvline(self.t_stop, color='darkgray')
+
+    def _plot_peak_lines_res(self):
+        self._plot_peak_lines()
+        plt.axhline(self.peak_dflux, color='darkgray', linestyle=':')
+        if self.all_peaks is not None:
+            for peak in self.all_peaks:
+                plt.scatter(
+                    self.sorted_times[peak['peak_index']], peak['peak_dflux'],
+                    marker='d', color='red', zorder=5)
+
         #plt.axvline(self.peak_time - self.peak_width / 2., color='darkgray')
         #plt.axvline(self.peak_time + self.peak_width / 2., color='darkgray')
 
@@ -1440,7 +1510,7 @@ class AnomalyPropertyEstimator():
         plt.title(self.anom_type)
         plt.axhline(0, color='black')
         plt.scatter(self.sorted_times, self.residuals)
-        self._plot_peak_lines()
+        self._plot_peak_lines_res()
         self._plot_af_lines()
         self._setup_anom_xaxis()
         plt.ylabel('res')
