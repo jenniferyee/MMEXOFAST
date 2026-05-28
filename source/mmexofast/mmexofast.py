@@ -880,6 +880,9 @@ class MMEXOFASTFitter:
         completed_ids = {
             (step.name, step.stage) for step in self.completed_steps
         }
+        for (name, stage) in completed_ids:
+            if f'{stage}:{name}' in (self.stop_before, self.stop_after):
+                return []
 
         if self.fit_type == 'point_lens':
             all_steps = self._build_point_lens_steps()
