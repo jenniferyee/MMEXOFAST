@@ -22,7 +22,7 @@ def fit_lc(lc_num, verbose=False):
     os.makedirs(output_dir, exist_ok=True)
 
     file_prefix = 'WFIRST.{0:03}'.format(lc_num)
-    fitter = mmexo.mmexofast.fit(
+    fitter = mmexo.MMEXOFASTFitter(
         files=[data.file_w149, data.file_z087], coords=data.coords, fit_type='binary_lens',
         verbose=verbose, renormalize_errors=False,
         no_parallax=True,
@@ -33,6 +33,8 @@ def fit_lc(lc_num, verbose=False):
             output_dir=output_dir, file_prefix=file_prefix, save_plots=True, save_table=True,
             save_exozippy_init=False)
     )
+    fitter.fit()
+    print(fitter.initialize_exozippy())
     #results = fitter.all_fit_results
 
 
@@ -58,7 +60,7 @@ big_close_planets = [27, 120, 124, 128, 172]
 slow_parallax = [124, 128, 217] # 66 is broke
 dip_anom = [47, 74, 95, 103]
 
-lc_nums = [53]
+lc_nums = [32]#, 53]
 for lc_num in np.sort(lc_nums):
     print('\n...Fitting light curve {0}...'.format(lc_num))
     try:

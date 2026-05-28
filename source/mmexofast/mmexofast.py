@@ -1767,6 +1767,8 @@ class MMEXOFASTFitter:
                     logger.info('Alternate s_dagger solution: %s', s_dagger.ulens)
                     est_params[class_name + '_alt'] = s_dagger
 
+                self.mag_methods = params.mag_methods
+
         self.intermediate_results.est_binary_params = est_params
         if (self._output_config is not None) and self._output_config.save_plots:
             self._plot_initial_2L1S_guess()
@@ -1784,6 +1786,7 @@ class MMEXOFASTFitter:
         best_pspl = self.select_best_point_lens_model()
         sigmas = dict(best_pspl.sigmas)
 
+        raise NotImplementedError('fit_binary_models needs to be updated to work with multiple est_binary_params')
         t_E = self.intermediate_results.est_binary_params['t_E']
         u_0 = self.intermediate_results.est_binary_params['u_0']
         max_sigma_u_0 = 0.1
@@ -2287,17 +2290,15 @@ class MMEXOFASTFitter:
 
     def _get_anomaly_source_plane_region(self, event, planet_t_range):
         traj = event.model.get_trajectory(planet_t_range)
-        for i in [0, -1]:
-            print(planet_t_range[i], traj.times[i], traj.x[i], traj.y[i])
+        #for i in [0, -1]:
+        #    print(planet_t_range[i], traj.times[i], traj.x[i], traj.y[i])
 
         xlim = np.min(traj.x), np.max(traj.x)
         ylim = np.min(traj.y), np.max(traj.y)
-        print(xlim, ylim)
+        #print(xlim, ylim)
         delta = np.max((xlim[1] - xlim[0], ylim[1] - ylim[0]))
         xlim = np.mean(xlim) + np.array([-delta, delta])
         ylim = np.mean(ylim) + np.array([-delta, delta])
-        print(delta)
-        print(xlim, ylim)
         return xlim, ylim
 
     def _plot_event(self, event, n_tE=5, suptitle=None):
@@ -2806,28 +2807,55 @@ class MMEXOFASTFitter:
         NotImplementedError
             If ``fit_type`` is not ``'point_lens'``.
         """
-        if self.fit_type != 'point_lens':
+        if self.fit_type == 'point_lens':
+            fits = []
+            for key in self._iter_parallax_point_lens_keys():
+                record = self.all_fit_results.get(key)
+                if record is not None:
+                    fits.append(
+                        {
+                            'parameters': record.params,
+                            'sigmas':     record.sigmas,
+                        }
+                    )
+
+            return {
+                'fits':        fits,
+                'errfacs':     self.renorm_factors,
+                'mag_methods': self.mag_methods,
+            }
+        if self.fit_type == 'binary_lens':
+            fits = []
+
+            binary_lens_fits = [
+                rec for key, rec in self.all_fit_results.items()
+                if key.lens_type == LensType.BINARY
+            ]
+            if len(binary_lens_fits) > 0:
+                # Use real fits if they exist
+                for binary_fit in binary_lens_fits:
+                    fits.append(
+                        {
+                            'parameters': binary_fit.params,
+                            'sigmas': binary_fit.sigmas,
+
+                        }
+                    )
+            elif self.intermediate_results.est_binary_params is not None:
+                # otherwise, return the initial estimates
+                for key, params in self.intermediate_results.est_binary_params.items():
+                    fits.append({'parameters': params.ulens})
+
+        else:
             raise NotImplementedError(
-                'initialize_exozippy is currently only implemented for '
-                'point_lens fits.'
+                'initialize_exozippy not implemented for '
+                f'{self.fit_type}.'
             )
 
-        fits = []
-        for key in self._iter_parallax_point_lens_keys():
-            record = self.all_fit_results.get(key)
-            if record is not None:
-                fits.append(
-                    {
-                        'parameters': record.params,
-                        'sigmas':     record.sigmas,
-                    }
-                )
-
         return {
-            'fits':        fits,
-            'errfacs':     self.renorm_factors,
-            'mag_methods': self.mag_methods,
-        }
+            'fits': fits,
+            'errfacs': self.renorm_factors,
+            'mag_methods': self.mag_methods}
 
     # ------------------------------------------------------------------
     # Dunder helpers
