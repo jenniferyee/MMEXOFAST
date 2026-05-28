@@ -2285,13 +2285,33 @@ class MMEXOFASTFitter:
                 self.intermediate_results.best_af_grid_point['t_0'] + self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
                 color='black', linestyle='--')
 
+    def _get_anomaly_source_plane_region(self, event, planet_t_range):
+        traj = event.model.get_trajectory(planet_t_range)
+        for i in [0, -1]:
+            print(planet_t_range[i], traj.times[i], traj.x[i], traj.y[i])
+
+        xlim = np.min(traj.x), np.max(traj.x)
+        ylim = np.min(traj.y), np.max(traj.y)
+        print(xlim, ylim)
+        delta = np.max((xlim[1] - xlim[0], ylim[1] - ylim[0]))
+        xlim = np.mean(xlim) + np.array([-delta, delta])
+        ylim = np.mean(ylim) + np.array([-delta, delta])
+        print(delta)
+        print(xlim, ylim)
+        return xlim, ylim
+
     def _plot_event(self, event, n_tE=5, suptitle=None):
         if suptitle is None:
             suptitle = '{0}'.format(event.model.parameters)
 
-        plt.figure(figsize=(10, 6))
+        if event.model.n_lenses == 1:
+            panels = 2
+        else:
+            panels = 3
+
+        plt.figure(figsize=(5*panels, 6))
         plt.suptitle(suptitle)
-        plt.subplot(1, 2, 1)
+        plt.subplot(1, panels, 1)
         event.plot_data(show_bad=True, subtract_2450000=True)
         t_range = self._get_event_t_range(event, n_tE=n_tE)
         event.plot_model(
@@ -2303,7 +2323,7 @@ class MMEXOFASTFitter:
         plt.xlim(np.array(t_range) - 2450000.)
         plt.minorticks_on()
 
-        plt.subplot(1, 2, 2)
+        plt.subplot(1, panels, 2)
         event.plot_data(show_bad=True, subtract_2450000=True)
         if event.model.n_lenses > 1:
             planet_t_range = self._get_planet_t_range(event)
@@ -2315,6 +2335,15 @@ class MMEXOFASTFitter:
         plt.xlim(np.array(planet_t_range) - 2450000.)
         plt.minorticks_on()
 
+        if panels > 2:
+            plt.subplot(1, panels, 3)
+            event.plot_trajectory(caustics=True, zorder=10)
+            plt.gca().set_aspect('equal')
+            xlim, ylim = self._get_anomaly_source_plane_region(event, planet_t_range)
+            plt.xlim(xlim)
+            plt.ylim(ylim)
+            plt.minorticks_on()
+
         plt.tight_layout()
 
     def _plot_initial_2L1S_guess(self):
@@ -2322,10 +2351,11 @@ class MMEXOFASTFitter:
         for key, params in self.intermediate_results.est_binary_params.items():
             model = MulensModel.Model(parameters=params.ulens)
             model.set_magnification_methods(params.mag_methods)
+            event = MulensModel.Event(
+                    model=model, datasets=self.datasets, coords=self.coords)
             self._plot_event(
-                MulensModel.Event(
-                    model=model, datasets=self.datasets, coords=self.coords),
-                suptitle=f'{key}:\n{model.parameters}')
+                event,
+                suptitle=f'{key}: {event.get_chi2():.1f}\n{model.parameters}')
             path = self._output_config.plot_path(f'af_{key}')
             plt.savefig(path)
 
