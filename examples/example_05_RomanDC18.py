@@ -35,7 +35,7 @@ def fit_lc(lc_num, verbose=False):
             save_exozippy_init=False)
     )
     fitter.fit()
-    print(fitter.initialize_exozippy())
+    print('exozippy input:\n', fitter.initialize_exozippy())
     #results = fitter.all_fit_results
 
 
@@ -61,7 +61,7 @@ big_close_planets = [27, 120, 124, 128, 172]
 slow_parallax = [124, 128, 217] # 66 is broke
 dip_anom = [47, 74, 95, 103]
 
-lc_nums = [32]
+lc_nums = [53]
 for lc_num in np.sort(lc_nums):
     print('\n...Fitting light curve {0}...'.format(lc_num))
     try:

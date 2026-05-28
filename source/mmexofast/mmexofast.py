@@ -794,9 +794,13 @@ class MMEXOFASTFitter:
             )
 
         self.planned_steps = self._build_remaining_steps()
-        logger.info(
-            '\nPlanned workflow: \n%s\n', '\n'.join(
-                ['{0}: {1}'.format(step.stage, step.name) for step in self.planned_steps]))
+        if len(self.planned_steps) == 0:
+            logger.info('\nNo workflow steps to execute.\n')
+        else:
+            logger.info(
+                '\nPlanned workflow: \n%s\n', '\n'.join(
+                    ['{0}: {1}'.format(step.stage, step.name) for step in self.planned_steps]))
+
         i = 0
         while i < len(self.planned_steps):
             step = self.planned_steps[i]
