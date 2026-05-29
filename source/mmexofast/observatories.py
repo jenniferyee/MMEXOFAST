@@ -268,6 +268,19 @@ register_observatory(Observatory(
     }
 ))
 
+register_observatory(Observatory(
+    name='DC18',
+    phot_fmt='mag',
+    usecols=[0, 1, 2],
+    ephemerides_file=os.path.join(
+        DATA_PATH, '2018DataChallenge',
+        'wfirst_ephemeris_W149.txt'),
+    bands={
+        'W149': {'color': 'darkorange', 'marker': 'o'},
+        'Z087': {'color': 'darkcyan', 'marker': 's', 'zorder': 5}
+    }
+))
+
 # Space-based
 register_observatory(Observatory(
     name='Spitzer',
