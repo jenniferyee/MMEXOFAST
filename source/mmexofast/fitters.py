@@ -791,6 +791,12 @@ class EmceeLCFitter(MulensFitter):
         verbose : bool, optional
             If ``True``, prints 16th/50th/84th-percentile summaries and logs
             the acceptance fraction every 100 steps.  Default ``False``.
+
+        Returns
+        -------
+        str or None
+            If None, the run complected successfully. Otherwise, str
+            explains what went wrong.
         """
         starting_vector = self.make_starting_vector()
 
@@ -816,6 +822,7 @@ class EmceeLCFitter(MulensFitter):
                 self.ln_prob)
 
         try:
+            mean_af = 1.0
             for _ in self.sampler.sample(
                     starting_vector, iterations=self.emcee_settings['n_steps']):
 
@@ -832,8 +839,6 @@ class EmceeLCFitter(MulensFitter):
                           self.sampler.acceptance_fraction)
 
                 if mean_af < self.emcee_settings['acceptance_fraction']:
-                    print('Acceptance fraction too low! Minimum set to:',
-                          self.emcee_settings['acceptance_fraction'])
                     break
 
         finally:
@@ -844,6 +849,15 @@ class EmceeLCFitter(MulensFitter):
         n_burn = self.emcee_settings['n_burn']
         n_dim = self.emcee_settings['n_dim']
         samples = self.sampler.chain[:, n_burn:, :].reshape((-1, n_dim))
+
+        if len(samples) == 0:
+            msg = f"No samples remain after burn-in. " + \
+                  f"Sampler ran {self.sampler.iteration} iterations but " + \
+                  f"n_burn={n_burn}."
+            if mean_af < self.emcee_settings['acceptance_fraction']:
+                msg += f"Acceptance fraction too low! Minimum set to: {self.emcee_settings['acceptance_fraction']}"
+
+            return msg
 
         if verbose:
             percentiles = np.percentile(samples, [16, 50, 84], axis=0)

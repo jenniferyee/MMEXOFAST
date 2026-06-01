@@ -1870,7 +1870,10 @@ class MMEXOFASTFitter:
                 model_config=self.model_config,
                 event_config=self.event_config
             )
-            anomaly_fitter.run()
+            msg = anomaly_fitter.run()
+            if msg is not None:
+                logger.warning(msg)
+                continue
 
             results = EmceeFitResults(anomaly_fitter)
             logger.info(f'Fitted params ({key}): {results.best}')
