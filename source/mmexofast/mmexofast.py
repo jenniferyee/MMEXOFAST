@@ -1856,7 +1856,7 @@ class MMEXOFASTFitter:
                 datasets=self.datasets,
             )
             binary_chi2 =event.get_chi2()
-            logger.info(f'{key} chi2: {binary_chi2:.1f}')
+            logger.info(f'{key} initial chi2: {binary_chi2:.1f}')
             if (pspl_chi2 - binary_chi2) * n_data / np.min((binary_chi2, pspl_chi2)) < 3.:
                 logger.info(f'Binary model does not improve chi2 enough, skipping.')
                 continue
