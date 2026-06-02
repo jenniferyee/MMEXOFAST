@@ -898,7 +898,7 @@ class AnomalyFitter(EmceeLCFitter):
     2. **From** ``anomaly_lc_params`` — if ``sigmas`` is not provided but
        ``anomaly_lc_params`` is, then for ``t_0`` and ``t_E``::
 
-           sigma_t0 = sigma_tE = 0.01 * anomaly_lc_params['dt']
+           sigma_t0 = sigma_tE = min(0.01 * anomaly_lc_params['dt'], default_sigma[param])
 
        All other parameters fall through to tier 3.
 
@@ -907,7 +907,7 @@ class AnomalyFitter(EmceeLCFitter):
            t_0   :  0.00001
            u_0   :  0.001 * |u_0|
            t_E   :  0.001 * |t_E|
-           alpha :  0.001
+           alpha :  0.0001
            log_X :  0.0001    # equivalent to sigma_X ~ 0.02% of X
 
        Parameters not matching any recognised pattern are omitted from
@@ -1008,9 +1008,9 @@ class AnomalyFitter(EmceeLCFitter):
         if self.anomaly_lc_params is not None:
             dt = self.anomaly_lc_params['dt']
             if 't_0' in self.parameters_to_fit:
-                sigmas['t_0'] = 0.01 * dt
+                sigmas['t_0'] = min(sigmas['t_0'], 0.01 * dt)
             if 't_E' in self.parameters_to_fit:
-                sigmas['t_E'] = 0.01 * dt
+                sigmas['t_E'] = min(sigmas['t_E'], 0.01 * dt)
 
         return sigmas
 
@@ -1043,7 +1043,7 @@ class AnomalyFitter(EmceeLCFitter):
             elif param == 't_E':
                 sigmas[param] = 0.001 * abs(self.initial_guess['t_E'])
             elif param == 'alpha':
-                sigmas[param] = 0.001
+                sigmas[param] = 0.0001
             elif param.startswith('log_'):
                 sigmas[param] = 0.0001
 

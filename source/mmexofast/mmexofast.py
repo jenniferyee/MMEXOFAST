@@ -869,6 +869,7 @@ class MMEXOFASTFitter:
                 if step.status == StepStatus.FAILED:
                     break
 
+                logger.info(f'\nStep completed: {step.stage}:{step.name}')
                 self.completed_steps.append(step)
 
                 # Insert any dynamically generated follow-up steps
@@ -1874,6 +1875,7 @@ class MMEXOFASTFitter:
                 model_config=self.model_config,
                 event_config=self.event_config
             )
+            logger.info(f'sigmas: {anomaly_fitter.sigmas}')
             msg = anomaly_fitter.run()
             if msg is not None:
                 logger.warning(msg)
