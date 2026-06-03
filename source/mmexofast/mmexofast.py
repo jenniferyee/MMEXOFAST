@@ -24,7 +24,7 @@ from scipy.special import erfcinv
 from .results import AllFitResults, FitRecord, IntermediateResults, MMEXOFASTFitResults, EmceeFitResults
 from .workflow_step import WorkflowStep, StepStatus
 from .estimate_params import (get_PSPL_params, AnomalyPropertyEstimator, WidePlanetGridSearchEstimator,
-    ClosePlanetGridSearchEstimator, CloseUpperPlanetGridSearchEstimator, CloseLowerPlanetGridSearchEstimator
+                              ClosePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator, CloseLowerPlanetGridSearchEstimator
                               )
 from .fitters import SFitFitter, AnomalyFitter
 from .fit_types import label_to_model_key, model_key_to_label, FitKey, LensType, SourceType, ParallaxBranch, LensOrbMotion
@@ -1798,7 +1798,7 @@ class MMEXOFASTFitter:
         est_params = {}
         estimator_classes = None
         if self.intermediate_results.anomaly_type == 'wide':
-            estimator_classes = [WidePlanetGridSearchEstimator, CloseUpperPlanetGridSearchEstimator,
+            estimator_classes = [WidePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
                                  CloseLowerPlanetGridSearchEstimator]
         elif self.intermediate_results.anomaly_type == 'close':
             estimator_classes = [ClosePlanetGridSearchEstimator]

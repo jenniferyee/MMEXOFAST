@@ -267,7 +267,7 @@ class TestCloseUpperParameterEstimatorOB180383(TestParameterEstimatorOB180383, O
 
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseUpperPlanetParameterEstimator(self.params, limit='point')
+        self.estimator = estimate_params.CloseUpperBinaryParameterEstimator(self.params, limit='point')
 
     def test_s(self):
         np.testing.assert_allclose(self.estimator.s, self.s_close, rtol=self.tol)
@@ -283,7 +283,7 @@ class TestCloseLowerParameterEstimatorOB180383(TestCloseUpperParameterEstimatorO
 
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseLowerPlanetParameterEstimator(self.params, limit='point')
+        self.estimator = estimate_params.CloseLowerBinaryParameterEstimator(self.params, limit='point')
 
 
 class TestGetWideParams(unittest.TestCase, KB160625):

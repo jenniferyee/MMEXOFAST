@@ -1079,7 +1079,7 @@ class WidePlanetEnsembleInitializer():
             ax.minorticks_on()
 
 
-class CloseUpperPlanetParameterEstimator(WidePlanetParameterEstimator):
+class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
     def __init__(self, params, limit='GG97', q=None):
         super().__init__(params, limit=limit)
@@ -1169,7 +1169,7 @@ class CloseUpperPlanetParameterEstimator(WidePlanetParameterEstimator):
         return self._alpha
 
 
-class CloseLowerPlanetParameterEstimator(CloseUpperPlanetParameterEstimator):
+class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
 
     @property
     def alpha(self):
@@ -1180,11 +1180,11 @@ class CloseLowerPlanetParameterEstimator(CloseUpperPlanetParameterEstimator):
         return self._alpha
 
 
-class CloseUpperPlanetGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUpperPlanetParameterEstimator):
+class CloseUpperBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUpperBinaryParameterEstimator):
     pass
 
 
-class CloseLowerPlanetGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerPlanetParameterEstimator):
+class CloseLowerPlanetGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator):
     pass
 
 
@@ -1211,8 +1211,8 @@ def get_close_params(params, q=None, rho=None):
         lens1, lens2 : *tuple of BinaryLensParams*
             Two instances of BinaryLensParams representing close model parameters.
     """
-    estimator_upper = CloseUpperPlanetParameterEstimator(params=params, q=q)
-    estimator_lower = CloseLowerPlanetParameterEstimator(params=params, q=q)
+    estimator_upper = CloseUpperBinaryParameterEstimator(params=params, q=q)
+    estimator_lower = CloseLowerBinaryParameterEstimator(params=params, q=q)
 
     return estimator_upper.binary_params, estimator_lower.binary_params
 
