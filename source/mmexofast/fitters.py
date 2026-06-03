@@ -855,7 +855,7 @@ class EmceeLCFitter(MulensFitter):
                   f"Sampler ran {self.sampler.iteration} iterations but " + \
                   f"n_burn={n_burn}."
             if mean_af < self.emcee_settings['acceptance_fraction']:
-                msg += f"Acceptance fraction too low! Minimum set to: {self.emcee_settings['acceptance_fraction']}"
+                msg += f"Acceptance fraction {mean_af:.3f} too low! Minimum set to: {self.emcee_settings['acceptance_fraction']}"
 
             return msg
 
