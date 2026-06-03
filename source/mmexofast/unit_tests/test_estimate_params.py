@@ -175,6 +175,13 @@ class TestParameterEstimatorKB160625(unittest.TestCase, KB160625):
         self.estimator = estimate_params.ParameterEstimator(self.params, limit='point')
         #self.ulens_params = estimate_params.get_wide_params(self.params, limit='point')
 
+    def test_correct_alpha(self):
+        expected = [20., 20., -20., -20.]
+        input = [20., 380., -20, -740.]
+        for value_exp, value_in in zip(expected, input):
+            print('expected', value_exp, 'input', value_in)
+            numpy.testing.assert_almost_equal(value_exp, self.estimator._correct_alpha(value_in))
+
     def test_get_rho_dwarf(self):
         estimator = estimate_params.ParameterEstimator(self.params, limit='dwarf')
         assert estimator.get_rho() == 0.001
@@ -409,14 +416,6 @@ class TestAnomalyParameterEstimator(unittest.TestCase):
 
 def test_model_pspl_at_pl():
     raise unittest.SkipTest()
-
-
-def test_correct_alpha():
-    expected = [20., 20., -20., -20.]
-    input = [20., 380., -20, -740.]
-    for value_exp, value_in in zip(expected, input):
-        print('expected', value_exp, 'input', value_in)
-        numpy.testing.assert_almost_equal(value_exp, estimate_params.correct_alpha(value_in))
 
 
 class TestBinarySourceParams(unittest.TestCase):
