@@ -15,6 +15,7 @@ from mmexofast.fitters import MulensFitter
 from mmexofast.config import DATA_PATH
 from mmexofast import fit_types
 from mmexofast.mulens_object_config import ModelConfig, EventConfig
+from mmexofast.workflow_step import StepStatus
 
 
 # OB05390
@@ -1280,3 +1281,206 @@ class TestRestartIgnoresPickledStopConditions(unittest.TestCase):
         completed_names = [step.name for step in fitter.completed_steps
                            if step.name != 'run_ef_grid']   # pre-loaded step
         self.assertIn('est_pl_params', completed_names)
+
+
+class TestWorkflowStepValueError(unittest.TestCase):
+    """
+    WorkflowStep.run() when func() always raises ValueError.
+
+    Covers the Cartesian product of:
+        max_retries : 0, 1, 2
+        required    : True, False
+    """
+
+    def _make_failing_step(self, *, max_retries=0, required=True):
+        """Return a WorkflowStep whose func always raises ValueError('boom')."""
+        return WorkflowStep(
+            name='failing_step',
+            stage='test_stage',
+            func=MagicMock(side_effect=ValueError('boom')),
+            description='A step that always fails',
+            max_retries=max_retries,
+            required=required,
+        )
+
+    # ------------------------------------------------------------------ #
+    # required=True — ValueError must propagate                           #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_required_raises(self):
+        """max_retries=0, required=True: ValueError is re-raised."""
+        step = self._make_failing_step(max_retries=0, required=True)
+        with self.assertRaises(ValueError):
+            step.run()
+
+    def test_one_retry_required_raises(self):
+        """max_retries=1, required=True: ValueError is re-raised."""
+        step = self._make_failing_step(max_retries=1, required=True)
+        with self.assertRaises(ValueError):
+            step.run()
+
+    def test_two_retries_required_raises(self):
+        """max_retries=2, required=True: ValueError is re-raised."""
+        step = self._make_failing_step(max_retries=2, required=True)
+        with self.assertRaises(ValueError):
+            step.run()
+
+    # ------------------------------------------------------------------ #
+    # required=False — run() returns without raising                      #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_not_required_does_not_raise(self):
+        """max_retries=0, required=False: run() returns without raising."""
+        step = self._make_failing_step(max_retries=0, required=False)
+        step.run()
+
+    def test_one_retry_not_required_does_not_raise(self):
+        """max_retries=1, required=False: run() returns without raising."""
+        step = self._make_failing_step(max_retries=1, required=False)
+        step.run()
+
+    def test_two_retries_not_required_does_not_raise(self):
+        """max_retries=2, required=False: run() returns without raising."""
+        step = self._make_failing_step(max_retries=2, required=False)
+        step.run()
+
+    # ------------------------------------------------------------------ #
+    # Status is always FAILED after all attempts are exhausted            #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_required_status_failed(self):
+        """max_retries=0, required=True: status is FAILED."""
+        step = self._make_failing_step(max_retries=0, required=True)
+        with self.assertRaises(ValueError):
+            step.run()
+        self.assertEqual(step.status, StepStatus.FAILED)
+
+    def test_zero_retries_not_required_status_failed(self):
+        """max_retries=0, required=False: status is FAILED."""
+        step = self._make_failing_step(max_retries=0, required=False)
+        step.run()
+        self.assertEqual(step.status, StepStatus.FAILED)
+
+    def test_two_retries_required_status_failed(self):
+        """max_retries=2, required=True: status is FAILED."""
+        step = self._make_failing_step(max_retries=2, required=True)
+        with self.assertRaises(ValueError):
+            step.run()
+        self.assertEqual(step.status, StepStatus.FAILED)
+
+    def test_two_retries_not_required_status_failed(self):
+        """max_retries=2, required=False: status is FAILED."""
+        step = self._make_failing_step(max_retries=2, required=False)
+        step.run()
+        self.assertEqual(step.status, StepStatus.FAILED)
+
+    # ------------------------------------------------------------------ #
+    # Attempt count equals 1 + max_retries                                #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_one_attempt(self):
+        """max_retries=0: exactly one attempt is made."""
+        step = self._make_failing_step(max_retries=0, required=False)
+        step.run()
+        self.assertEqual(step._attempts, 1)
+
+    def test_one_retry_two_attempts(self):
+        """max_retries=1: exactly two attempts are made."""
+        step = self._make_failing_step(max_retries=1, required=False)
+        step.run()
+        self.assertEqual(step._attempts, 2)
+
+    def test_two_retries_three_attempts(self):
+        """max_retries=2: exactly three attempts are made."""
+        step = self._make_failing_step(max_retries=2, required=False)
+        step.run()
+        self.assertEqual(step._attempts, 3)
+
+    # ------------------------------------------------------------------ #
+    # func call count mirrors attempt count                               #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_func_called_once(self):
+        """max_retries=0: func is called exactly once."""
+        step = self._make_failing_step(max_retries=0, required=False)
+        step.run()
+        step.func.assert_called_once()
+
+    def test_two_retries_func_called_three_times(self):
+        """max_retries=2: func is called exactly three times."""
+        step = self._make_failing_step(max_retries=2, required=False)
+        step.run()
+        self.assertEqual(step.func.call_count, 3)
+
+    # ------------------------------------------------------------------ #
+    # error attribute stores the raised exception                         #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_error_stored(self):
+        """max_retries=0: the ValueError is stored in step.error."""
+        step = self._make_failing_step(max_retries=0, required=False)
+        step.run()
+        self.assertIsInstance(step.error, ValueError)
+
+    def test_two_retries_error_stored(self):
+        """max_retries=2: the ValueError is stored in step.error."""
+        step = self._make_failing_step(max_retries=2, required=False)
+        step.run()
+        self.assertIsInstance(step.error, ValueError)
+
+    # ------------------------------------------------------------------ #
+    # Log output: one WARNING per retry attempt, one ERROR on final fail  #
+    # ------------------------------------------------------------------ #
+
+    def test_zero_retries_logs_error_no_warning(self):
+        """
+        max_retries=0: one ERROR is logged; no WARNING is logged
+        (there are no retry attempts to warn about).
+        """
+        step = self._make_failing_step(max_retries=0, required=False)
+        with self.assertLogs(level='WARNING') as cm:
+            step.run()
+        warnings = [m for m in cm.output if m.startswith('WARNING')]
+        errors   = [m for m in cm.output if m.startswith('ERROR')]
+        self.assertEqual(len(warnings), 0)
+        self.assertEqual(len(errors), 1)
+
+    def test_one_retry_logs_one_warning_then_error(self):
+        """
+        max_retries=1: one WARNING (first attempt, retrying)
+        then one ERROR (second attempt, final failure).
+        """
+        step = self._make_failing_step(max_retries=1, required=False)
+        with self.assertLogs(level='WARNING') as cm:
+            step.run()
+        warnings = [m for m in cm.output if m.startswith('WARNING')]
+        errors   = [m for m in cm.output if m.startswith('ERROR')]
+        self.assertEqual(len(warnings), 1)
+        self.assertEqual(len(errors), 1)
+
+    def test_two_retries_logs_two_warnings_then_error(self):
+        """
+        max_retries=2: two WARNINGs (attempts 1 and 2, retrying)
+        then one ERROR (attempt 3, final failure).
+        """
+        step = self._make_failing_step(max_retries=2, required=False)
+        with self.assertLogs(level='WARNING') as cm:
+            step.run()
+        warnings = [m for m in cm.output if m.startswith('WARNING')]
+        errors   = [m for m in cm.output if m.startswith('ERROR')]
+        self.assertEqual(len(warnings), 2)
+        self.assertEqual(len(errors), 1)
+
+    def test_two_retries_required_logs_before_raising(self):
+        """
+        max_retries=2, required=True: log entries are emitted before the
+        exception propagates — the raise does not suppress them.
+        """
+        step = self._make_failing_step(max_retries=2, required=True)
+        with self.assertLogs(level='WARNING') as cm:
+            with self.assertRaises(ValueError):
+                step.run()
+        warnings = [m for m in cm.output if m.startswith('WARNING')]
+        errors   = [m for m in cm.output if m.startswith('ERROR')]
+        self.assertEqual(len(warnings), 2)
+        self.assertEqual(len(errors), 1)

@@ -115,12 +115,9 @@ class EventFinderGridSearch():
             if verbose:
                 print('t_0, t_eff, chi2s:', t_0, t_eff, chi2s)
 
-            if not all(np.isnan(v) for v in dchi2s):
-                results.append(dchi2s)
+            results.append(dchi2s)
 
         self.results = np.array(results)
-        if len(self.results) == 0:
-            raise ValueError('EF Gridsearch failed. No results.')
 
     def plot(self, fig=None):
         """
@@ -461,12 +458,9 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
                 print(t_0, t_eff, chi2s)
 
             values = [chi2s[key] for key in ['1', '2', 'flat', 'zero']]
-            if not all(np.isnan(v) for v in values):
-                results.append(values)
+            results.append(values)
 
         self.results = np.array(results)
-        if len(self.results) == 0:
-            raise ValueError('AF Gridsearch failed. No results.')
 
     def get_zero_chi2(self, trimmed_datasets):
         chi2 = 0.
@@ -535,9 +529,7 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
         return chi2s
 
     def get_anomalies(self):
-
         anomalies = None
-
         for j in [1, 2]:
             dchi2_zero = self.results[:, 3] - self.results[:, j-1]
             dchi2_flat = self.results[:, 2] - self.results[:, j-1]
@@ -575,7 +567,7 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
 
     @property
     def best(self):
-        if (self.results is not None) and (len(self.results) > 0) and (self._best is None):
+        if (self.results is not None) and (self._best is None):
             index = np.nanargmax(self.anomalies[:, 5])
             self._best = {'t_0': self.anomalies[index, 0],
                           't_eff': self.anomalies[index, 1],

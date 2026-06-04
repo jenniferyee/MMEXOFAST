@@ -1740,7 +1740,6 @@ class MMEXOFASTFitter:
             residuals=self.residuals
         )
         af_grid.run()
-
         if (self._output_config is not None
                 and self._output_config.save_plots):
             fig = af_grid.plot()
