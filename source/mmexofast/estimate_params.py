@@ -1184,7 +1184,7 @@ class CloseUpperBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUp
     pass
 
 
-class CloseLowerPlanetGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator):
+class CloseLowerBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator):
     pass
 
 
