@@ -1896,7 +1896,7 @@ class MMEXOFASTFitter:
                source_type=SourceType.FINITE,  # TODO: In the future, want to allow for rho=0 fits.
                parallax_branch=ParallaxBranch.NONE,
                lens_orb_motion=LensOrbMotion.NONE,
-               binary_model_type=key.replace('Planet', ''),
+               binary_model_type=key.replace('Planet', '').replace('Binary', ''),
             )
             self.all_fit_results.set(
                 FitRecord.from_full_result(
