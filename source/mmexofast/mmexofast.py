@@ -1825,21 +1825,15 @@ class MMEXOFASTFitter:
                 est_params[class_name] = params
 
                 if self.intermediate_results.anomaly_type in ['close', 'wide']:
-                    s_dagger = estimator.alternate_params
-                    logger.info('Alternate s_dagger solution: %s', s_dagger.ulens)
-                    est_params[class_name + '_alt'] = s_dagger
+                    if self.intermediate_results.anomaly_lc_params['u_0'] < 0.05:
+                        s_alt = estimator.get_binary_lens_params()
+                        s_alt.ulens['s'] = 1. / s_alt.ulens['s']
+                    else:
+                        s_alt = estimator.alternate_params
 
-                if self.intermediate_results.anomaly_lc_params['u_0'] < 0.05:
-                    s_inv = estimator.get_binary_lens_params()
-                    s_inv.ulens['s'] = 1. / s_inv.ulens['s']
-                    logger.info('Alternate 1/s solution: %s', s_inv.ulens)
-                    est_params[class_name + '_inv'] = s_inv
+                    logger.info('Alternate solution: %s', s_alt.ulens)
+                    est_params[class_name + '_alt'] = s_alt
 
-                    if s_dagger is not None:
-                        s_inv_alt = estimator.get_binary_lens_params()
-                        s_inv_alt.ulens['s'] = 1. / s_dagger.ulens['s']
-                        logger.info('Alternate 1/s solution 2: %s', s_inv_alt.ulens)
-                        est_params[class_name + '_alt_inv'] = s_inv_alt
 
                 self.mag_methods = params.mag_methods
 

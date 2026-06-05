@@ -33,6 +33,7 @@ class SelectionStrategy(Enum):
     PRIMARY_FIRST = "primary_first"
     ALL_PRIMARY   = "all_primary"
     ALL           = "all"
+    BEST_S        = 'best_s'
 
 
 def _get_last_run_lines(lines: list[str]) -> list[str] | None:
@@ -250,7 +251,16 @@ class EvaluateResults():
             return (primary
                     .drop_duplicates(subset='idx', keep='first')
                     .reset_index(drop=True))
+        elif strategy == SelectionStrategy.BEST_S:
+            self.all_results['delta_s'] = np.abs(self.all_results['s_true'] - self.all_results['s'])
+            #self.all_results['delta_s'].min(groupby='lc_num')
+            idx = []
+            for lc_num in self.all_results['lc_num'].unique():
+                idx.append(
+                    self.all_results[self.all_results['lc_num'] == lc_num].sort_values(by='delta_s').index[0])
 
+            self.all_results = self.all_results.iloc[idx]
+            return self.all_results.drop(columns='delta_s').reset_index()
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
@@ -378,6 +388,20 @@ class EvaluateResults():
               f'{good.sum()} rows, {self.results[good]["idx"].nunique()} unique LCs')
         self.print_indices(good)
 
+    def is_there_a_good_guess(self):
+        #self.results['sol_dist'] = np.sqrt((np.log10(self.results['s_true']) - np.log10(self.results['s']))**2 +
+        #                               (np.log10(self.results['q_true']) - np.log10(self.results['q']))**2)
+        self.results['sol_dist'] = np.abs(self.results['s_true'] - self.results['s'])
+        #good = self.results.groupby('lc_num').min('sol_dist')
+        good = self.results['sol_dist'] < 0.1
+        self.print_indices(good)
+        #with pd.option_context('display.max_rows', None, 'display.width', None):
+        #    print(self.results[['sol_dist'] + self.print_columns].sort_values(by=['lc_num', 'sol_dist']))
+
+                    #['lc_num', 'solution_type', 'is_alternate', 'is_inverse', 'dist', 's_true', 's', 'q_true', 'q',
+                    #   'u0_true', 'tE_true']])
+
+
     # ------------------------------------------------------------------
     # Plotting
     # ------------------------------------------------------------------
@@ -477,17 +501,20 @@ def check_bad_t0(evaluator):
 
 
 if __name__ == '__main__':
-    evaluator = EvaluateResults(strategy=SelectionStrategy.ALL)
-    check_bad_t0(evaluator)
+    evaluator = EvaluateResults(strategy=SelectionStrategy.BEST_S)
+    with pd.option_context('display.width', None, 'display.max_rows', None):
+        print(evaluator.results[evaluator.print_columns].sort_values(by='lc_num'))
+    #check_bad_t0(evaluator)
 
-    evaluator.is_the_pspl_fit_good()
-    evaluator.is_log_q_good()
-    evaluator.is_sign_s_good()
-    evaluator.is_the_planet_good()
+    #evaluator.is_there_a_good_guess()
+    #evaluator.is_the_pspl_fit_good()
+    #evaluator.is_log_q_good()
+    #evaluator.is_sign_s_good()
+    #evaluator.is_the_planet_good()
     #evaluator.make_all_scatter_plots()
     #evaluator.make_all_delta_plots()
 
-    #evaluator.make_planet_plots()
+    evaluator.make_planet_plots()
     plt.show()
 
     # Switch strategies at any time without re-parsing:
