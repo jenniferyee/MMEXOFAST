@@ -8,35 +8,29 @@ u0        alpha       t0         tE        rE       thetaE    piE     rhos
 import matplotlib.pyplot as plt
 
 import MulensModel
-import exozippy as mmexo
+import mmexofast as mmexo
 from examples.data_for_test_examples import datasets
 
 results_EF = {'t_0': 2460023.2844586717, 't_eff': 9.988721231519582,
               'j': 2, 'chi2': -42226.356330652685}
 
-fitter = mmexo.mmexofast.MMEXOFASTFitter(
-    datasets=datasets, renormalize_errors=False, verbose=True)
-fitter.best_ef_grid_point = results_EF
-fitter.fit_point_lens()
-results = fitter.all_fit_results.get(fitter._label_to_model_key('static PSPL'))
+est_params = mmexo.estimate_params.get_PSPL_params(results_EF, datasets)
+fitter = mmexo.fitters.SFitFitter(
+    datasets=datasets, initial_model_params=est_params, verbose=True)
+fitter.run()
+best = fitter.best
+best.pop('chi2')
 
-# JCY: In the new architecture, the verbose option will output the initial parameters, but they
-# aren't stored, so can't be plotted.
-#
-#print('initial parameters', initial_pspl_params)
-#init_event = MulensModel.Event(
-#    datasets=datasets, model=MulensModel.Model(initial_pspl_params))
-#print('initial chi2', init_event.get_chi2())
-#
-#
-#fitter.pspl_params = initial_pspl_params
-#results = fitter.do_sfit(fitter.datasets, verbose=True)
-#print(results)
-#
-#init_event.plot(title='Initial Parameters')
+print('estimated parameters', est_params)
+init_event = MulensModel.Event(
+    datasets=datasets, model=MulensModel.Model(est_params))
+print('initial chi2', init_event.get_chi2())
+init_event.plot(title='Initial Parameters')
 
-event = MulensModel.Event(datasets=datasets, model=MulensModel.Model(results.params))
+event = MulensModel.Event(datasets=datasets, model=MulensModel.Model(best))
+print('final parameters', event.model.parameters.parameters)
 print(event)
 print('final chi2', event.get_chi2())
 event.plot(title='Final Parameters')
+
 plt.show()

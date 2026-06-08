@@ -4,7 +4,7 @@ EFMagnificationCurve classes work as expected.
 """
 import matplotlib.pyplot as plt
 
-import exozippy as mmexo
+import mmexofast as mmexo
 from examples.data_for_test_examples import datasets, data_w149
 
 

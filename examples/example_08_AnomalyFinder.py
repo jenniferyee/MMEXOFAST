@@ -7,7 +7,7 @@ import os.path
 import re, ast
 
 import MulensModel
-import exozippy as mmexo
+import mmexofast as mmexo
 from examples.DC18_classes import TestDataSet
 
 
@@ -17,9 +17,9 @@ class AnomalyFinderTest:
     for a given light curve number.
     """
 
-    def __init__(self, lc_num):
+    def __init__(self, lc_num, pspl_params=None):
         self.lc_num = lc_num
-        self._pspl_params = None
+        self._pspl_params = pspl_params
         self._fitter = None
         self._datasets = None
         self._t_start = None
@@ -28,18 +28,6 @@ class AnomalyFinderTest:
 
     @property
     def pspl_params(self):
-        if self._pspl_params is None:
-            log_file = os.path.join(
-                mmexo.MODULE_PATH, 'EXOZIPPy', '../DC18Test', 'temp_output',
-                f'W{self.lc_num:03}', f'WFIRST.{self.lc_num:03}.log')
-            with open(log_file) as f:
-                for line in reversed(f.readlines()):
-                    if line.startswith("Static PSPL"):
-                        dict_str = line.split(": ", 1)[1]
-                        dict_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', dict_str)
-                        params_dict = ast.literal_eval(dict_str)
-                        params_dict.pop('chi2')
-                        self._pspl_params = params_dict
         return self._pspl_params
 
     @property
@@ -48,7 +36,9 @@ class AnomalyFinderTest:
             test_data = TestDataSet(lc_num=self.lc_num)
             self._fitter = mmexo.mmexofast.MMEXOFASTFitter(
                 files=[test_data.file_w149, test_data.file_z087],
-                initial_results={'PSPL static': {'params': self.pspl_params}})
+                no_parallax=True, renormalize_errors=False, fit_type='point_lens')
+            self._fitter.fit()
+
         return self._fitter
 
     @property
@@ -216,6 +206,7 @@ class AnomalyFinderTest:
 
 
 if __name__ == '__main__':
-    lc_num = 92
-    test = AnomalyFinderTest(lc_num)
+    lc_num = 4
+    pspl_params = {'t_0': 2460023.2869408596, 't_E': 5.633313663946914, 'u_0': 2.216056444359401}
+    test = AnomalyFinderTest(lc_num, pspl_params=pspl_params)
     test.run()
