@@ -8,7 +8,7 @@ import re, ast
 
 import MulensModel
 import mmexofast as mmexo
-from examples.DC18_classes import TestDataSet
+from DC18_classes import TestDataSet
 
 
 class AnomalyFinderTest:

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from mmexofast.config import MODULE_PATH
 import mmexofast as mmexo
-from examples.DC18_classes import dir_, TestDataSet
+from DC18_classes import dir_, TestDataSet
 
 
 base_dir = os.path.join(
