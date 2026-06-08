@@ -2891,7 +2891,7 @@ class MMEXOFASTFitter:
             results_table['parameter_names'] = (
                 results_table['parameter_names'].apply(_fmt_latex)
             )
-            return results_table.to_latex(index=False)
+            return results_table.to_latex(index=False, escape=False)
 
         if table_type == 'ascii':
             with pd.option_context(
