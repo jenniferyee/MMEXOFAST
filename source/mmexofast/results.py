@@ -438,6 +438,7 @@ class EmceeFitResults(BaseFitResults):
         if self.fitter._event is None:
             self.fitter.initialize_event()
         self.fitter.event = self.fitter.best_theta
+        self.fitter.event.fit_fluxes()
 
         parameters = []
         values     = []

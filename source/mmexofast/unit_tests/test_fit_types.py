@@ -667,7 +667,7 @@ class TestLabelConversionsBinaryModelType(unittest.TestCase):
     def test_generate_wide_static(self):
         key = fit_types.FitKey(
             lens_type=fit_types.LensType.BINARY,
-            source_type=fit_types.SourceType.POINT,
+            source_type=fit_types.SourceType.FINITE,
             parallax_branch=fit_types.ParallaxBranch.NONE,
             lens_orb_motion=fit_types.LensOrbMotion.NONE,
             binary_model_type='Wide',

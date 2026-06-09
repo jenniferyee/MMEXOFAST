@@ -348,7 +348,7 @@ def model_key_to_label(key: FitKey) -> str:
 
     if base is None:
         if key.binary_model_type is not None:
-            base = '2L1S ' + key.binary_model_type
+            base = '2L1S' #+ key.binary_model_type
 
     assert base is not None, f"No base label mapping for FitKey {key!r}"
 
