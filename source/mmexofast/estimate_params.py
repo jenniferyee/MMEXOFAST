@@ -3,6 +3,15 @@
 
 # In[ ]:
 
+"""
+Classes and functions for estimating initial parameters for microlensing models.
+
+Provides tools for estimating starting parameters for PSPL from the results of
+EventFinderGridSearch and for wide binary lens, close binary lens, and binary
+source models given the properties of a detected photometric anomaly. Includes
+grid search with optional Nelder-Mead refinement for binary lens parameter
+estimation, and ensemble initialization for MCMC sampling.
+"""
 
 # Created by Luca Campiani in January 2024
 # Updated by Jennifer Yee, May 2025
@@ -15,7 +24,7 @@ import scipy.stats
 from matplotlib.gridspec import GridSpec
 import matplotlib.pyplot as plt
 import warnings
-#import copy
+# import copy
 
 import MulensModel
 from .mulens_object_config import ModelConfig, EventConfig
@@ -67,42 +76,47 @@ def get_PSPL_params(ef_grid_point, datasets, model_config=None, event_config=Non
 
 class BinaryLensParams():
     """
-    A class for managing parameters related to binary lens models.
+    Container for binary lens model parameters and magnification methods.
 
-    Attributes:
-        ulens: *object*
-            Object representing the lens model.
-        
-        mag_method: *object*
-            Object representing the magnification method.            
+    Attributes
+    ----------
+    ulens : dict
+        Binary lens parameter dictionary.
+    mag_methods : list or None
+        Magnification methods in MulensModel convention. Set by
+        set_mag_method().
     """
+
     def __init__(self, ulens):
         self.ulens = ulens
         self.mag_methods = None
-        
+
     def set_mag_method(self, params):
         """
-        Sets the magnification calculation method based on input parameters.
+        Set the magnification calculation method based on input parameters.
 
-        Arguments :
-            params: *dictionary*
-                Initilal parameters.
-            
-                - 't_0' (*float*): Time of maximum magnification.
-                - 'u_0' (*float*): Impact parameter.
-                - 't_E' (*float*): Einstein crossing time.
-                - 't_pl' (*float*): Time at which to compute the wide model parameters.
-                - 'dt' (*float*): Duration of the anomaly
-                - 'dmag' (*float*): Magnitude difference of the perturbation
+        Sets up a sequence of magnification methods transitioning from
+        point_source to hexadecapole to VBBL and back, centered on the
+        anomaly time.
 
-        Returns :
-           None
+        Parameters
+        ----------
+        params : dict
+            Anomaly light curve parameters as returned by
+            :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+            Required keys:
+
+            - ``'t_0'`` : float, time of maximum magnification.
+            - ``'u_0'`` : float, impact parameter.
+            - ``'t_E'`` : float, Einstein crossing time.
+            - ``'t_pl'`` : float, time of the anomaly.
+            - ``'dt'`` : float, duration of the anomaly.
+            - ``'dmag'`` : float, magnitude difference of the perturbation.
+
+        Returns
+        -------
+        None
         """
-        #t1 = params['t_pl'] - (5 * params['dt'])
-        #t2 = params['t_pl'] + (5 * params['dt'])
-        #self.mag_method = [t1, 'VBBL', t2]
-        #print(params)
-
         t_E = params['t_E']
         t_0 = params['t_0']
         t_pl = params['t_pl']
@@ -123,42 +137,109 @@ class BinaryLensParams():
 
 def get_wide_params(params, limit='GG97'):
     """
-    Transform initial parameters into wide model parameters.
+    Transform initial anomaly parameters into wide binary lens model parameters.
 
-    Arguments :
-        params: *dictionary*
-            Initial parameters.
-            
-            - 't_0' (*float*): Time of maximum magnification.
-            - 'u_0' (*float*): Impact parameter.
-            - 't_E' (*float*): Einstein crossing time.
-            - 't_pl' (*float*): Time at which to compute the wide model parameters.
-            - 'dt' (*float*): Duration of the anomaly
-            - 'dmag' (*float*): Magnitude difference of the perturbation
+    Wrapper for :class:`WidePlanetParameterEstimator`.
 
-        limit: *str*
-            Method to use for estimating *rho* and *q*.
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+        Required keys:
 
-    Returns :
-        wide_params : *BinaryLensParams*
-             Wide model parameters for the binary lens.
+        - ``'t_0'`` : float, time of maximum magnification.
+        - ``'u_0'`` : float, impact parameter.
+        - ``'t_E'`` : float, Einstein crossing time.
+        - ``'t_pl'`` : float, time of the anomaly.
+        - ``'dt'`` : float, duration of the anomaly.
+        - ``'dmag'`` : float, magnitude difference of the perturbation.
+
+    limit : str, optional
+        Method to use for estimating ``rho``. One of ``'GG97'`` (default),
+        ``'dwarf'``, ``'giant'``, or ``'point'``.
+
+    Returns
+    -------
+    :class:`BinaryLensParams`
+        Wide binary lens model parameters.
     """
     estimator = WidePlanetParameterEstimator(params, limit=limit)
-    
+
     return estimator.binary_params
 
 
 def get_possible_bump_anomaly_solutions(params):
+    """
+    Get possible binary lens and binary source solutions for a bump-type anomaly.
+
+    Runs simple, analytic parameter estimators for multiple model types and
+    returns all solutions in a single dictionary.
+
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+        Required keys:
+
+        - ``'t_0'`` : float, time of maximum magnification.
+        - ``'u_0'`` : float, impact parameter.
+        - ``'t_E'`` : float, Einstein crossing time.
+        - ``'t_pl'`` : float, time of the anomaly.
+        - ``'dt'`` : float, duration of the anomaly.
+        - ``'dmag'`` : float, magnitude difference of the perturbation.
+
+    Returns
+    -------
+    dict
+        Keys are solution types (``'Wide GG97'``, ``'Wide dwarf'``,
+        ``'Wide giant'``, ``'CloseUpper'``, ``'CloseLower'``,
+        ``'BinarySource'``), values are :class:`BinaryLensParams` or
+        :class:`BinarySourceParams` objects.
+    """
     solutions = {}
 
-    # large rho limit
-    estimator = WidePlanetParameterEstimator(params, limit='GG97')
-    solutions['GG97'] = estimator.calc_binary_ulens_params()
+    for limit in ['GG97', 'dwarf', 'giant']:
+        estimator = WidePlanetParameterEstimator(params, limit=limit)
+        solutions[f'Wide {limit}'] = estimator.get_binary_ulens_params()
+
+    close_upper = CloseUpperBinaryParameterEstimator(params)
+    solutions['CloseUpper'] = close_upper.get_binary_lens_params()
+
+    close_lower = CloseLowerBinaryParameterEstimator(params)
+    solutions['CloseLower'] = close_lower.get_binary_lens_params()
+
+    solutions['BinarySource'] = get_binary_source_params(params)
 
     return solutions
 
 
 class ParameterEstimator():
+    """
+    Base class for analytic microlensing parameter estimators.
+
+    Provides common properties and methods for computing binary lens
+    parameters from initial PSPL parameters and anomaly properties.
+    Subclasses should implement :meth:`get_binary_lens_params` and
+    optionally override :meth:`get_rho`.
+
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+        Required keys:
+
+        - ``'t_0'`` : float, time of maximum magnification.
+        - ``'u_0'`` : float, impact parameter.
+        - ``'t_E'`` : float, Einstein crossing time.
+        - ``'t_pl'`` : float, time of the anomaly.
+
+    limit : str, optional
+        Method to use for estimating ``rho``. One of ``'dwarf'``,
+        ``'giant'``, or ``'point'``.
+    """
 
     def __init__(self, params, limit=None):
         self.params = params
@@ -171,9 +252,41 @@ class ParameterEstimator():
         self._binary_params = None
 
     def get_binary_lens_params(self):
+        """
+        Return binary lens parameters for this estimator.
+
+        To be implemented by subclasses.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Binary lens model parameters.
+        """
         pass
 
     def get_rho(self):
+        """
+        Return rho based on the assumed source size limit.
+
+        Returns a fixed value of rho based on ``self.limit``:
+
+        - ``'dwarf'`` : 0.001
+        - ``'giant'`` : 0.05
+        - ``'point'`` : None (point source)
+
+        Overridden by subclasses to support additional limits (e.g. ``'GG97'``).
+
+        Returns
+        -------
+        float or None
+            Source size relative to the Einstein radius, or None for a
+            point source.
+
+        Raises
+        ------
+        ValueError
+            If ``self.limit`` is not a recognized value.
+        """
         if self.limit == 'dwarf':
             return 0.001
         elif self.limit == 'giant':
@@ -185,6 +298,16 @@ class ParameterEstimator():
 
     @property
     def binary_params(self):
+        """
+        Binary lens parameters for this estimator.
+
+        Computed lazily on first access via :meth:`get_binary_lens_params`.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Binary lens model parameters.
+        """
         if self._binary_params is None:
             self._binary_params = self.get_binary_lens_params()
 
@@ -192,18 +315,30 @@ class ParameterEstimator():
 
     @property
     def t_0(self):
+        """Time of maximum magnification, from ``self.params``."""
         return self.params['t_0']
 
     @property
     def u_0(self):
+        """Impact parameter, from ``self.params``."""
         return self.params['u_0']
 
     @property
     def t_E(self):
+        """Einstein crossing time, from ``self.params``."""
         return self.params['t_E']
 
     @property
     def tau_pl(self):
+        """
+        Dimensionless time of the anomaly.
+
+        Computed as ``(t_pl - t_0) / t_E``.
+
+        Returns
+        -------
+        float
+        """
         if self._tau_pl is None:
             self._tau_pl = (self.params['t_pl'] - self.params['t_0']) / self.params['t_E']
 
@@ -211,12 +346,34 @@ class ParameterEstimator():
 
     @property
     def u_pl(self):
+        """
+        Lens-source separation at the anomaly time in Einstein radius units.
+
+        Computed as ``sqrt(u_0^2 + tau_pl^2)``.
+
+        Returns
+        -------
+        float
+        """
         if self._u_pl is None:
             self._u_pl = np.sqrt(self.params['u_0'] ** 2 + self.tau_pl ** 2)
 
         return self._u_pl
 
     def _correct_alpha(self, alpha):
+        """
+        Normalize alpha to the range (-360, 360] degrees.
+
+        Parameters
+        ----------
+        alpha : float
+            Angle in degrees.
+
+        Returns
+        -------
+        float
+            Normalized angle in degrees.
+        """
         while alpha > 360.:
             alpha -= 360.
 
@@ -227,6 +384,15 @@ class ParameterEstimator():
 
     @property
     def alpha(self):
+        """
+        Trajectory angle of the source relative to the lens axis, in degrees.
+
+        Computed from ``u_0`` and ``tau_pl`` using the PSPL geometry.
+
+        Returns
+        -------
+        float
+        """
         if self._alpha is None:
             alpha = np.pi - np.arctan2(self.params['u_0'], self.tau_pl)
             alpha = np.rad2deg(alpha)
@@ -236,6 +402,17 @@ class ParameterEstimator():
 
     @property
     def rho(self):
+        """
+        Source size relative to the Einstein radius.
+
+        Computed lazily on first access via :meth:`get_rho`. Can be
+        overridden by setting directly.
+
+        Returns
+        -------
+        float or None
+            Rho value, or None for a point source.
+        """
         if self._rho is None:
             self._rho = self.get_rho()
 
@@ -247,6 +424,23 @@ class ParameterEstimator():
 
 
 class WidePlanetParameterEstimator(ParameterEstimator):
+    """
+    Analytic parameter estimator for wide binary lens models.
+
+    Extends :class:`ParameterEstimator` to compute binary lens parameters
+    appropriate for a wide planet (s > 1) from anomaly light curve properties.
+    Implements the ``'GG97'`` limit for estimating rho in addition to the
+    limits defined in the base class.
+
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+    limit : str, optional
+        Method to use for estimating ``rho``. One of ``'GG97'`` (default),
+        ``'dwarf'``, ``'giant'``, or ``'point'``.
+    """
 
     def __init__(self, params, limit='GG97'):
         super().__init__(params, limit=limit)
@@ -254,6 +448,19 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         self._a_pspl = None
 
     def get_rho(self):
+        """
+        Return rho based on the assumed source size limit.
+
+        Extends :meth:`ParameterEstimator.get_rho` to support the ``'GG97'``
+        limit, where rho is estimated from the anomaly duration as
+        ``dt / t_E / 4``. All other limits fall back to the base class.
+
+        Returns
+        -------
+        float or None
+            Source size relative to the Einstein radius, or None for a
+            point source.
+        """
         if self.limit == 'GG97':
             rho = self.params['dt'] / self.params['t_E'] / 4.
         else:
@@ -262,6 +469,21 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         return rho
 
     def calc_binary_ulens_params(self):
+        """
+        Compute the binary lens parameter dictionary.
+
+        Assembles the PSPL parameters with the computed binary lens
+        parameters (``s``, ``alpha``, ``q``, and optionally ``rho``)
+        into a single dictionary suitable for passing to
+        ``MulensModel.Model``.
+
+        Returns
+        -------
+        dict
+            Binary lens parameter dictionary with keys ``'t_0'``,
+            ``'u_0'``, ``'t_E'``, ``'s'``, ``'alpha'``, and ``'q'``.
+            ``'rho'`` is included unless ``limit='point'``.
+        """
         new_params = {'t_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E, 's': self.s, 'alpha': self.alpha}
         rho = self.rho
         if rho is not None:
@@ -272,6 +494,19 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         return new_params
 
     def get_binary_lens_params(self):
+        """
+        Return binary lens parameters for the wide planet model.
+
+        Calls :meth:`calc_binary_ulens_params` to get the parameter
+        dictionary, wraps it in a :class:`BinaryLensParams` object, and
+        sets the magnification methods via
+        :meth:`BinaryLensParams.set_mag_method`.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Wide binary lens model parameters with magnification methods set.
+        """
         binary_ulens_params = self.calc_binary_ulens_params()
         out = BinaryLensParams(binary_ulens_params)
         out.set_mag_method(self.params)
@@ -279,6 +514,16 @@ class WidePlanetParameterEstimator(ParameterEstimator):
 
     @property
     def s(self):
+        """
+        Binary lens separation in Einstein radius units.
+
+        Computed from ``u_pl`` as ``0.5 * (sqrt(u_pl^2 + 4) + u_pl)``.
+        This is the wide-topology solution (s > 1).
+
+        Returns
+        -------
+        float
+        """
         if self._s is None:
             u = self.u_pl
             self._s = 0.5 * (np.sqrt(u ** 2 + 4) + u)
@@ -286,6 +531,15 @@ class WidePlanetParameterEstimator(ParameterEstimator):
 
     @property
     def q(self):
+        """
+        Planet-to-star mass ratio.
+
+        Estimated from the anomaly as ``0.5 * |delta_A| * rho^2``.
+
+        Returns
+        -------
+        float
+        """
         if self._q is None:
             self._q = 0.5 * np.abs(self.delta_A) * (self.rho ** 2)
 
@@ -293,20 +547,38 @@ class WidePlanetParameterEstimator(ParameterEstimator):
 
     @property
     def a_pspl(self):
+        """
+        PSPL magnification at the anomaly position.
+
+        Computed from ``u_pl`` using the standard PSPL formula:
+        ``(u_pl^2 + 2) / sqrt(u_pl^2 * (u_pl^2 + 4))``.
+
+        Returns
+        -------
+        float
+        """
         if self._a_pspl is None:
-            self._a_pspl = (self.u_pl**2 + 2.) / np.sqrt(self.u_pl**2 * (self.u_pl**2 + 4.))
+            self._a_pspl = (self.u_pl ** 2 + 2.) / np.sqrt(self.u_pl ** 2 * (self.u_pl ** 2 + 4.))
 
         return self._a_pspl
 
     @property
     def delta_A(self):
         """
-        Might want to add an option to calculate delta_A using PSPL fitted fs and fb.
-        Current calculation assumes fb=0. This could be a problem if fb is large, e.g. OB180383.
-        :return:
+        Change in magnification due to the planetary anomaly.
+
+        Computed as ``a_pspl * (10^(dmag / -2.5) - 1)``. This assumes
+        zero blending (``fb = 0``), which may be inaccurate for events
+        with significant blend flux.
+
+        Returns
+        -------
+        float
         """
+        # TODO: Might want to add an option to calculate delta_A using PSPL fitted fs and fb.
+        # Current calculation assumes fb=0. This could be a problem if fb is large, e.g. OB180383.
         if self._delta_A is None:
-            self._delta_A = self.a_pspl * (10.**(self.params['dmag'] / -2.5) - 1.)
+            self._delta_A = self.a_pspl * (10. ** (self.params['dmag'] / -2.5) - 1.)
 
         return self._delta_A
 
@@ -320,59 +592,50 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
     The grid spans alpha, s, log_q, and log_rho. The best-fit parameters
     are identified by minimizing chi2 over the grid.
 
-    Attributes:
-        datasets: *list* of *MulensModel.MulensData*
-            Photometric datasets to evaluate chi2 against.
+    Parameters
+    ----------
+    datasets : list of MulensModel.MulensData
+        Photometric datasets to evaluate chi2 against.
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+    model_config : ModelConfig, optional
+        Configuration for Model construction. If None, a default
+        ``ModelConfig`` is used (no coords, no limb darkening).
+    event_config : EventConfig, optional
+        Configuration for Event construction. If None, a default
+        ``EventConfig`` is used (no coords, no flux fixing).
+    d_alpha : float, optional
+        Step size for alpha grid. See :attr:`alpha_values`.
+    n_alpha : int, optional
+        Number of alpha grid points. See :attr:`alpha_values`.
+    d_s : float, optional
+        Step size for s grid. See :attr:`s_values`.
+    n_s : int, optional
+        Number of s grid points. See :attr:`s_values`.
+    log_q_values : array-like, optional
+        Grid values for log10(q). See :attr:`log_q_grid`.
+    log_rho_values : array-like, optional
+        Grid values for log10(rho). See :attr:`log_rho_grid`.
+    alpha_grid : array-like, optional
+        Explicit grid values for alpha. If provided, overrides d_alpha
+        and n_alpha. Defaults to None.
+    s_grid : array-like, optional
+        Explicit grid values for s. If provided, overrides d_s and n_s.
+        Defaults to None.
+    refine : bool, optional
+        If True, runs Nelder-Mead refinement after the grid search.
+        Defaults to True.
+    nelder_mead_options : dict, optional
+        Options passed to scipy.optimize.minimize with method='Nelder-Mead'.
+        Supported keys: 'maxfev' (default 500), 'xatol' (default 1e-3),
+        'fatol' (default 0.1). Any key not specified falls back to the
+        default. Note: 'initial_simplex' is computed internally from the
+        grid step sizes and should not be passed here.
 
-        params: *dict*
-            Anomaly parameters. See WidePlanetParameterEstimator for details.
-
-        model_config : ModelConfig, optional
-            Configuration for Model construction. If None, a default
-            ``ModelConfig`` is used (no coords, no limb darkening).
-
-        event_config : EventConfig, optional
-            Configuration for Event construction. If None, a default
-            ``EventConfig`` is used (no coords, no flux fixing).
-
-        d_alpha: *float*, optional
-            Step size for alpha grid. Defaults to 0.1.
-
-        n_alpha: *int*, optional
-            Number of alpha grid points. Defaults to 6.
-
-        d_s: *float*, optional
-            Step size for s grid. Defaults to 0.01 * s.
-
-        n_s: *int*, optional
-            Number of s grid points. Defaults to 4.
-
-        log_q_values: *array-like*, optional
-            Grid values for log10(q). Defaults to np.arange(-6, -1).
-
-        log_rho_values: *array-like*, optional
-            Grid values for log10(rho). Defaults to np.arange(-4, -1).
-
-        alpha_grid: *array-like*, optional
-            Explicit grid values for alpha. If provided, overrides d_alpha
-            and n_alpha. Defaults to None.
-
-        s_grid: *array-like*, optional
-            Explicit grid values for s. If provided, overrides d_s and n_s.
-            Defaults to None.
-
-        refine: *bool*, optional
-            If True, runs Nelder-Mead refinement after the grid search.
-            Defaults to True.
-
-        nelder_mead_options: *dict*, optional
-            Options passed to scipy.optimize.minimize with method='Nelder-Mead'.
-            Supported keys: 'maxfev' (default 500), 'xatol' (default 1e-3),
-            'fatol' (default 0.1). Any key not specified falls back to the
-            default. Note: 'initial_simplex' is computed internally from the
-            grid step sizes and should not be passed here.
-
-    Note: In future it might be a good idea to refactor best_params (and
+    Note
+    ----
+    In future it might be a good idea to refactor best_params (and
     related methods) to use dynamic lists of grid parameters rather than
     hardcoding ['alpha', 's', 'q', 'rho'].
     """
@@ -418,6 +681,19 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def _nelder_mead_options(self):
+        """
+        Nelder-Mead options with defaults applied.
+
+        Merges user-supplied ``nelder_mead_options`` with defaults
+        (``maxfev=500``, ``xatol=1e-3``, ``fatol=0.1``). User-supplied
+        values take precedence.
+
+        Returns
+        -------
+        dict
+            Options dict suitable for passing to
+            ``scipy.optimize.minimize``.
+        """
         defaults = {'maxfev': 500, 'xatol': 1e-3, 'fatol': 0.1}
         if self.nelder_mead_options is not None:
             defaults.update(self.nelder_mead_options)
@@ -426,8 +702,19 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
     @property
     def binary_params(self):
         """
-        Returns binary_params populated with best-fit parameters from the
-        grid search and refinement. Call run() first.
+        Best-fit binary lens parameters from the grid search and refinement.
+
+        :meth:`run` must be called before accessing this property.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Binary lens parameters populated with best-fit values.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
         """
         if not self._is_run:
             raise RuntimeError(
@@ -436,8 +723,26 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def alternate_params(self):
+        """
+        Degenerate binary lens parameters using the s_dagger degeneracy.
+
+        Computes the alternate solution by replacing ``s`` with
+        ``s_analytic^2 / s_best``, where ``s_analytic`` is the analytic
+        wide-planet estimate and ``s_best`` is the best-fit value from the
+        grid search.
+
+        see Hwang et al. 2022 and Ryu et al. 2022 for more background
+
+        https://ui.adsabs.harvard.edu/abs/2022AJ....163...43H/abstract
+        https://ui.adsabs.harvard.edu/abs/2022AJ....164..180R/abstract
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Alternate binary lens parameters.
+        """
         base_params = self.get_binary_lens_params()
-        s_new = base_params.ulens['s']**2 / self.best_params['s']
+        s_new = base_params.ulens['s'] ** 2 / self.best_params['s']
         alt_params = BinaryLensParams(base_params.ulens)
         alt_params.mag_methods = base_params.mag_methods
         alt_params.ulens['s'] = s_new
@@ -446,8 +751,19 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
     @property
     def best_params(self):
         """
-        Returns the best-fit parameter dictionary from the grid search and
-        refinement. Call run() first.
+        Best-fit parameter dictionary from the grid search and refinement.
+
+        :meth:`run` must be called before accessing this property.
+
+        Returns
+        -------
+        dict
+            Binary lens parameter dictionary.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
         """
         if not self._is_run:
             raise RuntimeError(
@@ -456,12 +772,15 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     def run(self):
         """
-        Runs the full pipeline: grid search and (if refine=True) iterative
-        refinement. Populates binary_params and best_params.
+        Run the full pipeline: grid search and optional Nelder-Mead refinement.
 
-        Returns:
-            binary_params: *BinaryLensParams*
-                Binary lens parameters populated with best-fit values.
+        Populates :attr:`binary_params` and :attr:`best_params`. Must be
+        called before accessing those properties.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Binary lens parameters populated with best-fit values.
         """
         _ = self.all_results  # triggers grid search + refinement
         self._is_run = True
@@ -469,6 +788,18 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def alpha_values(self):
+        """
+        Grid values of alpha for the grid search.
+
+        If ``alpha_grid`` was provided at construction, returns that
+        directly. Otherwise, constructs a uniform grid of ``n_alpha=6``
+        points centered on the analytic ``alpha`` estimate with step
+        size ``d_alpha=0.1``.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._alpha_grid is not None:
             return self._alpha_grid
         d_alpha = self.d_alpha if self.d_alpha is not None else 0.1
@@ -478,6 +809,17 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def s_values(self):
+        """
+        Grid values of s for the grid search.
+
+        If ``s_grid`` was provided at construction, returns that directly.
+        Otherwise, constructs a uniform grid of ``n_s=4`` points centered
+        on the analytic ``s`` estimate with step size ``d_s=0.01 * s``.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._s_grid is not None:
             return self._s_grid
         d_s = self.d_s if self.d_s is not None else 0.01 * self.s
@@ -487,10 +829,30 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def log_q_grid(self):
+        """
+        Grid values of log10(q) for the grid search.
+
+        Returns ``log_q_values`` if provided at construction, otherwise
+        defaults to ``numpy.arange(-6, -1)``.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         return self.log_q_values if self.log_q_values is not None else np.arange(-6, -1)
 
     @property
     def log_rho_grid(self):
+        """
+        Grid values of log10(rho) for the grid search.
+
+        Returns ``log_rho_values`` if provided at construction, otherwise
+        defaults to ``numpy.arange(-4, -1)``.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         return self.log_rho_values if self.log_rho_values is not None else np.arange(-4, -1)
 
     def _make_event(self, grid_params):
@@ -522,11 +884,32 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         )
 
     def _grid_iterator(self):
+        """
+        Yield all combinations of alpha, s, log_q, and log_rho for the grid search.
+
+        Returns
+        -------
+        itertools.product
+            Iterator over (alpha, s, log_q, log_rho) tuples.
+        """
         return product(
             self.alpha_values, self.s_values,
             self.log_q_grid, self.log_rho_grid)
 
     def _run_grid_search(self):
+        """
+        Run the chi2 grid search over alpha, s, log_q, and log_rho.
+
+        Iterates over all grid points via :meth:`_grid_iterator`, evaluates
+        chi2 for each, and updates ``_base_binary_params`` with the
+        best-fit values.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Results for all grid points with columns ``'chi2'``,
+            ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``.
+        """
         results = []
         grid_params = self._base_binary_params.ulens.copy()
 
@@ -552,6 +935,23 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         return df
 
     def _run_refinement(self):
+        """
+        Run Nelder-Mead refinement starting from the best grid search point.
+
+        Optimizes over alpha, s, log_q, and log_rho using
+        ``scipy.optimize.minimize`` with ``method='Nelder-Mead'``. The
+        initial simplex is scaled to the grid step sizes. Updates
+        ``_base_binary_params`` only if the refinement finds a lower chi2
+        than the grid search best.
+
+        A warning is issued if Nelder-Mead does not converge.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Trajectory of all points evaluated during refinement, with
+            columns ``'chi2'``, ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``.
+        """
         best = self._base_binary_params.ulens.copy()
         x0 = np.array([
             best['alpha'],
@@ -622,6 +1022,18 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def results(self):
+        """
+        Grid search results as a DataFrame.
+
+        Computed lazily on first access by running :meth:`_run_grid_search`
+        and :meth:`_postprocess_grid_results`. Columns include ``'chi2'``,
+        ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``, ``'log_q'``,
+        ``'log_rho'``, and ``'sigma'``.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         if self._results is None:
             df = self._run_grid_search()
             self._results = self._postprocess_grid_results(df)
@@ -644,6 +1056,21 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     @property
     def all_results(self):
+        """
+        Combined grid search and refinement results as a DataFrame.
+
+        Computed lazily on first access. Merges :attr:`results` and (if
+        ``refine=True``) :attr:`refinement_results`, adding a ``'source'``
+        column (``'grid'`` or ``'refinement'``) and recomputing ``'sigma'``
+        relative to the global minimum chi2.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Columns include ``'chi2'``, ``'alpha'``, ``'s'``, ``'q'``,
+            ``'rho'``, ``'log_q'``, ``'log_rho'``, ``'sigma'``,
+            and ``'source'``.
+        """
         if self._all_results is None:
             df_grid = self.results.copy()
             df_grid['source'] = 'grid'
@@ -666,6 +1093,21 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         return self._all_results
 
     def _postprocess_grid_results(self, df):
+        """
+        Add log_q, log_rho, and sigma columns to the raw grid results.
+
+        Parameters
+        ----------
+        df : pandas.DataFrame
+            Raw grid results with columns ``'chi2'``, ``'alpha'``, ``'s'``,
+            ``'q'``, ``'rho'``.
+
+        Returns
+        -------
+        pandas.DataFrame
+            Input DataFrame with added columns ``'log_q'``, ``'log_rho'``,
+            and ``'sigma'`` (relative to the minimum chi2 in this DataFrame).
+        """
         df = df.copy()
         df['log_q'] = np.round(np.log10(df['q'])).astype(int)
         df['log_rho'] = np.round(np.log10(df['rho'])).astype(int)
@@ -674,22 +1116,41 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     def get_results_within_n_sigma(self, n_sigma=3):
         """
-        Return all results (grid and refinement) within n_sigma of the
-        minimum chi2.
+        Return all results within n_sigma of the minimum chi2.
 
-        Arguments:
-            n_sigma: *float*, optional
-                Maximum sigma threshold. Defaults to 3.
+        Parameters
+        ----------
+        n_sigma : float, optional
+            Maximum sigma threshold. Default is 3.
 
-        Returns:
-            *pandas.DataFrame*
-                Subset of all_results with sigma <= n_sigma.
+        Returns
+        -------
+        pandas.DataFrame
+            Subset of :attr:`all_results` with ``sigma <= n_sigma``.
         """
         df = self.all_results
         return df[df['sigma'] <= n_sigma]
 
     @staticmethod
     def _get_sigma_marker(sigma):
+        """
+        Return a matplotlib marker style and size for a given sigma value.
+
+        Used by :meth:`plot_sigma_maps` to distinguish refinement points
+        by their sigma level.
+
+        Parameters
+        ----------
+        sigma : float
+            Sigma value to classify.
+
+        Returns
+        -------
+        marker : str
+            Matplotlib marker code (``'*'``, ``'D'``, ``'o'``, or ``'^'``).
+        size : int
+            Marker size in points.
+        """
         if sigma < 1:
             return '*', 200
         elif sigma < 2:
@@ -700,6 +1161,23 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             return '^', 30
 
     def plot_sigma_maps(self):
+        """
+        Plot 2D sigma maps in the alpha-s plane for each log_q and log_rho combination.
+
+        Produces one figure per unique log_q value. Each figure contains
+        one subplot per unique log_rho value, showing a heatmap of sigma
+        (relative to the global minimum chi2) over the alpha-s grid. If
+        ``refine=True``, refinement trajectory points are overlaid as
+        scatter points with marker styles from :meth:`_get_sigma_marker`.
+
+        Note
+        ----
+        Refinement points are only overlaid when their rounded log_q and
+        log_rho values match the grid values exactly. Refinement points
+        that have wandered to different log_q or log_rho values will not
+        be shown. This is a known limitation and may be addressed in a
+        future version.
+        """
         df_all = self.all_results
         df_grid = df_all[df_all['source'] == 'grid']
 
@@ -707,6 +1185,9 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         unique_log_rho = sorted(df_grid['log_rho'].unique())
         n_rho = len(unique_log_rho)
 
+        # TODO: Refinement points are only overlaid when their rounded log_q and
+        # log_rho match the grid values exactly. Refinement points that have
+        # wandered to different log_q or log_rho values will not be shown. Fix this in the future.
         if self.refine:
             df_refine = df_all[df_all['source'] == 'refinement']
 
@@ -729,8 +1210,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
                 # Refinement scatter overlay
                 if self.refine:
                     refine_mask = (
-                        (df_refine['log_q'] == log_q) &
-                        (df_refine['log_rho'] == log_rho))
+                            (df_refine['log_q'] == log_q) &
+                            (df_refine['log_rho'] == log_rho))
                     refine_subset = df_refine[refine_mask]
 
                     for sigma_low, sigma_high in [(0, 1), (1, 2), (2, 3), (3, np.inf)]:
@@ -763,35 +1244,30 @@ class WidePlanetEnsembleInitializer():
     The first estimator uses a broad default grid. Its best log_q and
     log_rho are used to seed a narrower grid for all subsequent estimators.
 
-    Attributes:
-        datasets: *list* of *MulensModel.MulensData*
-            Photometric datasets.
-
-        anomaly_params: *dict*
-            Anomaly light curve parameters.
-
-        sigmas: *dict*
-            Step sizes for PSPL parameter perturbations. Expected keys:
-            't_0', 'u_0', 't_E'.
-
-        model_config : ModelConfig, optional
-            Configuration for Model construction. If None, a default
-            ``ModelConfig`` is used (no coords, no limb darkening).
-
-        event_config : EventConfig, optional
-            Configuration for Event construction. If None, a default
-            ``EventConfig`` is used (no coords, no flux fixing).
-
-        n_estimators: *int*, optional
-            Number of estimators to run. Should equal n_walkers.
-            Defaults to 40.
-
-        pspl_chi2: *float*, optional
-            Chi2 of the no-planet PSPL model. Used only for diagnostics
-            (delta_chi2, summary counts). Defaults to None.
-
-    # TODO: Hypothesis that this is very slow because the event/Estimator class is getting  created anew every time.
+    Parameters
+    ----------
+    datasets : list of MulensModel.MulensData
+        Photometric datasets.
+    anomaly_params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+    sigmas : dict
+        Step sizes for PSPL parameter perturbations. Expected keys:
+        ``'t_0'``, ``'u_0'``, ``'t_E'``. See :attr:`sigma_t0`,
+        :attr:`sigma_u0`, :attr:`sigma_tE` for defaults.
+    model_config : ModelConfig, optional
+        Configuration for Model construction. If None, a default
+        ``ModelConfig`` is used (no coords, no limb darkening).
+    event_config : EventConfig, optional
+        Configuration for Event construction. If None, a default
+        ``EventConfig`` is used (no coords, no flux fixing).
+    n_estimators : int, optional
+        Number of estimators to run. Should equal n_walkers. Default is 40.
+    pspl_chi2 : float, optional
+        Chi2 of the no-planet PSPL model. Used only for diagnostics
+        (delta_chi2, summary counts). Default is None.
     """
+    # TODO: Hypothesis that this is very slow because the event/Estimator class is getting created anew every time.
 
     def __init__(self, datasets, anomaly_params, sigmas, model_config=None,
                  event_config=None, n_estimators=40, pspl_chi2=None):
@@ -812,15 +1288,18 @@ class WidePlanetEnsembleInitializer():
 
     @property
     def sigma_t0(self):
-        return self.sigmas.get('t_0', 0.)
+        """Perturbation step size for t_0, from ``self.sigmas`` (default 0.00001)."""
+        return self.sigmas.get('t_0', 0.00001)
 
     @property
     def sigma_u0(self):
-        return self.sigmas.get('u_0', 0.)
+        """Perturbation step size for u_0, from ``self.sigmas`` (default 0.001 * u_0)."""
+        return self.sigmas.get('u_0', 0.001 * self.anomaly_params['u_0'])
 
     @property
     def sigma_tE(self):
-        return self.sigmas.get('t_E', 0.)
+        """Perturbation step size for t_E, from ``self.sigmas`` (default 0.001 * t_E)."""
+        return self.sigmas.get('t_E', 0.001 * self.anomaly_params['t_E'])
 
     def _perturb_params(self):
         """
@@ -843,15 +1322,18 @@ class WidePlanetEnsembleInitializer():
         """
         Generate a 3-point grid from the seed estimator's best log value.
 
-        Perturbs best_log_val by 5% and returns
-        [rand_best - 0.5, rand_best, rand_best + 0.5].
+        Perturbs ``best_log_val`` by 5% and returns
+        ``[rand_best - 0.5, rand_best, rand_best + 0.5]``.
 
-        Arguments:
-            best_log_val: *float*
-                Best log10 value from the seed estimator.
+        Parameters
+        ----------
+        best_log_val : float
+            Best log10 value from the seed estimator.
 
-        Returns:
-            *list* of 3 floats
+        Returns
+        -------
+        list of float
+            Three grid values centered on the perturbed best log value.
         """
         rand_best = best_log_val + np.random.randn() * 0.05 * np.abs(best_log_val)
         return [rand_best - 0.5, rand_best, rand_best + 0.5]
@@ -977,12 +1459,36 @@ class WidePlanetEnsembleInitializer():
 
     @property
     def results(self):
+        """
+        Results from every estimator as a DataFrame.
+
+        Computed lazily on first access by running :meth:`_run_all_estimators`.
+        Columns include ``'chi2'``, ``'t_0'``, ``'u_0'``, ``'t_E'``, ``'s'``,
+        ``'q'``, ``'rho'``, ``'alpha'``, and (if ``pspl_chi2`` was provided)
+        ``'delta_chi2'``.
+
+        Returns
+        -------
+        pandas.DataFrame
+        """
         if self._results is None:
             self._results = self._run_all_estimators()
         return self._results
 
     @property
     def mag_methods(self):
+        """
+        Magnification methods from the seed estimator.
+
+        Computed lazily as a side effect of accessing :attr:`results`.
+        Taken from the first estimator run (the seed estimator with the
+        broad default grid).
+
+        Returns
+        -------
+        list
+            Magnification methods in MulensModel convention.
+        """
         _ = self.results  # ensure estimators have run
         return self._mag_methods
 
@@ -1053,7 +1559,7 @@ class WidePlanetEnsembleInitializer():
         cmap = plt.cm.get_cmap('RdYlGn', self.n_estimators)
 
         for fig_title, t_range in [('Anomaly region', t_range_anomaly),
-                                    ('VBBL zoom', t_range_vbbl)]:
+                                   ('VBBL zoom', t_range_vbbl)]:
             fig, ax = plt.subplots(figsize=(10, 5))
             plt.sca(ax)
             ref_event.plot_data()
@@ -1080,17 +1586,56 @@ class WidePlanetEnsembleInitializer():
 
 
 class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
+    """
+    Analytic parameter estimator for close binary lens models (upper caustic).
 
-    def __init__(self, params, limit='GG97', q=None):
+    Extends :class:`WidePlanetParameterEstimator` to compute binary lens
+    parameters appropriate for a close binary (s < 1). The binary lens
+    separation uses the close-topology solution, and ``alpha`` is computed
+    using the upper caustic geometry.
+
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+    limit : str, optional
+        Method to use for estimating ``rho``. One of ``'dwarf'`` (default),
+        ``'giant'``, or ``'point'``. ``'GG97'`` is not supported and will
+        raise a ``ValueError``.
+    q : float, optional
+        Planet-to-star mass ratio. Default is 0.004.
+    rho : float, optional
+        Source size relative to the Einstein radius. If provided, overrides
+        the value computed from ``limit``. Default is None.
+    """
+
+    def __init__(self, params, limit='dwarf', q=None, rho=None):
+        if limit == 'GG97':
+            raise ValueError(
+                "'GG97' limit is not supported for close binary models. "
+                "Use 'dwarf', 'giant', or 'point'.")
         super().__init__(params, limit=limit)
         if q is None:
             q = 0.004
-
         self._q = q
+        if rho is not None:
+            self._rho = rho
         self._eta_not, self._mu, self._phi = None, None, None
-        #self._alpha_upper, self._alpha_lower = None, None
 
     def setup_close_ulens_params(self):
+        """
+        Assemble the close binary lens parameter dictionary without alpha.
+
+        Builds a parameter dict from the PSPL parameters and computed ``s``,
+        ``q``, and (if not None) ``rho``. Used by :meth:`calc_binary_ulens_params`.
+
+        Returns
+        -------
+        dict
+            Binary lens parameter dictionary with keys ``'t_0'``, ``'u_0'``,
+            ``'t_E'``, ``'s'``, ``'q'``, and (if ``rho`` is not None) ``'rho'``.
+        """
         new_params = {'t_0': self.t_0,
                       'u_0': self.u_0,
                       't_E': self.t_E,
@@ -1103,12 +1648,38 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         return new_params
 
     def calc_binary_ulens_params(self):
+        """
+        Compute the binary lens parameter dictionary including alpha.
+
+        Calls :meth:`setup_close_ulens_params` and adds the computed
+        ``alpha`` for the upper caustic geometry.
+
+        Returns
+        -------
+        dict
+            Binary lens parameter dictionary with keys ``'t_0'``, ``'u_0'``,
+            ``'t_E'``, ``'s'``, ``'q'``, ``'alpha'``, and (if ``rho`` is
+            not None) ``'rho'``.
+        """
         new_params = self.setup_close_ulens_params()
         new_params['alpha'] = self.alpha
 
         return new_params
 
     def get_binary_lens_params(self):
+        """
+        Return binary lens parameters for the close upper binary model.
+
+        Calls :meth:`calc_binary_ulens_params` to get the parameter
+        dictionary, wraps it in a :class:`BinaryLensParams` object, and
+        sets the magnification methods via
+        :meth:`BinaryLensParams.set_mag_method`.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Close binary lens model parameters with magnification methods set.
+        """
         binary_ulens_params = self.calc_binary_ulens_params()
         binary_params = BinaryLensParams(binary_ulens_params)
         binary_params.set_mag_method(self.params)
@@ -1117,36 +1688,75 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
     @property
     def log_q_grid(self):
+        """
+        Grid values of log10(q) for the grid search.
+
+        Returns ``log_q_values`` if provided at construction, otherwise
+        defaults to ``numpy.array([-2.5, -2, -1, -0.5])``, which spans
+        the mass ratio range appropriate for close binary models.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         return self.log_q_values if self.log_q_values is not None else np.array([-2.5, -2, -1, -0.5])
 
     @property
-    def binary_params(self):
-        if self._binary_params is None:
-            self._binary_params = self.get_binary_lens_params()
-
-        return self._binary_params
-
-    @property
     def s(self):
+        """
+        Binary lens separation in Einstein radius units.
+
+        Computed from ``u_pl`` as ``0.5 * (sqrt(u_pl^2 + 4) - u_pl)``.
+        This is the close-topology solution (s < 1).
+
+        Returns
+        -------
+        float
+        """
         if self._s is None:
             u = self.u_pl
-            self._s = 0.5 * (np.sqrt(u**2 + 4) - u)
+            self._s = 0.5 * (np.sqrt(u ** 2 + 4) - u)
 
         return self._s
 
     @property
     def q(self):
+        """Planet-to-star mass ratio, set at construction (default 0.004)."""
         return self._q
 
     @property
     def eta_not(self):
+        """
+        Vertical distance of the planetary caustic from the binary axis.
+
+        Computed as ``(q^0.5 / s) * (1/sqrt(1 + s^2) + sqrt(1 - s^2))``.
+        Used to calculate :attr:`mu`.
+
+        See Han 2006 https://ui.adsabs.harvard.edu/abs/2006ApJ...638.1080H/abstract
+
+        Returns
+        -------
+        float
+        """
         if self._eta_not is None:
-            self._eta_not = (self.q**0.5 / self.s) * (1 / (np.sqrt(1 + self.s**2)) + np.sqrt(1 - self.s**2))
+            self._eta_not = (self.q ** 0.5 / self.s) * (1 / (np.sqrt(1 + self.s ** 2)) + np.sqrt(1 - self.s ** 2))
 
         return self._eta_not
 
     @property
     def mu(self):
+        """
+        Angle between the lens axis and the direction to the caustic.
+
+        Computed as ``arctan2(eta_not, (s - 1/s) / (1 + q))``. Includes a
+        correction from the primary lens position to the center of mass.
+        Used to calculate :attr:`alpha`.
+
+        Returns
+        -------
+        float
+            Angle in radians.
+        """
         if self._mu is None:
             self._mu = np.arctan2(self.eta_not, (self.s - 1 / self.s) / (1 + self.q))
             # correction for primary --> COM
@@ -1155,6 +1765,17 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
     @property
     def phi(self):
+        """
+        Angle between the source trajectory and the line connecting the
+        planetary caustic and the origin.
+
+        Computed as ``arctan2(u_0, tau_pl)``. Used to calculate :attr:`alpha`.
+
+        Returns
+        -------
+        float
+            Angle in radians.
+        """
         if self._phi is None:
             self._phi = np.arctan2(self.u_0, self.tau_pl)
 
@@ -1162,6 +1783,18 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
     @property
     def alpha(self):
+        """
+        Angle of the source trajectory relative to the binary axis, in degrees,
+        for the upper caustic solution.
+
+        Computed as ``180 - deg(phi - mu)``, where ``phi`` is the source
+        trajectory angle and ``mu`` is the caustic offset angle.
+        Normalized to (-360, 360] via :meth:`_correct_alpha`.
+
+        Returns
+        -------
+        float
+        """
         if self._alpha is None:
             alpha = 180. - np.rad2deg(self.phi - self.mu)
             self._alpha = self._correct_alpha(alpha)
@@ -1170,9 +1803,28 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
 
 class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
+    """
+    Analytic parameter estimator for close binary lens models (lower caustic).
+
+    Identical to :class:`CloseUpperBinaryParameterEstimator` except that
+    ``alpha`` uses the lower caustic geometry, computed as
+    ``180 - deg(phi + mu)``.
+    """
 
     @property
     def alpha(self):
+        """
+        Angle of the source trajectory relative to the binary axis, in degrees,
+        for the lower caustic solution.
+
+        Computed as ``180 - deg(phi + mu)``, where ``phi`` is the source
+        trajectory angle and ``mu`` is the caustic offset angle.
+        Normalized to (-360, 360] via :meth:`_correct_alpha`.
+
+        Returns
+        -------
+        float
+        """
         if self._alpha is None:
             alpha = 180. - np.rad2deg(self.phi + self.mu)
             self._alpha = self._correct_alpha(alpha)
@@ -1181,10 +1833,24 @@ class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
 
 
 class CloseUpperBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUpperBinaryParameterEstimator):
+    """
+    Grid search estimator for close binary lens models (upper caustic).
+
+    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`CloseUpperBinaryParameterEstimator`
+    (close-topology analytic parameter estimates and upper caustic ``alpha``).
+    """
     pass
 
 
 class CloseLowerBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator):
+    """
+    Grid search estimator for close binary lens models (lower caustic).
+
+    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`CloseLowerBinaryParameterEstimator`
+    (close-topology analytic parameter estimates and lower caustic ``alpha``).
+    """
     pass
 
 
@@ -1218,9 +1884,39 @@ def get_close_params(params, q=None, rho=None):
 
 
 class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
+    """
+    Analytic parameter estimator for close planet models.
+
+    Extends :class:`WidePlanetParameterEstimator` to compute binary lens
+    parameters appropriate for a close planet (s < 1), based on matching
+    the dip in the light curve to the center of the demagnified region
+    (mid-point between the planetary caustics). ``q`` is estimated from
+    the anomaly duration and source trajectory geometry.
+
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+    limit : str, optional
+        Method to use for estimating ``rho``. One of ``'GG97'`` (default),
+        ``'dwarf'``, ``'giant'``, or ``'point'``.
+    """
 
     @property
     def s(self):
+        """
+        Binary lens separation in Einstein radius units.
+
+        Computed as ``|0.5 * (sqrt(u_pl^2 + 4) - u_pl)|``.
+        This is the close-topology solution (s < 1).
+
+        See Han 2006 https://ui.adsabs.harvard.edu/abs/2006ApJ...638.1080H/abstract
+
+        Returns
+        -------
+        float
+        """
         if self._s is None:
             u = self.u_pl
             self._s = np.abs(0.5 * (np.sqrt(u ** 2 + 4) - u))
@@ -1228,15 +1924,36 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
 
     @property
     def q(self):
+        """
+        Planet-to-star mass ratio.
+
+        Estimated from the anomaly duration and source trajectory geometry as
+        ``(dt / t_E / 4)^2 * (s / u_0) * |sin(alpha)^3|``.
+
+        See Hwang et al. 2022
+        https://ui.adsabs.harvard.edu/abs/2022AJ....163...43H/abstract
+
+        Returns
+        -------
+        float
+        """
         if self._q is None:
-            #print((self.params['dt'] / self.params['t_E'] / 4.)**2)
-            #print((self.s / self.u_0))
-            #print(np.abs((np.sin(np.deg2rad(self.alpha)))**3))
-            self._q = (self.params['dt'] / self.params['t_E'] / 4.)**2 * (self.s / self.u_0) * np.abs((np.sin(np.deg2rad(self.alpha)))**3)
+            self._q = (self.params['dt'] / self.params['t_E'] / 4.) ** 2 * (self.s / self.u_0) * np.abs(
+                (np.sin(np.deg2rad(self.alpha))) ** 3)
         return self._q
 
     @property
     def alpha(self):
+        """
+        Angle of the source trajectory relative to the binary axis, in degrees.
+
+        Computed as ``-deg(arctan2(u_0, tau_pl))``.
+        Normalized to (-360, 360] via :meth:`_correct_alpha`.
+
+        Returns
+        -------
+        float
+        """
         if self._alpha is None:
             alpha = np.arctan2(self.params['u_0'], self.tau_pl)
             alpha = np.rad2deg(-alpha)
@@ -1246,10 +1963,31 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
 
 
 class ClosePlanetGridSearchEstimator(WidePlanetGridSearchEstimator, ClosePlanetParameterEstimator):
+    """
+    Grid search estimator for close planet models.
+
+    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`ClosePlanetParameterEstimator`
+    (close-topology analytic parameter estimates).
+    """
 
     @property
     def s_values(self):
-        """Close planets need a wider range of possible s values because of non-caustic crossing values"""
+        """
+        Grid values of s for the grid search.
+
+        If ``s_grid`` was provided at construction, returns that directly.
+        Otherwise, constructs a uniform grid of ``n_s=7`` points centered
+        on the analytic ``s`` estimate with step size ``d_s=0.05 * s``,
+        then filters to only include values less than 1. The wider default
+        grid (compared to :class:`WidePlanetGridSearchEstimator`) accounts
+        for the broader range of possible s values in non-caustic-crossing
+        close planet geometries.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._s_grid is not None:
             return self._s_grid
 
@@ -1262,109 +2000,156 @@ class ClosePlanetGridSearchEstimator(WidePlanetGridSearchEstimator, ClosePlanetP
 
 def model_pspl_mag_at_pl(params):
     """
-    Gets the magnification at anomaly time assuming point lens model.
+    Compute the PSPL magnification at the anomaly time.
 
-    Arguments :
-        params: *dictionary*
-            Initilal parameters.
-            
-            - 't_0' (*float*): The time of maximum magnification.
-            - 'u_0' (*float*): The impact parameter.
-            - 't_E' (*float*): The Einstein crossing time.
-            - 't_pl' (*float*): The time at which to compute the magnification.
-            
-    Returns :
-        mag :*float*
-             Magnification at the specified time 't_pl' based on the point lens model.
-            
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+        Required keys:
+
+        - ``'t_0'`` : float, time of maximum magnification.
+        - ``'u_0'`` : float, impact parameter.
+        - ``'t_E'`` : float, Einstein crossing time.
+        - ``'t_pl'`` : float, time of the anomaly.
+
+    Returns
+    -------
+    float
+        PSPL magnification at ``t_pl``.
     """
     model1 = MulensModel.Model({'t_0': params['t_0'],
-                       'u_0': params['u_0'], 
-                       't_E': params['t_E']})
+                                'u_0': params['u_0'],
+                                't_E': params['t_E']})
     return model1.get_magnification(params['t_pl'])
 
 
 class BinarySourceParams():
     """
-    A class for managing parameters related to binary source models. Derived from equation 2.5 from Gaudi 1998.
-   
-   Attributes:
-        ulens: *object*
-            Object representing the underlying lens model.
-            
-        source_flux_ratio: *object*
-            Object representing the source flux ratio.  
-            
-        set_source_flux_ratio(params):
-            Sets the source flux ratio based on input parameters.
-  
+    Container for binary source model parameters.
+
+    Parameters
+    ----------
+    ulens : dict
+        PSPL parameter dictionary with keys ``'t_0_1'``, ``'u_0_1'``,
+        ``'t_0_2'``, ``'u_0_2'``, ``'t_E'``.
+
+    Attributes
+    ----------
+    ulens : dict
+        Binary source parameter dictionary.
+    source_flux_ratio : float or None
+        Source flux ratio. Set by :meth:`set_source_flux_ratio`.
     """
+
     def __init__(self, ulens):
         self.ulens = ulens
         self.source_flux_ratio = None
-        
+
     def set_source_flux_ratio(self, params):
         """
-         Sets the source flux ratio based on input parameters.
+        Set the source flux ratio from anomaly light curve parameters.
 
-        Arguments :
-            params: *dictionary*
-                Initilal parameters.
-            
-                - 't_0' (*float*): Time of maximum magnification.
-                - 'u_0' (*float*): Impact parameter.
-                - 't_E' (*float*): Einstein crossing time.
-                - 't_pl' (*float*): Time at which to compute the wide model parameters.
-                - 'dt' (*float*): Duration of the anomaly
-                - 'dmag' (*float*): Magnitude difference of the perturbation
+        See Gaudi 1998 equation 2.5
+        https://ui.adsabs.harvard.edu/abs/1998ApJ...506..533G/abstract
 
-        Returns :
-           None
+        Parameters
+        ----------
+        params : dict
+            Anomaly light curve parameters as returned by
+            :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+            Required keys:
+
+            - ``'t_0'`` : float, time of maximum magnification.
+            - ``'u_0'`` : float, impact parameter.
+            - ``'t_E'`` : float, Einstein crossing time.
+            - ``'t_pl'`` : float, time of the anomaly.
+            - ``'dt'`` : float, duration of the anomaly.
+            - ``'dmag'`` : float, magnitude difference of the perturbation.
+
+        Returns
+        -------
+        None
         """
         A1 = model_pspl_mag_at_pl(params)
-        u_0_2 = params["dt"] / (12**0.5 * params["t_E"])
+        u_0_2 = params["dt"] / (12 ** 0.5 * params["t_E"])
         e = params["dmag"] * u_0_2 * A1
         self.source_flux_ratio = e
 
 
 def get_binary_source_params(params):
     """
-    Transform initial parameters into binary source model parameters.
+    Transform initial anomaly parameters into binary source model parameters.
 
-    Arguments:
-        params: *dictionary*
-            Initial parameters.
+    Parameters
+    ----------
+    params : dict
+        Anomaly light curve parameters as returned by
+        :meth:`AnomalyPropertyEstimator.get_anomaly_lc_parameters`.
+        Required keys:
 
-            - 't_0' (*float*): Time of maximum magnification for the first lens.
-            - 'u_0' (*float*): Impact parameter for the first lens.
-            - 't_pl' (*float*): Time at which to compute the source flux ratio.
-            - 'dt' (*float*): Duration of the anomaly
-            - 't_E' (*float*): Einstein crossing time.
-            - 'dmag' (*float*): Magnitude difference of the perturbation
+        - ``'t_0'`` : float, time of maximum magnification.
+        - ``'u_0'`` : float, impact parameter.
+        - ``'t_E'`` : float, Einstein crossing time.
+        - ``'t_pl'`` : float, time of the anomaly.
+        - ``'dt'`` : float, duration of the anomaly.
+        - ``'dmag'`` : float, magnitude difference of the perturbation.
 
-    Returns:
-        source_params : *BinarySourceParams*
-            Binary source model parameters.
+    Returns
+    -------
+    :class:`BinarySourceParams`
+        Binary source model parameters with ``source_flux_ratio`` set.
     """
-    u_0_2 = params["dt"] / (12**0.5 * params["t_E"])
-    new_params= {'t_0_1': params['t_0'],
-              'u_0_1': params['u_0'],
-              't_0_2': params['t_pl'],
-              'u_0_2': u_0_2,
-              't_E': params['t_E']}
+    u_0_2 = params["dt"] / (12 ** 0.5 * params["t_E"])
+    new_params = {'t_0_1': params['t_0'],
+                  'u_0_1': params['u_0'],
+                  't_0_2': params['t_pl'],
+                  'u_0_2': u_0_2,
+                  't_E': params['t_E']}
     out = BinarySourceParams(new_params)
     out.set_source_flux_ratio(params)
     return out
 
 
 class AnomalyPropertyEstimator():
+    """
+    Estimates photometric anomaly properties from PSPL residuals.
+
+    Identifies the time, duration, and magnitude of a photometric anomaly
+    by computing residuals relative to a PSPL model and finding the dominant
+    extremum within the anomaly window defined by the AnomalyFinderGridSearch
+    results.
+
+    Parameters
+    ----------
+    datasets : MulensModel.MulensData or list of MulensModel.MulensData
+        Photometric datasets.
+    pspl_params : dict
+        PSPL model parameters. Required keys: ``'t_0'``, ``'u_0'``, ``'t_E'``.
+    af_results : dict
+        Best point from the AnomalyFinderGridSearch. Required keys:
+        ``'t_0'``, ``'t_eff'``.
+    model_config : :class:`.mulens_object_config.ModelConfig`, optional
+        Configuration for Model construction. If None, a default
+        ``ModelConfig`` is used (no coords, no limb darkening).
+    event_config : :class:`.mulens_object_config.EventConfig`, optional
+        Configuration for Event construction. If None, a default
+        ``EventConfig`` is used (no coords, no flux fixing).
+    n_mask : int or float, optional
+        Half-width of the anomaly window in units of ``t_eff``. Default is 3.
+    importance_threshold : float, optional
+        If the amplitude of a negative peak is less than this fraction of
+        the dominant positive peak, it is considered unimportant.
+        Default is 0.2.
+    """
     # TODO: The old version revised the PSPL parameters after masking the anomaly.
     # Could consider whether it would be a good idea to reimplement that.
 
     def __init__(self,
                  datasets=None, pspl_params=None, af_results=None,
                  model_config=None, event_config=None,
-                 mask_type='t_eff', n_mask=3,
+                 n_mask=3,
                  importance_threshold=0.2):
 
         if isinstance(datasets, MulensModel.MulensData):
@@ -1391,7 +2176,6 @@ class AnomalyPropertyEstimator():
         self._source_flux = None
         self._blend_flux = None
 
-        self._anom_type = None
         self._anom_index = None
         self._sorted_index = None
         self._times = None
@@ -1400,7 +2184,7 @@ class AnomalyPropertyEstimator():
         self._chi2s = None
         self._expected_model_fluxes = None
 
-    def get_pspl_event(self):
+    def get_psql_event(self):
         """
         Create a MulensModel.Event for the PSPL model.
 
@@ -1419,57 +2203,67 @@ class AnomalyPropertyEstimator():
         event.fit_fluxes()
         return event
 
-    def get_anom_type(self):
-        n_pts = np.sum(self.anom_index)
-        sigmas = np.sign(self.residuals) * np.sqrt(self.chi2s)
-        #med, std = np.nanmedian(sigmas), np.nanstd(sigmas)
-        #print('sigma dist', med, std, np.percentile(sigmas, q=[0, 1, 2, 98, 99, 100]))
-        #plt.figure()
-        #plt.hist(sigmas, bins=int(n_pts/40))
-        #plt.axvline(med, color='black')
-        #plt.axvline(med - std, color='black')
-        #plt.axvline(med + std, color='black')
-        #plt.gca().minorticks_on()
-        #plt.xlabel('sigmas')
-
-        if n_pts > 10:
-            max_res = np.percentile(sigmas, q=98)
-            min_res = np.percentile(sigmas, q=2)
-        else:
-            min_res, max_res = -np.inf, np.inf
-
-        #print('res', n_pts, min_res, max_res)
-        if (min_res < 0) and (np.abs(min_res) > max_res):
-            return 'negative'
-
-        top_index = (sigmas > 0) & (sigmas < max_res)
-        bot_index = (sigmas < 0) & (sigmas > min_res)
-        #print('n', np.sum(bot_index), np.sum(top_index))
-        if np.sum(top_index) == 0:
-            return 'negative'
-        elif np.sum(bot_index) == 0:
-            return 'positive'
-        else:
-            top_chi2 = np.sum(self.chi2s[top_index])
-            bot_chi2 = np.sum(self.chi2s[bot_index])
-            #print('chi2', bot_chi2, top_chi2)
-            if top_chi2 > bot_chi2:
-                return 'positive'
-            else:
-                return 'negative'
-
     def set_anom_prop(self):
+        """
+        Compute and cache anomaly properties if not already set.
+
+        Calls :meth:`find_extremum` with ``method='rolling'`` and stores the
+        results in ``_peak_dflux``, ``_peak_index``, ``_t_start``, and
+        ``_t_stop``.
+
+        Returns
+        -------
+        None
+        """
         if self._peak_dflux is None:
             self._peak_dflux, self._peak_index, self._t_start, self._t_stop = self.find_extremum(
                 method='rolling')
 
     def get_anom_prop(self):
+        """
+        Return anomaly properties, computing them first if necessary.
+
+        Calls :meth:`set_anom_prop` if ``peak_dflux``, ``t_start``, or
+        ``t_stop`` are not yet set.
+
+        Returns
+        -------
+        peak_dflux : float
+            Peak flux deviation of the anomaly.
+        peak_index : int
+            Index into :attr:`sorted_times` of the dominant peak.
+        t_start : float
+            Start time of the anomaly.
+        t_stop : float
+            End time of the anomaly.
+        peak_width : float
+            Duration of the anomaly (``t_stop - t_start``).
+        """
         if (self.peak_dflux is None) or (self.t_start is None) or (self.t_stop is None):
             self.set_anom_prop()
 
         return self.peak_dflux, self.peak_index, self.t_start, self.t_stop, self.peak_width
 
     def _find_extremum_with_simple_line(self):
+        """
+        Estimate the anomaly extremum using a simple linear interpolation.
+
+        Fallback method used when the anomaly window contains too few points
+        for rolling-mean smoothing. Identifies the peak as the point of maximum
+        chi2, then estimates ``t_start`` and ``t_stop`` by linear interpolation
+        between the peak and the first/last points in the window.
+
+        Returns
+        -------
+        peak_dflux : float
+            Peak flux deviation of the anomaly.
+        peak_index : int
+            Index into :attr:`sorted_times` of the dominant peak.
+        t_start : float
+            Estimated start time of the anomaly.
+        t_stop : float
+            Estimated end time of the anomaly.
+        """
         peak_index = np.nanargmax(self.chi2s)
         peak_dflux = self.residuals[peak_index]
         t_start, t_stop = None, None
@@ -1485,6 +2279,17 @@ class AnomalyPropertyEstimator():
         return peak_dflux, peak_index, t_start, t_stop
 
     def _get_window_size(self):
+        """
+        Compute the rolling mean window size based on the number of anomaly points.
+
+        Scales the window to roughly 10% of the anomaly points for small windows,
+        decreasing to ~1% for large windows.
+
+        Returns
+        -------
+        int
+            Window size for use with :meth:`_find_extremum_with_rolling_mean`.
+        """
         n_pts = np.sum(self.anom_index)
 
         if n_pts < 10:
@@ -1498,13 +2303,28 @@ class AnomalyPropertyEstimator():
         else:
             window_size = int(np.floor(n_pts / 100))
 
-        #window_size = int(np.floor(n_pts / 10))
-        #print('points', n_pts, 'window', window_size)
         return window_size
 
     def _find_all_extrema(self, res_rolling_mean, prominence):
-        """Find all local extrema in the smoothed residuals, returning a list
-        of dicts with peak_index and peak_dflux."""
+        """
+        Find all local extrema in the smoothed residuals.
+
+        Uses ``scipy.signal.find_peaks`` on both the positive and negative
+        signal. If no peaks are found, falls back to the global extremum.
+
+        Parameters
+        ----------
+        res_rolling_mean : numpy.ndarray
+            Smoothed residuals from the rolling mean.
+        prominence : float
+            Minimum prominence required for a peak to be detected.
+
+        Returns
+        -------
+        list of dict
+            Each dict has keys ``'peak_index'`` (int) and ``'peak_dflux'``
+            (float).
+        """
         pos_indices, _ = find_peaks(res_rolling_mean, prominence=prominence)
         neg_indices, _ = find_peaks(-res_rolling_mean, prominence=prominence)
 
@@ -1515,7 +2335,6 @@ class AnomalyPropertyEstimator():
             peaks.append({'peak_index': idx, 'peak_dflux': res_rolling_mean[idx]})
 
         if len(peaks) == 0:
-            # Fallback for monotonic signal: use global extremum
             max_idx = np.argmax(res_rolling_mean)
             min_idx = np.argmin(res_rolling_mean)
             if abs(res_rolling_mean[max_idx]) >= abs(res_rolling_mean[min_idx]):
@@ -1526,38 +2345,77 @@ class AnomalyPropertyEstimator():
         return peaks
 
     def _select_dominant_peak(self, peaks):
-        """Select the dominant peak using importance_threshold to handle mixed-sign cases.
+        """
+        Select the dominant peak from a list of candidates.
 
-        Cases:
-            1. All positive peaks: return biggest positive
-            2. All negative peaks: return biggest negative
-            3. Mixed:
-                a. |biggest_neg| > importance_threshold * |biggest_pos|: both important,
-                   return biggest by absolute amplitude
-                b. |biggest_neg| <= importance_threshold * |biggest_pos|: neg unimportant,
-                   return biggest positive
+        Uses :attr:`importance_threshold` to handle mixed-sign cases.
+
+        Parameters
+        ----------
+        peaks : list of dict
+            Candidates as returned by :meth:`_find_all_extrema`. Each dict
+            has keys ``'peak_index'`` and ``'peak_dflux'``.
+
+        Returns
+        -------
+        dict
+            The dominant peak dict with keys ``'peak_index'`` and
+            ``'peak_dflux'``.
+
+        Notes
+        -----
+        Selection logic:
+
+        1. All positive peaks: return the largest positive peak.
+        2. All negative peaks: return the largest negative peak.
+        3. Mixed sign:
+
+           a. If ``|biggest_neg| > importance_threshold * |biggest_pos|``,
+              both signs are considered important; return the peak with the
+              largest absolute amplitude.
+           b. Otherwise, the negative peak is considered unimportant;
+              return the largest positive peak.
         """
         pos_peaks = [p for p in peaks if p['peak_dflux'] > 0]
         neg_peaks = [p for p in peaks if p['peak_dflux'] < 0]
 
         if len(pos_peaks) == 0:
-            # Case 2: all negative
             return max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
         elif len(neg_peaks) == 0:
-            # Case 1: all positive
             return max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
         else:
-            # Case 3: mixed
             biggest_pos = max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
             biggest_neg = max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
             if abs(biggest_neg['peak_dflux']) <= self.importance_threshold * abs(biggest_pos['peak_dflux']):
-                # Case 3b: negative unimportant
                 return biggest_pos
             else:
-                # Case 3a: negative important
                 return biggest_neg
 
     def _find_extremum_with_rolling_mean(self):
+        """
+        Estimate the anomaly extremum using a rolling mean.
+
+        Smooths the residuals with a boxcar kernel of size from
+        :meth:`_get_window_size`, estimates noise via median absolute deviation,
+        finds all peaks with prominence ≥ 3σ via :meth:`_find_all_extrema`,
+        selects the dominant peak via :meth:`_select_dominant_peak`, and
+        estimates ``t_start``/``t_stop`` as the times where the smoothed
+        residuals cross the half-maximum of the dominant peak.
+
+        Falls back to :meth:`_find_extremum_with_simple_line` if the window
+        size equals or exceeds the number of anomaly points.
+
+        Returns
+        -------
+        peak_dflux : float
+            Peak flux deviation of the anomaly.
+        peak_index : int
+            Index into :attr:`sorted_times` of the dominant peak.
+        t_start : float
+            Start time of the anomaly (half-maximum crossing).
+        t_stop : float
+            End time of the anomaly (half-maximum crossing).
+        """
         window_size = self._get_window_size()
         kernel = np.ones(window_size) / window_size
 
@@ -1586,10 +2444,49 @@ class AnomalyPropertyEstimator():
             return self._find_extremum_with_simple_line()
 
     def find_extremum(self, method=None):
+        """
+        Find the dominant extremum in the anomaly window.
+
+        Dispatches to the appropriate algorithm based on ``method``.
+
+        Parameters
+        ----------
+        method : str, optional
+            Algorithm to use. Currently only ``'rolling'`` is supported,
+            which calls :meth:`_find_extremum_with_rolling_mean`.
+
+        Returns
+        -------
+        peak_dflux : float
+            Peak flux deviation of the anomaly.
+        peak_index : int
+            Index into :attr:`sorted_times` of the dominant peak.
+        t_start : float
+            Start time of the anomaly.
+        t_stop : float
+            End time of the anomaly.
+        """
         if method == 'rolling':
             return self._find_extremum_with_rolling_mean()
 
     def get_anomaly_lc_parameters(self):
+        """
+        Return the full set of anomaly light curve parameters.
+
+        Combines the PSPL parameters with the estimated anomaly properties
+        (``dmag``, ``dt``, ``t_pl``). The returned dictionary is the standard
+        ``params`` input expected by all parameter estimator classes in this
+        module.
+
+        Returns
+        -------
+        dict
+            PSPL parameters plus:
+
+            - ``'dmag'`` : float, magnitude difference of the anomaly.
+            - ``'dt'`` : float, duration of the anomaly (``t_stop - t_start``).
+            - ``'t_pl'`` : float, midpoint time of the anomaly.
+        """
         self.set_anom_prop()
         params = {key: value for key, value in self.pspl_params.items()}
         params['dmag'] = self.dmag
@@ -1599,11 +2496,13 @@ class AnomalyPropertyEstimator():
         return params
 
     def _plot_peak_lines(self):
+        """Draw vertical lines at peak_time, t_start, and t_stop on the current axes."""
         plt.axvline(self.peak_time, color='darkgray', zorder=10, linestyle=':')
         plt.axvline(self.t_start, color='darkgray')
         plt.axvline(self.t_stop, color='darkgray')
 
     def _plot_peak_lines_res(self):
+        """Draw peak lines and a horizontal line at peak_dflux; overlay all_peaks as scatter points."""
         self._plot_peak_lines()
         plt.axhline(self.peak_dflux, color='darkgray', linestyle=':')
         if self.all_peaks is not None:
@@ -1612,23 +2511,28 @@ class AnomalyPropertyEstimator():
                     self.sorted_times[peak['peak_index']], peak['peak_dflux'],
                     marker='d', color='red', zorder=5)
 
-        #plt.axvline(self.peak_time - self.peak_width / 2., color='darkgray')
-        #plt.axvline(self.peak_time + self.peak_width / 2., color='darkgray')
-
     def _plot_af_lines(self):
+        """Draw vertical lines at the AnomalyFinder t_eff boundaries on the current axes."""
         plt.axvline(self.af_results['t_0'] +
                     self.af_results['t_eff'], color='black')
         plt.axvline(self.af_results['t_0'] -
                     self.af_results['t_eff'], color='black')
 
     def _setup_anom_xaxis(self):
+        """Set x-axis limits to ±5 t_eff around the AnomalyFinder t_0 and label as 'time'."""
         plt.xlim(self.af_results['t_0'] + 5. * np.array([-1, 1]) *
                  self.af_results['t_eff'])
         plt.xlabel('time')
 
     def plot_residuals(self):
+        """
+        Plot PSPL residuals in the anomaly window.
+
+        Scatter plot of residuals vs. time with peak and AnomalyFinder boundary
+        lines overlaid via :meth:`_plot_peak_lines_res` and
+        :meth:`_plot_af_lines`.
+        """
         plt.figure()
-        plt.title(self.anom_type)
         plt.axhline(0, color='black')
         plt.scatter(self.sorted_times, self.residuals)
         self._plot_peak_lines_res()
@@ -1637,11 +2541,18 @@ class AnomalyPropertyEstimator():
         plt.ylabel('res')
 
     def plot_anomaly(self):
+        """
+        Plot the PSPL model and data in the anomaly window.
+
+        Shows the data, PSPL model, and the estimated peak anomaly magnitude,
+        with peak and AnomalyFinder boundary lines overlaid via
+        :meth:`_plot_peak_lines` and :meth:`_plot_af_lines`.
+        """
         plt.figure()
-        plt.title(self.anom_type)
         self.pspl_event.plot_data()
         self.pspl_event.plot_model(color='black', zorder=5)
-        peak_anom_mag = MulensModel.Utils.get_mag_from_flux(self.expected_model_fluxes[self.peak_index] + self.peak_dflux)
+        peak_anom_mag = MulensModel.Utils.get_mag_from_flux(
+            self.expected_model_fluxes[self.peak_index] + self.peak_dflux)
         plt.scatter(self.peak_time, peak_anom_mag, marker='d', color='darkgray', zorder=10)
 
         self._plot_peak_lines()
@@ -1651,34 +2562,42 @@ class AnomalyPropertyEstimator():
         plt.ylabel('mag')
 
     @property
-    def anom_type(self):
-        if self._anom_type is None:
-            self._anom_type = self.get_anom_type()
-
-        return self._anom_type
-
-    @property
     def peak_dflux(self):
+        """Peak flux deviation of the dominant anomaly, set by :meth:`set_anom_prop`."""
         return self._peak_dflux
 
     @property
     def peak_index(self):
+        """Index into :attr:`sorted_times` of the dominant peak, set by :meth:`set_anom_prop`."""
         return self._peak_index
 
     @property
     def peak_time(self):
+        """Time of the dominant peak (``sorted_times[peak_index]``)."""
         return self.sorted_times[self.peak_index]
 
     @property
     def t_start(self):
+        """Start time of the anomaly, set by :meth:`set_anom_prop`."""
         return self._t_start
 
     @property
     def t_stop(self):
+        """End time of the anomaly, set by :meth:`set_anom_prop`."""
         return self._t_stop
 
     @property
     def dmag(self):
+        """
+        Magnitude difference between the anomaly peak and the PSPL model.
+
+        Computed as ``mag(model_flux + peak_dflux) - mag(model_flux)`` at the
+        peak index, where ``model_flux`` is the expected PSPL flux.
+
+        Returns
+        -------
+        float
+        """
         expected_mag = MulensModel.Utils.get_mag_from_flux(
             self.expected_model_fluxes[self.peak_index])
         peak_anom_mag = MulensModel.Utils.get_mag_from_flux(
@@ -1688,10 +2607,21 @@ class AnomalyPropertyEstimator():
 
     @property
     def peak_width(self):
+        """Duration of the anomaly (``t_stop - t_start``)."""
         return self.t_stop - self.t_start
 
     @property
     def anom_index(self):
+        """
+        Boolean mask selecting data points within the anomaly window.
+
+        The window is ``t_0 ± n_mask * t_eff`` from :attr:`af_results`,
+        computed at construction as ``anom_t_range_af``.
+
+        Returns
+        -------
+        numpy.ndarray of bool
+        """
         if self._anom_index is None:
             self._anom_index = (self.times > self.anom_t_range_af[0]) & (self.times < self.anom_t_range_af[1])
 
@@ -1699,6 +2629,13 @@ class AnomalyPropertyEstimator():
 
     @property
     def sorted_index(self):
+        """
+        Indices that sort :attr:`times` within the anomaly window.
+
+        Returns
+        -------
+        numpy.ndarray of int
+        """
         if self._sorted_index is None:
             self._sorted_index = np.argsort(self.times[self.anom_index])
 
@@ -1706,6 +2643,13 @@ class AnomalyPropertyEstimator():
 
     @property
     def times(self):
+        """
+        Observation times from all datasets, concatenated.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._times is None:
             self._times = np.hstack([dataset.time for dataset in self.pspl_event.datasets])
 
@@ -1713,10 +2657,18 @@ class AnomalyPropertyEstimator():
 
     @property
     def sorted_times(self):
+        """
+        Observation times within the anomaly window, sorted in time order.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         return self.times[self.anom_index][self.sorted_index]
 
     @property
     def pspl_event(self):
+        """PSPL MulensModel.Event with fluxes fitted, computed lazily via :meth:`get_pspl_event`."""
         if self._pspl_event is None:
             self._pspl_event = self.get_pspl_event()
 
@@ -1724,6 +2676,7 @@ class AnomalyPropertyEstimator():
 
     @property
     def source_flux(self):
+        """Reference source flux from the PSPL fit, from :attr:`pspl_event`."""
         if self._source_flux is None:
             self._source_flux, foo = self.pspl_event.get_ref_fluxes()
 
@@ -1731,6 +2684,7 @@ class AnomalyPropertyEstimator():
 
     @property
     def blend_flux(self):
+        """Reference blend flux from the PSPL fit, from :attr:`pspl_event`."""
         if self._blend_flux is None:
             foo, self._blend_flux = self.pspl_event.get_ref_fluxes()
 
@@ -1738,14 +2692,32 @@ class AnomalyPropertyEstimator():
 
     @property
     def scaled_fluxes(self):
+        """
+        Scaled fluxes within the anomaly window, sorted in time order.
+
+        Concatenated from all datasets via ``pspl_event.get_scaled_fluxes()``,
+        then filtered by :attr:`anom_index` and ordered by :attr:`sorted_index`.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._scaled_fluxes is None:
             self._scaled_fluxes = np.hstack(
-                [np.array(flux) for (flux, err) in self.pspl_event.get_scaled_fluxes()])[self.anom_index][self.sorted_index]
+                [np.array(flux) for (flux, err) in self.pspl_event.get_scaled_fluxes()])[self.anom_index][
+                self.sorted_index]
 
         return self._scaled_fluxes
 
     @property
     def residuals(self):
+        """
+        Flux residuals within the anomaly window (``scaled_fluxes - expected_model_fluxes``).
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._scaled_residuals is None:
             self._scaled_residuals = self.scaled_fluxes - self.expected_model_fluxes
 
@@ -1753,6 +2725,13 @@ class AnomalyPropertyEstimator():
 
     @property
     def chi2s(self):
+        """
+        Chi2 per point within the anomaly window, sorted in time order.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._chi2s is None:
             self._chi2s = np.hstack(self.pspl_event.get_chi2_per_point())[self.anom_index][self.sorted_index]
 
@@ -1760,6 +2739,15 @@ class AnomalyPropertyEstimator():
 
     @property
     def expected_model_fluxes(self):
+        """
+        Expected PSPL model fluxes at :attr:`sorted_times`.
+
+        Computed as ``source_flux * magnification + blend_flux``.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
         if self._expected_model_fluxes is None:
             self._expected_model_fluxes = self.source_flux * self.pspl_event.model.get_magnification(
                 self.sorted_times) + self.blend_flux

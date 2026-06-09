@@ -1,3 +1,5 @@
+"""Configuration settings, including path definitions for the module and data directory."""
+
 # Import paths
 from os import path
 
