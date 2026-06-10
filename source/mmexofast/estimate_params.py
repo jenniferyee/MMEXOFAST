@@ -2184,7 +2184,7 @@ class AnomalyPropertyEstimator():
         self._chi2s = None
         self._expected_model_fluxes = None
 
-    def get_psql_event(self):
+    def get_pspl_event(self):
         """
         Create a MulensModel.Event for the PSPL model.
 
