@@ -992,9 +992,14 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             })
             return chi2
 
-        result = minimize(
-            chi2_fn, x0, method='Nelder-Mead',
-            options={**self._nelder_mead_options, 'initial_simplex': initial_simplex})
+        try:
+            result = minimize(
+                chi2_fn, x0, method='Nelder-Mead',
+                options={**self._nelder_mead_options, 'initial_simplex': initial_simplex})
+        except Exception as e:
+            warnings.warn(
+                f"Nelder-Mead refinement exited in an error. Error:\n{type(e).__name__}: {e}.")
+            return None
 
         if not result.success:
             warnings.warn(
@@ -1076,7 +1081,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             df_grid['source'] = 'grid'
             df_grid['iteration'] = 0
 
-            if self.refine:
+            if self.refine and self.refinement_results is not None:
                 df_refine = self.refinement_results.copy()
                 df_refine['source'] = 'refinement'
                 df_refine['log_q'] = np.round(np.log10(df_refine['q'])).astype(int)
