@@ -2294,7 +2294,9 @@ class MMEXOFASTFitter:
         Return True if any dataset's chi-squared per degree of freedom
         deviates from 1 by more than ``RENORM_THRESHOLD``.
 
-        Uses the best available fit across all models as the reference.
+        Uses ``select_best_model`` as the reference, consistent with
+        ``renormalize_datasets``.  Both methods scale errors relative to
+        ``chi2 / (n_good - n_params) = 1`` per dataset.
 
         Returns
         -------
@@ -2303,26 +2305,30 @@ class MMEXOFASTFitter:
         if self.RENORM_THRESHOLD is None:
             return False
 
-        all_fits = [
-            rec for rec in self.all_fit_results.values()
-            if rec.chi2() is not None
-        ]
-        if not all_fits:
+        try:
+            reference_fit = self.select_best_model()
+        except RuntimeError:
             return False
 
-        reference_fit = min(all_fits, key=lambda r: r.chi2())
         event = reference_fit.full_result.fitter.get_event()
         event.fit_fluxes()
+        n_params = len(event.model.parameters.as_dict())
 
-        for i in range(len(event.datasets)):
-            chi2 = event.get_chi2_for_dataset(i)
-            n_good = np.sum(event.datasets[i].good)
-            if n_good == 0:
+        for i, dataset in enumerate(event.datasets):
+            n_good = int(np.sum(dataset.good))
+            dof = n_good - n_params
+            if dof <= 0:
                 continue
-            if np.abs(chi2 / n_good - 1.0) > self.RENORM_THRESHOLD:
-                return True
+            chi2 = event.get_chi2_for_dataset(i)
+            if np.abs(chi2 / dof - 1.0) > self.RENORM_THRESHOLD:
+                # TODO: This should return True, but that doesn't actually cause any datasets to be re-renormalized.
+                # Need to implement correct behavior for re-renormalization.
+                # return True
+                logger.warning('A dataset needs re-renormalization, but this feature is disabled.')
+                return False
 
         return False
+
 
     def _infer_entry_point_from_initial_results(self) -> Optional[str]:
         """
