@@ -685,6 +685,81 @@ class TestBinaryLensParams(unittest.TestCase):
                 self.assertEqual(model.default_magnification_method, method)
 
 
+class TestParameterUpdateEquivalence(unittest.TestCase):
+
+    def setUp(self):
+        self.base_params = {
+            't_0': 2460000.0,
+            'u_0': 0.1,
+            't_E': 30.0,
+            's': 1.5,
+            'q': 1e-4,
+            'alpha': 45.0,
+        }
+        self.observation_times = np.linspace(2459990.0, 2460010.0, 100)
+        self.updated_values = {'alpha': 50.0, 's': 1.6, 'q': 1e-3}
+
+    def _build_model_with_attribute_assignment(self, params, updated_values,
+                                               mag_methods=None):
+        model = MulensModel.Model(params)
+        if mag_methods is not None:
+            model.set_magnification_methods(mag_methods)
+        for key, value in updated_values.items():
+            setattr(model.parameters, key, value)
+        return model
+
+    def _build_model_with_dict_update(self, params, updated_values,
+                                      mag_methods=None):
+        model = MulensModel.Model(params)
+        if mag_methods is not None:
+            model.set_magnification_methods(mag_methods)
+        model.parameters.parameters.update(updated_values)
+        return model
+
+    def _get_magnifications(self, model):
+        return model.get_magnification(self.observation_times)
+
+    def test_parameter_update_matches_attribute_assignment(self):
+        """
+        Verify that model.parameters.parameters.update() gives identical
+        magnification to individual attribute assignment for alpha, s, and q.
+        """
+        model_attr = self._build_model_with_attribute_assignment(
+            self.base_params.copy(), self.updated_values)
+        model_update = self._build_model_with_dict_update(
+            self.base_params.copy(), self.updated_values)
+
+        np.testing.assert_array_equal(
+            self._get_magnifications(model_attr),
+            self._get_magnifications(model_update)
+        )
+
+    def test_parameter_update_with_rho_matches_attribute_assignment(self):
+        """
+        Same as above but includes rho using hexadecapole magnification.
+        """
+        params = {**self.base_params, 'rho': 1e-3}
+        updated_values = {**self.updated_values, 'rho': 1e-2}
+        mag_methods = [
+            self.observation_times[0],
+            'hexadecapole',
+            self.observation_times[-1]
+        ]
+
+        model_attr = self._build_model_with_attribute_assignment(
+            params, updated_values, mag_methods)
+        model_update = self._build_model_with_dict_update(
+            params, updated_values, mag_methods)
+
+        np.testing.assert_array_equal(
+            self._get_magnifications(model_attr),
+            self._get_magnifications(model_update)
+        )
+
+
+if __name__ == '__main__':
+    unittest.main()
+
 if __name__ == '__main__':
     unittest.main()
 

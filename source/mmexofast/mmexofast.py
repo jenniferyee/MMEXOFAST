@@ -1999,7 +1999,6 @@ class MMEXOFASTFitter:
                     logger.info('Alternate solution: %s', s_alt.ulens)
                     est_params[class_name + '_alt'] = s_alt
 
-
                 self.mag_methods = params.mag_methods
 
         self.intermediate_results.est_binary_params = est_params
@@ -2610,6 +2609,9 @@ class MMEXOFASTFitter:
     def _plot_initial_2L1S_guess(self):
         #print(self.intermediate_results.est_binary_params)
         for key, params in self.intermediate_results.est_binary_params.items():
+            print(key)
+            print(params.ulens)
+            print(params.mag_methods)
             model = self.model_config.build(
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,

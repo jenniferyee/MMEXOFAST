@@ -85,29 +85,46 @@ class BinaryLensParams():
         ``MulensModel.Model``.
     mag_methods : list or None
         Magnification methods in MulensModel convention. Set by
-        :meth:`set_mag_method` and optionally refined by
-        :meth:`refine_mag_methods`.
+        :meth:`set_mag_method` and refined by :meth:`refine_mag_methods`.
     params : dict or None
-        Anomaly light curve parameters. Stored by :meth:`set_mag_method`
-        for use by :meth:`refine_mag_methods`.
+        Anomaly light curve parameters. Stored by :meth:`set_mag_method`.
+    t_star : float
+        Half the anomaly duration, ``params['dt'] / 2``. Derived from
+        ``params``; raises ``RuntimeError`` if accessed before
+        :meth:`set_mag_method` is called.
+
+    Notes
+    -----
+    The mag_methods list alternates between time boundaries and method names:
+
+        [t_start, 'point_source', t1, 'hexadecapole', t2, 'VBBL',
+         t3, 'hexadecapole', t4, 'point_source', t_end]
+
+    Boundaries are refined outward from the most precise method (VBBL)
+    to the least (point_source), guaranteeing monotonicity by construction.
     """
 
-    # Index map for mag_methods list:
-    # [t_start, 'point_source', t1, 'hexadecapole', t2, 'VBBL',
-    #  t3, 'hexadecapole', t4, 'point_source', t_end]
-    #    0           1       2        3          4     5
-    #    6       7           8       9           10
-    _T_START_IDX = 0
-    _T_HEXA_LEFT_IDX = 2
-    _T_VBBL_LEFT_IDX = 4
-    _T_VBBL_RIGHT_IDX = 6
-    _T_HEXA_RIGHT_IDX = 8
-    _T_END_IDX = 10
+    _METHOD_PRECISION = {'point_source': 10, 'hexadecapole': 20, 'VBBL': 30}
+    _N_TSTAR_WINDOW_HW = 5  # half-width of each method window, in units of t_star
 
     def __init__(self, ulens):
         self.ulens = ulens
         self.mag_methods = None
         self.params = None
+
+    @property
+    def t_star(self):
+        """
+        Half the anomaly duration in days.
+
+        Derived from ``params['dt'] / 2``. Raises ``RuntimeError`` if
+        accessed before :meth:`set_mag_method` is called.
+        """
+        if self.params is None:
+            raise RuntimeError(
+                "set_mag_method() must be called before accessing t_star.")
+        dt = self.params['dt']
+        return dt / 2.
 
     def set_mag_method(self, params):
         """
@@ -115,8 +132,9 @@ class BinaryLensParams():
 
         Sets up a sequence of magnification methods transitioning from
         point_source to hexadecapole to VBBL and back, centered on the
-        anomaly time. Also stores ``params`` as ``self.params`` for use
-        by :meth:`refine_mag_methods`.
+        anomaly time. Window half-widths are multiples of
+        ``_N_TSTAR_WINDOW_HW * t_star``. Also stores ``params`` as
+        ``self.params`` for use by :meth:`refine_mag_methods`.
 
         Parameters
         ----------
@@ -140,19 +158,19 @@ class BinaryLensParams():
         t_E = params['t_E']
         t_0 = params['t_0']
         t_pl = params['t_pl']
-        t_star = params['dt'] / 2.
+        width = self._N_TSTAR_WINDOW_HW * self.t_star
         self.mag_methods = [
-            np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 20. * t_star)),
+            np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 4. * width)),
             'point_source',
-            t_pl - 10. * t_star,
+            t_pl - 2. * width,
             'hexadecapole',
-            t_pl - 5. * t_star,
+            t_pl - width,
             'VBBL',
-            t_pl + 5. * t_star,
+            t_pl + width,
             'hexadecapole',
-            t_pl + 10. * t_star,
+            t_pl + 2. * width,
             'point_source',
-            np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 20. * t_star))]
+            np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 4. * width))]
 
     @staticmethod
     def _mag_threshold(mag_precise, base=0.0001):
@@ -175,7 +193,7 @@ class BinaryLensParams():
         base : float, optional
             Base precision level. Controls both the relative precision
             (as a fraction) for A < 3 and the absolute threshold for
-            A >= 3. Default 0.01 (i.e. 1%).
+            A >= 3. Default 0.0001.
 
         Returns
         -------
@@ -183,9 +201,9 @@ class BinaryLensParams():
             Absolute threshold on ``|mag_precise - mag_approx|``.
         """
         if mag_precise >= 3.0:
-            return base                  # absolute
+            return base
         else:
-            return base * mag_precise    # relative
+            return base * mag_precise
 
     def _make_model(self, default_method):
         """
@@ -207,189 +225,277 @@ class BinaryLensParams():
                 if k not in ('rho', 't_star')
             }
         else:
-            ulens_params = self.ulens
+            ulens_params = {k: v for k, v in self.ulens.items()}
+
+        # Give some buffer for larger q.
+        if ulens_params['q'] < 0.01:
+            ulens_params['q'] = 0.01
+        else:
+            ulens_params['q'] *= 10
 
         model = MulensModel.Model(ulens_params)
         model.default_magnification_method = default_method
         return model
 
-    def _find_method_boundary(self, idx, model_precise, model_approx,
-                               base=0.0001, xtol=0.01):
+    def _parse_transitions(self, models):
         """
-        Find the refined boundary time at ``self.mag_methods[idx]``.
+        Parse mag_methods to identify all method transition boundaries,
+        sorted from most to least precise.
 
-        Checks whether ``model_precise`` and ``model_approx`` agree to
-        within the magnification-dependent threshold (see
-        :meth:`_mag_threshold`) at the current boundary. If they already
-        agree, the boundary is returned unchanged. Otherwise, uses
-        exponential search to find an outer bracket where the methods
-        agree, then ``scipy.optimize.brentq`` to locate the transition
-        precisely.
-
-        The search direction is determined by the sign of
-        ``mag_methods[idx] - t_pl``: left boundaries search further left,
-        right boundaries search further right. The hard limits are
-        ``mag_methods[_T_START_IDX]`` and ``mag_methods[_T_END_IDX]``.
+        Iterates over the time entries in mag_methods (even indices,
+        excluding the first and last), identifies the methods on either
+        side of each boundary, and sorts the resulting list so that the
+        highest-precision transitions are processed first.
 
         Parameters
         ----------
-        idx : int
-            Index into ``self.mag_methods`` of the boundary time to
-            refine. Must be one of the numeric (time) entries, i.e. one
-            of ``_T_HEXA_LEFT_IDX``, ``_T_VBBL_LEFT_IDX``,
-            ``_T_VBBL_RIGHT_IDX``, or ``_T_HEXA_RIGHT_IDX``.
-        model_precise : MulensModel.Model
-            The more precise magnification method model (e.g. VBBL).
-        model_approx : MulensModel.Model
-            The less precise magnification method model (e.g.
-            hexadecapole).
-        base : float, optional
-            Base precision level passed to :meth:`_mag_threshold`.
-            Default 0.01.
-        xtol : float, optional
-            Time precision in days passed to ``brentq``. Default 0.01.
+        models : dict
+            Dictionary mapping method name to MulensModel.Model, as built
+            in :meth:`refine_mag_methods`.
+
+        Returns
+        -------
+        list of dict
+            Each dict has keys:
+                'idx' : int
+                    Index in mag_methods of the boundary time.
+                'method_precise' : str
+                    The more precise of the two adjacent methods.
+                'method_approx' : str
+                    The less precise of the two adjacent methods.
+                'model_precise' : MulensModel.Model
+                    Model for the more precise method.
+                'model_approx' : MulensModel.Model
+                    Model for the less precise method.
+        """
+        transitions = []
+        for idx in range(2, len(self.mag_methods) - 1, 2):
+            left_method = self.mag_methods[idx - 1]
+            right_method = self.mag_methods[idx + 1]
+            if self._METHOD_PRECISION[left_method] >= self._METHOD_PRECISION[right_method]:
+                method_precise, method_approx = left_method, right_method
+            else:
+                method_precise, method_approx = right_method, left_method
+            transitions.append({
+                'idx': idx,
+                'method_precise': method_precise,
+                'method_approx': method_approx,
+                'model_precise': models[method_precise],
+                'model_approx': models[method_approx],
+            })
+        transitions.sort(
+            key=lambda trans: self._METHOD_PRECISION[trans['method_precise']],
+            reverse=True)
+        return transitions
+
+    def _compute_boundary_start(self, transition):
+        """
+        Compute the starting time for the boundary search for a given
+        transition.
+
+        If the current boundary estimate in mag_methods is already outside
+        the adjacent inner boundary (i.e. further from ``t_pl``), returns
+        it unchanged. Otherwise returns a starting point offset outward
+        from the inner boundary by ``_N_TSTAR_WINDOW_HW * t_star``.
+
+        The adjacent inner boundary is the already-refined transition at
+        the next time index toward ``t_pl``. For the innermost transition
+        pair (e.g. VBBL), there is no valid inner boundary and the current
+        estimate is returned unchanged.
+
+        Parameters
+        ----------
+        transition : dict
+            Transition dict as built by :meth:`_parse_transitions`.
+            Uses key ``'idx'``.
 
         Returns
         -------
         float
-            Refined boundary time. Equal to the original
-            ``mag_methods[idx]`` if the methods already agree there, or
-            the appropriate hard limit if the exponential search reaches
-            it without finding agreement.
+            Starting time for :meth:`_find_method_boundary`.
+        """
+        idx = transition['idx']
+        t_current = float(self.mag_methods[idx])
+        t_pl = float(self.params['t_pl'])
+        direction = int(np.sign(t_current - t_pl))
+
+        inner_idx = idx - 2 * direction
+        if inner_idx < 2 or inner_idx > len(self.mag_methods) - 3:
+            return t_current
+
+        inner_boundary = float(self.mag_methods[inner_idx])
+        width = self._N_TSTAR_WINDOW_HW * self.t_star
+        if direction * t_current > direction * inner_boundary:
+            return t_current
+        else:
+            return inner_boundary + direction * width
+
+    def _make_mag_diff(self, transition, base):
+        """
+        Build a signed magnification-difference function for a transition.
+
+        Returns a callable ``mag_diff(t)`` that evaluates to
+        ``|mag_precise - mag_approx| - threshold``, where threshold is
+        determined by :meth:`_mag_threshold`. Positive values indicate the
+        methods disagree beyond the threshold; non-positive values indicate
+        agreement. Results are cached to avoid redundant model evaluations.
+
+        Parameters
+        ----------
+        transition : dict
+            Must contain ``'model_precise'`` and ``'model_approx'``.
+        base : float
+            Base precision level passed to :meth:`_mag_threshold`.
+
+        Returns
+        -------
+        callable
+            Function of a single float argument ``t`` returning float.
+        """
+        model_precise = transition['model_precise']
+        model_approx = transition['model_approx']
+        cache = {}
+
+        def mag_diff(t):
+            if t not in cache:
+                mag_p = float(model_precise.get_magnification(t)[0])
+                mag_a = float(model_approx.get_magnification(t)[0])
+                threshold = self._mag_threshold(mag_p, base=base)
+                cache[t] = abs(mag_p - mag_a) - threshold
+            return cache[t]
+
+        return mag_diff
+
+    def _find_method_boundary(self, transition, refinement_settings):
+        """
+        Find the refined boundary time for a single method transition.
+
+        Searches outward from ``transition['t_start']`` (away from
+        ``t_pl``) for the outermost time at which the precise and
+        approximate methods disagree beyond the threshold. If the methods
+        already agree at ``t_start``, returns ``t_start`` unchanged.
+        Otherwise uses exponential search to bracket the transition, then
+        ``scipy.optimize.brentq`` to refine it.
+
+        Parameters
+        ----------
+        transition : dict
+            Built by :meth:`_parse_transitions` and augmented in the
+            :meth:`refine_mag_methods` loop. Must contain keys:
+                'idx' : int
+                    Index in mag_methods of the boundary time.
+                'method_precise' : str
+                    The more precise of the two adjacent methods.
+                'method_approx' : str
+                    The less precise of the two adjacent methods.
+                'model_precise' : MulensModel.Model
+                    Model for the more precise method.
+                'model_approx' : MulensModel.Model
+                    Model for the less precise method.
+                't_start' : float
+                    Starting time for the search, as computed by
+                    :meth:`_compute_boundary_start`.
+        refinement_settings : dict
+            Must contain ``'base'`` (magnification tolerance) and
+            ``'xtol'`` (time precision in days for brentq).
+
+        Returns
+        -------
+        float
+            Refined boundary time.
+
+        Raises
+        ------
+        ValueError
+            If ``t_start`` equals ``t_pl``, making search direction
+            indeterminate.
 
         Warns
         -----
         UserWarning
             If the exponential search reaches the hard limit before
-            finding a bracket where the methods agree.
+            finding agreement.
         """
-        t_start = float(self.mag_methods[idx])  # ensure scalars
+        t_start = float(transition['t_start'])
         t_pl = float(self.params['t_pl'])
-        direction = np.sign(t_start - t_pl)
+        direction = int(np.sign(t_start - t_pl))
+        if direction == 0:
+            raise ValueError(
+                "t_start equals t_pl; cannot determine search direction.")
 
-        t_limit = (self.mag_methods[self._T_START_IDX] if direction < 0
-                   else self.mag_methods[self._T_END_IDX])
+        xtol = refinement_settings['xtol']
+        t_limit = float(
+            self.mag_methods[0] if direction < 0 else self.mag_methods[-1])
+        mag_diff = self._make_mag_diff(transition, refinement_settings['base'])
 
-        _cache = {}
-
-        def mag_diff(t):
-            if t not in _cache:
-                mag_p = float(model_precise.get_magnification(t)[0])
-                mag_a = float(model_approx.get_magnification(t)[0])
-                threshold = self._mag_threshold(mag_p, base=base)
-                _cache[t] = abs(mag_p - mag_a) - threshold
-            return _cache[t]
-
-        # Guard: methods already agree at the initial boundary
         if mag_diff(t_start) <= 0:
-            return float(t_start)
+            return t_start
 
-        # Phase 1: exponential search for a bracket where methods agree
-        step = abs(t_start - t_pl)
-        t_outer = t_start
+        t_inner = t_start
+        step_size = abs(t_start - t_pl)
         while True:
-            t_outer += direction * step
+            t_outer = t_inner + direction * step_size
             if direction * t_outer >= direction * t_limit:
                 warnings.warn(
-                    f"Reached hard limit t={t_limit:.3f} at "
-                    f"mag_methods[{idx}]; methods may still disagree."
-                )
+                    f"Boundary search reached hard limit {t_limit:.3f}; "
+                    "methods may still disagree.",
+                    UserWarning)
                 return float(t_limit)
             if mag_diff(t_outer) <= 0:
                 break
-            step *= 2.0
+            t_inner = t_outer
+            step_size *= 2.0
 
-        # Phase 2: brentq to locate the transition precisely
         return float(brentq(
             mag_diff,
-            min(t_start, t_outer),
-            max(t_start, t_outer),
+            min(t_inner, t_outer),
+            max(t_inner, t_outer),
             xtol=xtol))
 
     def _boundaries_monotonic(self):
         """
-        Check whether all time values in ``self.mag_methods`` are strictly
+        Check whether all time values in mag_methods are strictly
         increasing.
+
+        Used as a post-refinement sanity check in
+        :meth:`refine_mag_methods`. Failure indicates a bug in
+        :meth:`_compute_boundary_start` or :meth:`_find_method_boundary`
+        rather than a recoverable runtime condition.
 
         Returns
         -------
         bool
-            True if ``mag_methods[0] < mag_methods[2] < ... < mag_methods[10]``.
+            True if the time entries in mag_methods (even indices) are
+            strictly increasing.
         """
         times = self.mag_methods[0::2]
         return all(times[i] < times[i + 1] for i in range(len(times) - 1))
-
-    def _apply_refinement(self, base, xtol, model_vbbl, model_hexa, model_ps):
-        """
-        Run one pass of boundary refinement for all four method transitions.
-
-        Updates ``self.mag_methods`` in place at the four inner boundary
-        indices. Called by :meth:`refine_mag_methods` with different
-        ``base`` values as part of its fallback sequence.
-
-        Parameters
-        ----------
-        base : float
-            Base precision level passed to :meth:`_find_method_boundary`.
-        xtol : float
-            Time precision in days passed to :meth:`_find_method_boundary`.
-        model_vbbl : MulensModel.Model
-            Model with ``default_magnification_method = 'VBBL'``.
-        model_hexa : MulensModel.Model
-            Model with ``default_magnification_method = 'hexadecapole'``.
-        model_ps : MulensModel.Model
-            Model with ``default_magnification_method = 'point_source'``.
-
-        Returns
-        -------
-        None
-        """
-        boundaries = [
-            (self._T_HEXA_LEFT_IDX,  model_hexa, model_ps),
-            (self._T_VBBL_LEFT_IDX,  model_vbbl, model_hexa),
-            (self._T_VBBL_RIGHT_IDX, model_vbbl, model_hexa),
-            (self._T_HEXA_RIGHT_IDX, model_hexa, model_ps),
-        ]
-        for idx, model_precise, model_approx in boundaries:
-            self.mag_methods[idx] = self._find_method_boundary(
-                idx, model_precise, model_approx, base, xtol)
 
     def refine_mag_methods(self, base=0.0001, xtol=0.01):
         """
         Refine the magnification method boundaries using model comparisons.
 
-        For each of the four transition points in ``self.mag_methods``,
-        compares the two adjacent magnification methods at the current
-        boundary using a magnification-dependent threshold (see
-        :meth:`_mag_threshold`). If they differ by more than the threshold,
-        uses exponential search and ``scipy.optimize.brentq`` (via
+        Processes transitions from most precise to least precise (VBBL
+        boundaries first, then hexadecapole boundaries), ensuring that each
+        outer boundary search starts from outside the already-refined inner
+        window. Monotonicity of the refined boundaries is guaranteed by
+        construction.
+
+        For each transition, compares the two adjacent magnification
+        methods using a magnification-dependent threshold (see
+        :meth:`_mag_threshold`). If the methods already agree at the
+        starting point, the boundary is left unchanged. Otherwise, uses
+        exponential search and ``scipy.optimize.brentq`` (via
         :meth:`_find_method_boundary`) to locate the outermost time at
-        which the methods agree.
-
-        If the refined boundaries are not strictly monotonic (i.e. adjacent
-        method windows have collapsed into each other), refinement is
-        retried with progressively looser thresholds. The sequence of base
-        values tried is ``[base, 0.001, 0.005, 0.01]``, with any values
-        smaller than ``base`` skipped. If no threshold produces monotonic
-        boundaries, refinement is abandoned and the original unrefined
-        boundaries from :meth:`set_mag_method` are restored, and a
-        :class:`UserWarning` is issued.
-
-        The four boundaries refined are, from left to right:
-
-        - ``point_source`` / ``hexadecapole`` (left)
-        - ``hexadecapole`` / ``VBBL`` (left)
-        - ``VBBL`` / ``hexadecapole`` (right)
-        - ``hexadecapole`` / ``point_source`` (right)
+        which the methods disagree.
 
         Must be called after :meth:`set_mag_method`.
 
         Parameters
         ----------
         base : float, optional
-            Starting base precision level. The first entry in the fallback
-            sequence; subsequent values are fixed at ``0.001``, ``0.005``,
-            and ``0.01``. Default 0.0001.
+            Base precision level for the magnification threshold.
+            Default 0.0001.
         xtol : float, optional
             Time precision in days for each refined boundary.
             Default 0.01.
@@ -401,41 +507,30 @@ class BinaryLensParams():
         Raises
         ------
         RuntimeError
-            If :meth:`set_mag_method` has not been called first.
+            If :meth:`set_mag_method` has not been called first, or if
+            the refined boundaries are not monotonic (indicating a bug).
         """
         if self.mag_methods is None or self.params is None:
             raise RuntimeError(
                 "set_mag_method() must be called before refine_mag_methods().")
 
-        initial_mag_methods = self.mag_methods.copy()
+        models = {
+            method: self._make_model(method)
+            for method in self._METHOD_PRECISION
+        }
+        transitions = self._parse_transitions(models)
+        refinement_settings = {'base': base, 'xtol': xtol}
 
-        model_vbbl = self._make_model('VBBL')
-        model_hexa = self._make_model('hexadecapole')
-        model_ps = self._make_model('point_source')
+        for transition in transitions:
+            transition['t_start'] = self._compute_boundary_start(transition)
+            self.mag_methods[transition['idx']] = self._find_method_boundary(
+                transition, refinement_settings)
 
-        # Try progressively looser thresholds; skip any tighter than base
-        fallback_sequence = [b for b in [0.0001, 0.001, 0.005, 0.01]
-                             if b >= base]
-
-        for current_base in fallback_sequence:
-            self.mag_methods = initial_mag_methods.copy()
-            self._apply_refinement(
-                current_base, xtol, model_vbbl, model_hexa, model_ps)
-            if self._boundaries_monotonic():
-                return
-            warnings.warn(
-                f"Refined mag_method boundaries are not monotonic with "
-                f"base={current_base:.4f}. "
-                f"Trying next threshold in fallback sequence.",
-                UserWarning)
-
-        # All thresholds exhausted: restore original unrefined boundaries
-        warnings.warn(
-            f"Refined mag_method boundaries are not monotonic for any "
-            f"threshold in {fallback_sequence}. "
-            f"Falling back to unrefined boundaries.",
-            UserWarning)
-        self.mag_methods = initial_mag_methods
+        if not self._boundaries_monotonic():
+            raise RuntimeError(
+                "Refined mag_method boundaries are not monotonic. "
+                "This indicates a bug in _compute_boundary_start or "
+                "_find_method_boundary.")
 
 
 def get_wide_params(params, limit='GG97'):
@@ -955,7 +1050,6 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         self.datasets = datasets
         self.model_config = model_config if model_config is not None else ModelConfig()
         self.event_config = event_config if event_config is not None else EventConfig()
-
         self.d_alpha = d_alpha
         self.n_alpha = n_alpha
         self.d_s = d_s
@@ -966,64 +1060,134 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         self._s_grid = s_grid
         self.refine = refine
         self.nelder_mead_options = nelder_mead_options
+        self._binary_params = None
         self._results = None
         self._refinement_results = None
         self._refinement_result = None
         self._all_results = None
         self._is_run = False
 
-    @property
-    def _base_binary_params(self):
-        """
-        Internal access to binary_params without run check. Used by all
-        internal methods to avoid triggering the RuntimeError guard on
-        binary_params before run() has been called.
-        """
-        if self._binary_params is None:
-            self._binary_params = self.get_binary_lens_params()
-        return self._binary_params
+    # ---- Guard ----
 
-    @property
-    def _nelder_mead_options(self):
-        """
-        Nelder-Mead options with defaults applied.
+    def _require_run(self, attr_name):
+        if not self._is_run:
+            raise RuntimeError(
+                f"'{attr_name}' is not available until run() has been called.")
 
-        Merges user-supplied ``nelder_mead_options`` with defaults
-        (``maxfev=500``, ``xatol=1e-3``, ``fatol=0.1``). User-supplied
-        values take precedence.
-
-        Returns
-        -------
-        dict
-            Options dict suitable for passing to
-            ``scipy.optimize.minimize``.
-        """
-        defaults = {'maxfev': 500, 'xatol': 1e-3, 'fatol': 0.1}
-        if self.nelder_mead_options is not None:
-            defaults.update(self.nelder_mead_options)
-        return defaults
+    # ---- Public result properties ----
 
     @property
     def binary_params(self):
         """
         Best-fit binary lens parameters from the grid search and refinement.
 
-        :meth:`run` must be called before accessing this property.
+        Set by :meth:`run`.
 
         Returns
         -------
         :class:`BinaryLensParams`
-            Binary lens parameters populated with best-fit values.
 
         Raises
         ------
         RuntimeError
             If :meth:`run` has not been called.
         """
-        if not self._is_run:
-            raise RuntimeError(
-                "binary_params is not available until run() has been called.")
+        self._require_run('binary_params')
         return self._binary_params
+
+    @property
+    def best_params(self):
+        """
+        Best-fit parameter dictionary from the grid search and refinement.
+
+        Set by :meth:`run`.
+
+        Returns
+        -------
+        dict
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
+        """
+        self._require_run('best_params')
+        return self._binary_params.ulens
+
+    @property
+    def results(self):
+        """
+        Grid search results as a DataFrame.
+
+        Set by :meth:`run`. Columns include ``'chi2'``, ``'alpha'``,
+        ``'s'``, ``'q'``, ``'rho'``, ``'log_q'``, ``'log_rho'``,
+        and ``'sigma'``.
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
+        """
+        self._require_run('results')
+        return self._results
+
+    @property
+    def refinement_result(self):
+        """
+        Raw scipy OptimizeResult from Nelder-Mead.
+
+        Set by :meth:`run`. Check ``result.success`` and ``result.nfev``
+        for convergence diagnostics.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
+        """
+        self._require_run('refinement_result')
+        return self._refinement_result
+
+    @property
+    def refinement_results(self):
+        """
+        DataFrame of all points evaluated during Nelder-Mead refinement.
+
+        Set by :meth:`run`.
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
+        """
+        self._require_run('refinement_results')
+        return self._refinement_results
+
+    @property
+    def all_results(self):
+        """
+        Combined grid search and refinement results as a DataFrame.
+
+        Set by :meth:`run`. Columns include ``'chi2'``, ``'alpha'``,
+        ``'s'``, ``'q'``, ``'rho'``, ``'log_q'``, ``'log_rho'``,
+        ``'sigma'``, and ``'source'`` (``'grid'`` or ``'refinement'``).
+
+        Returns
+        -------
+        pandas.DataFrame
+
+        Raises
+        ------
+        RuntimeError
+            If :meth:`run` has not been called.
+        """
+        self._require_run('all_results')
+        return self._all_results
+
+    # ---- Alternate params ----
 
     @property
     def alternate_params(self):
@@ -1052,43 +1216,27 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         alt_params.ulens['s'] = s_new
         return alt_params
 
-    @property
-    def best_params(self):
-        """
-        Best-fit parameter dictionary from the grid search and refinement.
+    # ---- Nelder-Mead options ----
 
-        :meth:`run` must be called before accessing this property.
+    @property
+    def _nelder_mead_options(self):
+        """
+        Nelder-Mead options with defaults applied.
+
+        Merges user-supplied ``nelder_mead_options`` with defaults
+        (``maxfev=500``, ``xatol=1e-3``, ``fatol=0.1``). User-supplied
+        values take precedence.
 
         Returns
         -------
         dict
-            Binary lens parameter dictionary.
-
-        Raises
-        ------
-        RuntimeError
-            If :meth:`run` has not been called.
         """
-        if not self._is_run:
-            raise RuntimeError(
-                "best_params is not available until run() has been called.")
-        return self._binary_params.ulens
+        defaults = {'maxfev': 500, 'xatol': 1e-3, 'fatol': 0.1}
+        if self.nelder_mead_options is not None:
+            defaults.update(self.nelder_mead_options)
+        return defaults
 
-    def run(self):
-        """
-        Run the full pipeline: grid search and optional Nelder-Mead refinement.
-
-        Populates :attr:`binary_params` and :attr:`best_params`. Must be
-        called before accessing those properties.
-
-        Returns
-        -------
-        :class:`BinaryLensParams`
-            Binary lens parameters populated with best-fit values.
-        """
-        _ = self.all_results  # triggers grid search + refinement
-        self._is_run = True
-        return self._binary_params
+    # ---- Grid parameter properties ----
 
     @property
     def alpha_values(self):
@@ -1159,37 +1307,10 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         """
         return self.log_rho_values if self.log_rho_values is not None else np.arange(-4, -1)
 
-    def _make_event(self, grid_params):
-        """
-        Create a MulensModel.Event for the given grid parameters.
-
-        Magnification methods and default magnification method are
-        model-type specific and are taken from the base binary parameter
-        estimates. Coordinates and flux-fixing are applied via
-        ``event_config``.
-
-        Parameters
-        ----------
-        grid_params : dict
-            Model parameters for this grid point.
-
-        Returns
-        -------
-        MulensModel.Event
-        """
-        model = self.model_config.build(
-            parameters=grid_params,
-            magnification_methods=self._base_binary_params.mag_methods,
-            default_magnification_method='point_source_point_lens',
-        )
-        return self.event_config.build(
-            model=model,
-            datasets=self.datasets,
-        )
-
     def _grid_iterator(self):
         """
-        Yield all combinations of alpha, s, log_q, and log_rho for the grid search.
+        Yield all combinations of alpha, s, log_q, and log_rho for the
+        grid search.
 
         Returns
         -------
@@ -1200,206 +1321,241 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             self.alpha_values, self.s_values,
             self.log_q_grid, self.log_rho_grid)
 
+    # ---- Main pipeline ----
+
+    def run(self):
+        """
+        Run the full pipeline: grid search and optional Nelder-Mead
+        refinement.
+
+        Populates :attr:`binary_params`, :attr:`best_params`,
+        :attr:`results`, :attr:`refinement_results`, and
+        :attr:`all_results`. Must be called before accessing any of
+        those properties.
+
+        Returns
+        -------
+        :class:`BinaryLensParams`
+            Binary lens parameters populated with best-fit values.
+        """
+        self._binary_params = self.get_binary_lens_params()
+
+        df_grid, best_grid_params = self._run_grid_search()
+        self._results = self._postprocess_grid_results(df_grid)
+
+        full_grid_best = {**self._binary_params.ulens, **best_grid_params}
+        df_refine, opt_result = self._run_refinement_if_needed(full_grid_best)
+        self._refinement_results = df_refine
+        self._refinement_result = opt_result
+
+        best_params = self._select_best_params(best_grid_params, opt_result)
+        self._binary_params.ulens.update(best_params)
+        self._all_results = self._build_all_results()
+        self._is_run = True
+
+        return self._binary_params
+
+    def _run_refinement_if_needed(self, full_grid_best):
+        if not self.refine:
+            return None, None
+        return self._run_refinement(full_grid_best)
+
+    def _select_best_params(self, best_grid_params, opt_result):
+        best_grid_chi2 = self._results['chi2'].min()
+        if opt_result is not None and opt_result.fun < best_grid_chi2:
+            return self._params_from_opt_result(opt_result)
+        return best_grid_params
+
+    # ---- Grid search ----
+
     def _run_grid_search(self):
         """
         Run the chi2 grid search over alpha, s, log_q, and log_rho.
 
-        Iterates over all grid points via :meth:`_grid_iterator`, evaluates
-        chi2 for each, and updates ``_base_binary_params`` with the
-        best-fit values.
+        Returns
+        -------
+        df : pandas.DataFrame
+            Raw results for all grid points with columns ``'chi2'``,
+            ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``.
+        best_params : dict
+            Parameter values at the lowest chi2 grid point.
+        """
+        rows = self._collect_grid_rows()
+        df = pd.DataFrame(rows)
+        best_row = df.loc[df['chi2'].idxmin()]
+        best_params = best_row[['alpha', 's', 'q', 'rho']].to_dict()
+        return df, best_params
+
+    def _collect_grid_rows(self):
+        """
+        Iterate over the full grid and return chi2 for each point.
+
+        Creates a single Event and updates its parameters in-place for
+        each grid point to avoid repeated model construction overhead.
 
         Returns
         -------
-        pandas.DataFrame
-            Results for all grid points with columns ``'chi2'``,
-            ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``.
+        list of dict
+            Each dict has keys ``'chi2'``, ``'alpha'``, ``'s'``,
+            ``'q'``, ``'rho'``.
         """
-        results = []
-        grid_params = self._base_binary_params.ulens.copy()
-
-        event = self._make_event(grid_params)
-
+        event = self._make_event(self._binary_params.ulens.copy())
+        rows = []
         for alpha, s, log_q, log_rho in self._grid_iterator():
-            event.model.parameters.alpha = alpha
-            event.model.parameters.s = s
-            event.model.parameters.q = 10. ** log_q
-            event.model.parameters.rho = 10. ** log_rho
+            params = {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+            event.model.parameters.parameters.update(params)
+            rows.append({'chi2': event.get_chi2(), **params})
+        return rows
 
-            results.append({
-                'chi2': event.get_chi2(),
-                'alpha': alpha,
-                's': s,
-                'q': event.model.parameters.q,
-                'rho': event.model.parameters.rho
-            })
+    # ---- Refinement ----
 
-        df = pd.DataFrame(results)
-        best_row = df.loc[df['chi2'].idxmin()]
-        self._base_binary_params.ulens.update(best_row[['alpha', 's', 'q', 'rho']].to_dict())
-        return df
-
-    def _run_refinement(self):
+    def _run_refinement(self, best_grid_params):
         """
         Run Nelder-Mead refinement starting from the best grid search point.
 
-        Optimizes over alpha, s, log_q, and log_rho using
-        ``scipy.optimize.minimize`` with ``method='Nelder-Mead'``. The
-        initial simplex is scaled to the grid step sizes. Updates
-        ``_base_binary_params`` only if the refinement finds a lower chi2
-        than the grid search best.
+        Optimizes over alpha, s, log_q, and log_rho. A warning is issued
+        if Nelder-Mead does not converge. Returns ``(None, None)`` if an
+        exception occurs.
 
-        A warning is issued if Nelder-Mead does not converge.
+        Parameters
+        ----------
+        best_grid_params : dict
+            Full parameter dict (including t_0, u_0, t_E, etc.) with
+            alpha, s, q, rho set to the best grid values.
 
         Returns
         -------
-        pandas.DataFrame
+        df : pandas.DataFrame or None
             Trajectory of all points evaluated during refinement, with
             columns ``'chi2'``, ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``.
+        result : scipy.optimize.OptimizeResult or None
         """
-        best = self._base_binary_params.ulens.copy()
-        x0 = np.array([
-            best['alpha'],
-            best['s'],
-            np.log10(best['q']),
-            np.log10(best['rho'])
-        ])
-
-        # Build initial simplex scaled to the grid step sizes used in the
-        # grid search. This is important: Nelder-Mead's default simplex
-        # perturbs each coordinate by 5% of x0, which is arbitrary and can
-        # be badly scaled here (e.g. log_q near 0 gets almost no perturbation).
-        d_alpha = self.d_alpha if self.d_alpha is not None else 0.1
-        d_s = self.d_s if self.d_s is not None else 0.01 * self.s
-        simplex_deltas = np.array([d_alpha, d_s, 0.5, 0.5])
-        n = len(x0)
-        initial_simplex = np.vstack(
-            [x0] + [x0 + simplex_deltas[i] * np.eye(n)[i] for i in range(n)])
-
-        # Single Event created once; parameters updated in-place each call
-        event = self._make_event(best)
-
+        x0 = self._make_refinement_x0(best_grid_params)
+        initial_simplex = self._make_initial_simplex(x0)
+        event = self._make_event(best_grid_params)
         trajectory = []
-
-        def chi2_fn(x):
-            alpha, s, log_q, log_rho = x
-            event.model.parameters.alpha = alpha
-            event.model.parameters.s = s
-            event.model.parameters.q = 10. ** log_q
-            event.model.parameters.rho = 10. ** log_rho
-            chi2 = event.get_chi2()
-            trajectory.append({
-                'chi2': chi2,
-                'alpha': alpha,
-                's': s,
-                'q': 10. ** log_q,
-                'rho': 10. ** log_rho,
-            })
-            return chi2
+        chi2_fn = self._make_chi2_fn(event, trajectory)
 
         try:
             result = minimize(
                 chi2_fn, x0, method='Nelder-Mead',
-                options={**self._nelder_mead_options, 'initial_simplex': initial_simplex})
+                options={**self._nelder_mead_options,
+                         'initial_simplex': initial_simplex})
         except Exception as e:
             warnings.warn(
-                f"Nelder-Mead refinement exited in an error. Error:\n{type(e).__name__}: {e}.")
-            return None
+                f"Nelder-Mead refinement exited in an error. "
+                f"Error:\n{type(e).__name__}: {e}.")
+            return None, None
 
         if not result.success:
             warnings.warn(
                 f"Nelder-Mead refinement did not converge: {result.message}. "
                 f"Best chi2={result.fun:.4f} after {result.nfev} evaluations.")
 
-        self._refinement_result = result
+        return pd.DataFrame(trajectory), result
 
-        df = pd.DataFrame(trajectory)
-        # Guard against Nelder-Mead wandering to a worse basin than the grid:
-        # take the global best across both grid and refinement trajectory.
-        # Use result.x directly — scipy guarantees this is the best point found
-        best_grid_chi2 = self.results['chi2'].min()
-        if result.fun < best_grid_chi2:
-            alpha, s, log_q, log_rho = result.x
-            self._base_binary_params.ulens.update({
-                'alpha': alpha,
-                's': s,
-                'q': 10. ** log_q,
-                'rho': 10. ** log_rho
-            })
-        # else: grid best is already set by _run_grid_search — leave it
+    def _make_refinement_x0(self, best_grid_params):
+        return np.array([
+            best_grid_params['alpha'],
+            best_grid_params['s'],
+            np.log10(best_grid_params['q']),
+            np.log10(best_grid_params['rho'])
+        ])
 
-        return df
+    def _make_initial_simplex(self, x0):
+        d_alpha = self.d_alpha if self.d_alpha is not None else 0.1
+        d_s = self.d_s if self.d_s is not None else 0.01 * self.s
+        simplex_deltas = np.array([d_alpha, d_s, 0.5, 0.5])
+        n = len(x0)
+        return np.vstack(
+            [x0] + [x0 + simplex_deltas[i] * np.eye(n)[i] for i in range(n)])
 
-    @property
-    def results(self):
+    def _make_chi2_fn(self, event, trajectory):
         """
-        Grid search results as a DataFrame.
+        Build the chi2 callable for Nelder-Mead, closing over event and
+        trajectory.
 
-        Computed lazily on first access by running :meth:`_run_grid_search`
-        and :meth:`_postprocess_grid_results`. Columns include ``'chi2'``,
-        ``'alpha'``, ``'s'``, ``'q'``, ``'rho'``, ``'log_q'``,
-        ``'log_rho'``, and ``'sigma'``.
+        The returned function unpacks x into alpha, s, log_q, log_rho,
+        updates the event parameters in-place, evaluates chi2, and
+        appends the result to trajectory.
+
+        Returns
+        -------
+        callable
+        """
+        def chi2_fn(x):
+            alpha, s, log_q, log_rho = x
+            params = {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+            event.model.parameters.parameters.update(params)
+            chi2 = event.get_chi2()
+            trajectory.append({'chi2': chi2, **params})
+            return chi2
+        return chi2_fn
+
+    def _params_from_opt_result(self, result):
+        alpha, s, log_q, log_rho = result.x
+        return {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+
+    # ---- Result building ----
+
+    def _build_all_results(self):
+        """
+        Combine grid and refinement results into a single DataFrame.
+
+        Adds a ``'source'`` column (``'grid'`` or ``'refinement'``) and
+        recomputes ``'sigma'`` relative to the global minimum chi2.
 
         Returns
         -------
         pandas.DataFrame
         """
-        if self._results is None:
-            df = self._run_grid_search()
-            self._results = self._postprocess_grid_results(df)
-        return self._results
+        df_grid = self._results.copy()
+        df_grid['source'] = 'grid'
+        df_grid['iteration'] = 0
 
-    @property
-    def refinement_result(self):
-        """Raw scipy OptimizeResult from Nelder-Mead. Check result.success and
-        result.nfev for convergence diagnostics."""
-        _ = self.refinement_results  # ensure refinement has run
-        return self._refinement_result
+        if self.refine and self._refinement_results is not None:
+            df_refine = self._refinement_results.copy()
+            df_refine['source'] = 'refinement'
+            df_refine['log_q'] = np.round(np.log10(df_refine['q'])).astype(int)
+            df_refine['log_rho'] = np.round(np.log10(df_refine['rho'])).astype(int)
+            combined = pd.concat([df_grid, df_refine], ignore_index=True)
+        else:
+            combined = df_grid
 
-    @property
-    def refinement_results(self):
-        """DataFrame of all points evaluated during Nelder-Mead refinement."""
-        if self._refinement_results is None:
-            _ = self.results  # ensure grid search has run first
-            self._refinement_results = self._run_refinement()
-        return self._refinement_results
+        min_chi2 = combined['chi2'].min()
+        combined['sigma'] = np.sqrt(combined['chi2'] - min_chi2)
+        return combined
 
-    @property
-    def all_results(self):
+    # ---- Event construction ----
+
+    def _make_event(self, params):
         """
-        Combined grid search and refinement results as a DataFrame.
+        Create a MulensModel.Event for the given parameters.
 
-        Computed lazily on first access. Merges :attr:`results` and (if
-        ``refine=True``) :attr:`refinement_results`, adding a ``'source'``
-        column (``'grid'`` or ``'refinement'``) and recomputing ``'sigma'``
-        relative to the global minimum chi2.
+        Magnification methods and default magnification method are
+        model-type specific and are taken from ``_binary_params``.
+        Coordinates and flux-fixing are applied via ``event_config``.
+
+        Parameters
+        ----------
+        params : dict
+            Full model parameter dict.
 
         Returns
         -------
-        pandas.DataFrame
-            Columns include ``'chi2'``, ``'alpha'``, ``'s'``, ``'q'``,
-            ``'rho'``, ``'log_q'``, ``'log_rho'``, ``'sigma'``,
-            and ``'source'``.
+        MulensModel.Event
         """
-        if self._all_results is None:
-            df_grid = self.results.copy()
-            df_grid['source'] = 'grid'
-            df_grid['iteration'] = 0
+        model = self.model_config.build(
+            parameters=params,
+            magnification_methods=self._binary_params.mag_methods,
+            default_magnification_method='point_source_point_lens',
+        )
+        return self.event_config.build(
+            model=model,
+            datasets=self.datasets,
+        )
 
-            if self.refine and self.refinement_results is not None:
-                df_refine = self.refinement_results.copy()
-                df_refine['source'] = 'refinement'
-                df_refine['log_q'] = np.round(np.log10(df_refine['q'])).astype(int)
-                df_refine['log_rho'] = np.round(np.log10(df_refine['rho'])).astype(int)
-                combined = pd.concat([df_grid, df_refine], ignore_index=True)
-            else:
-                combined = df_grid
-
-            # Recompute sigma relative to global minimum
-            min_chi2 = combined['chi2'].min()
-            combined['sigma'] = np.sqrt(combined['chi2'] - min_chi2)
-            self._all_results = combined
-
-        return self._all_results
+    # ---- Postprocessing and analysis ----
 
     def _postprocess_grid_results(self, df):
         """
@@ -1445,20 +1601,14 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         """
         Return a matplotlib marker style and size for a given sigma value.
 
-        Used by :meth:`plot_sigma_maps` to distinguish refinement points
-        by their sigma level.
-
         Parameters
         ----------
         sigma : float
-            Sigma value to classify.
 
         Returns
         -------
         marker : str
-            Matplotlib marker code (``'*'``, ``'D'``, ``'o'``, or ``'^'``).
         size : int
-            Marker size in points.
         """
         if sigma < 1:
             return '*', 200
@@ -1471,7 +1621,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
     def plot_sigma_maps(self):
         """
-        Plot 2D sigma maps in the alpha-s plane for each log_q and log_rho combination.
+        Plot 2D sigma maps in the alpha-s plane for each log_q and log_rho
+        combination.
 
         Produces one figure per unique log_q value. Each figure contains
         one subplot per unique log_rho value, showing a heatmap of sigma
@@ -1494,9 +1645,6 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         unique_log_rho = sorted(df_grid['log_rho'].unique())
         n_rho = len(unique_log_rho)
 
-        # TODO: Refinement points are only overlaid when their rounded log_q and
-        # log_rho match the grid values exactly. Refinement points that have
-        # wandered to different log_q or log_rho values will not be shown. Fix this in the future.
         if self.refine:
             df_refine = df_all[df_all['source'] == 'refinement']
 
@@ -1507,7 +1655,6 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             for idx, log_rho in enumerate(unique_log_rho):
                 ax = fig.add_subplot(gs[idx, 0])
 
-                # Grid imshow
                 mask = (df_grid['log_q'] == log_q) & (df_grid['log_rho'] == log_rho)
                 subset = df_grid[mask]
                 grid = subset.pivot(index='s', columns='alpha', values='sigma')
@@ -1516,11 +1663,10 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
                                extent=[subset['alpha'].min(), subset['alpha'].max(),
                                        subset['s'].min(), subset['s'].max()])
 
-                # Refinement scatter overlay
                 if self.refine:
                     refine_mask = (
-                            (df_refine['log_q'] == log_q) &
-                            (df_refine['log_rho'] == log_rho))
+                        (df_refine['log_q'] == log_q) &
+                        (df_refine['log_rho'] == log_rho))
                     refine_subset = df_refine[refine_mask]
 
                     for sigma_low, sigma_high in [(0, 1), (1, 2), (2, 3), (3, np.inf)]:
