@@ -102,6 +102,9 @@ class BinaryLensParams():
 
     Boundaries are refined outward from the most precise method (VBBL)
     to the least (point_source), guaranteeing monotonicity by construction.
+    After refinement, ``mag_methods[0]`` and ``mag_methods[-1]`` are
+    updated to lie ``4 * _N_TSTAR_WINDOW_HW * t_star`` outside the
+    outermost refined boundaries.
     """
 
     _METHOD_PRECISION = {'point_source': 10, 'hexadecapole': 20, 'VBBL': 30}
@@ -396,8 +399,15 @@ class BinaryLensParams():
                     Starting time for the search, as computed by
                     :meth:`_compute_boundary_start`.
         refinement_settings : dict
-            Must contain ``'base'`` (magnification tolerance) and
-            ``'xtol'`` (time precision in days for brentq).
+            Must contain:
+                'base' : float
+                    Magnification tolerance passed to :meth:`_mag_threshold`.
+                'xtol' : float
+                    Time precision in days for brentq.
+                't_left_limit' : float
+                    Hard left limit for boundary searches.
+                't_right_limit' : float
+                    Hard right limit for boundary searches.
 
         Returns
         -------
@@ -413,8 +423,9 @@ class BinaryLensParams():
         Warns
         -----
         UserWarning
-            If the exponential search reaches the hard limit before
-            finding agreement.
+            If ``t_start`` is already at or past the hard limit, or if the
+            exponential search reaches the hard limit before finding
+            agreement.
         """
         t_start = float(transition['t_start'])
         t_pl = float(self.params['t_pl'])
@@ -424,9 +435,19 @@ class BinaryLensParams():
                 "t_start equals t_pl; cannot determine search direction.")
 
         xtol = refinement_settings['xtol']
-        t_limit = float(
-            self.mag_methods[0] if direction < 0 else self.mag_methods[-1])
+        if direction < 0:
+            t_limit = float(refinement_settings['t_left_limit'])
+        else:
+            t_limit = float(refinement_settings['t_right_limit'])
+
         mag_diff = self._make_mag_diff(transition, refinement_settings['base'])
+
+        if direction * t_start >= direction * t_limit:
+            warnings.warn(
+                f"t_start {t_start:.3f} is at or beyond hard limit "
+                f"{t_limit:.3f}; returning hard limit.",
+                UserWarning)
+            return float(t_limit)
 
         if mag_diff(t_start) <= 0:
             return t_start
@@ -471,7 +492,8 @@ class BinaryLensParams():
         times = self.mag_methods[0::2]
         return all(times[i] < times[i + 1] for i in range(len(times) - 1))
 
-    def refine_mag_methods(self, base=0.0001, xtol=0.01):
+    def refine_mag_methods(self, base=0.0001, xtol=0.01,
+                            t_left_limit=None, t_right_limit=None):
         """
         Refine the magnification method boundaries using model comparisons.
 
@@ -481,13 +503,9 @@ class BinaryLensParams():
         window. Monotonicity of the refined boundaries is guaranteed by
         construction.
 
-        For each transition, compares the two adjacent magnification
-        methods using a magnification-dependent threshold (see
-        :meth:`_mag_threshold`). If the methods already agree at the
-        starting point, the boundary is left unchanged. Otherwise, uses
-        exponential search and ``scipy.optimize.brentq`` (via
-        :meth:`_find_method_boundary`) to locate the outermost time at
-        which the methods disagree.
+        After all boundaries are refined, ``mag_methods[0]`` and
+        ``mag_methods[-1]`` are updated to lie ``4 * _N_TSTAR_WINDOW_HW *
+        t_star`` outside the outermost refined boundaries.
 
         Must be called after :meth:`set_mag_method`.
 
@@ -499,6 +517,12 @@ class BinaryLensParams():
         xtol : float, optional
             Time precision in days for each refined boundary.
             Default 0.01.
+        t_left_limit : float or None, optional
+            Hard left limit for boundary searches. If None, defaults to
+            ``min(t_0 - 2*t_E, t_pl - t_E/2)``.
+        t_right_limit : float or None, optional
+            Hard right limit for boundary searches. If None, defaults to
+            ``max(t_0 + 2*t_E, t_pl + t_E/2)``.
 
         Returns
         -------
@@ -514,17 +538,34 @@ class BinaryLensParams():
             raise RuntimeError(
                 "set_mag_method() must be called before refine_mag_methods().")
 
+        t_0 = self.params['t_0']
+        t_E = self.params['t_E']
+        t_pl = self.params['t_pl']
+        if t_left_limit is None:
+            t_left_limit = min(t_0 - 2.*t_E, t_pl - t_E / 2.)
+        if t_right_limit is None:
+            t_right_limit = max(t_0 + 2.*t_E, t_pl + t_E / 2.)
+
         models = {
             method: self._make_model(method)
             for method in self._METHOD_PRECISION
         }
         transitions = self._parse_transitions(models)
-        refinement_settings = {'base': base, 'xtol': xtol}
+        refinement_settings = {
+            'base': base,
+            'xtol': xtol,
+            't_left_limit': t_left_limit,
+            't_right_limit': t_right_limit,
+        }
 
         for transition in transitions:
             transition['t_start'] = self._compute_boundary_start(transition)
             self.mag_methods[transition['idx']] = self._find_method_boundary(
                 transition, refinement_settings)
+
+        width = self._N_TSTAR_WINDOW_HW * self.t_star
+        self.mag_methods[0] = self.mag_methods[2] - 4. * width
+        self.mag_methods[-1] = self.mag_methods[-3] + 4. * width
 
         if not self._boundaries_monotonic():
             raise RuntimeError(
