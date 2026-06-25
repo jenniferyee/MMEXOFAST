@@ -1700,6 +1700,8 @@ class MMEXOFASTFitter:
             )
             logger.info('    sigmas:  %s', list(fitter.results.sigmas))
 
+            # TODO: Output plots if save_plots = True
+
     def _select_best_lens_model(self, lens_type: LensType) -> FitRecord:
         """
         Internal helper: return the best ``FitRecord`` for the given
@@ -2027,6 +2029,7 @@ class MMEXOFASTFitter:
 
         # TODO: Implement grid search for high-mag models. See gridsearches.BinaryGridSearch()
         # TODO: Separate models (key/param items) into separate steps.
+        # TODO: Check for and implement point source binary lens models.
 
         for key, params in self.intermediate_results.est_binary_params.items():
             model = self.model_config.build(
@@ -2565,8 +2568,8 @@ class MMEXOFASTFitter:
         ylim = np.min(traj.y), np.max(traj.y)
         #print(xlim, ylim)
         delta = np.max((xlim[1] - xlim[0], ylim[1] - ylim[0]))
-        xlim = np.mean(xlim) + np.array([-delta, delta])
-        ylim = np.mean(ylim) + np.array([-delta, delta])
+        xlim = np.mean(xlim) + 0.5 * np.array([-delta, delta])
+        ylim = np.mean(ylim) + 0.5 * np.array([-delta, delta])
         return xlim, ylim
 
     def _plot_event(self, event, n_tE=5, suptitle=None):
