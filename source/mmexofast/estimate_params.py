@@ -568,6 +568,7 @@ class BinaryLensParams():
         self.mag_methods[-1] = self.mag_methods[-3] + 4. * width
 
         if not self._boundaries_monotonic():
+            # TODO: Change default behavior to NOT raise an error. maybe a warning instead?
             raise RuntimeError(
                 "Refined mag_method boundaries are not monotonic. "
                 "This indicates a bug in _compute_boundary_start or "
@@ -1390,6 +1391,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         self._refinement_results = df_refine
         self._refinement_result = opt_result
 
+        # TODO: It would be better to recalculate mag_methods from the best model, i.e. create a new object rather than updating. Can this be done by calling get_binary_params()?
         best_params = self._select_best_params(best_grid_params, opt_result)
         self._binary_params.ulens.update(best_params)
         self._all_results = self._build_all_results()

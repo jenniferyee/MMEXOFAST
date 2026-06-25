@@ -505,10 +505,10 @@ class MMEXOFASTFitter:
         coords=None,
         fit_type: str = 'point_lens',
         finite_source: bool = False,
-        mag_methods=None,
+        mag_methods=None,  # TODO: Check whether mag_methods does anything
         limb_darkening_coeffs_u=None,
         limb_darkening_coeffs_gamma=None,
-        fix_blend_flux=None,
+        fix_blend_flux=None,  # TODO: Check whether fixed fluxes are implemented
         fix_source_flux=None,
         renormalize_errors: bool = True,  # TODO: ADD option for remove_outliers=True/False
         no_parallax: bool = False,
@@ -521,7 +521,7 @@ class MMEXOFASTFitter:
         stop_after: Optional[str] = None,
         restart_file=None,
         restart_from=None,
-        initial_results=None, # TODO: Implement starting from prior results.
+        initial_results=None,  # TODO: Implement starting from prior results.
         output_config=None,
         verbose: bool = False,
         log_file=None,

@@ -320,6 +320,7 @@ class MMEXOFASTFitResults(BaseFitResults):
                         flux, err_flux
                     )
                 else:
+                    # TODO: Maybe it would be better to give the blend ratio instead of neg flux
                     mag     = 'neg flux'
                     err_mag = np.nan
 
