@@ -2176,6 +2176,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         -------
         numpy.ndarray
         """
+        # TODO: Does this go here or in CloseUpperBinaryGridSearchEstimator?
         return self.log_q_values if self.log_q_values is not None else np.array([-2.5, -2, -1, -0.5])
 
     @property
@@ -2190,6 +2191,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         -------
         float
         """
+        # TODO: Is the correct way to calculate s for this type of solution?
         if self._s is None:
             u = self.u_pl
             self._s = 0.5 * (np.sqrt(u ** 2 + 4) - u)
