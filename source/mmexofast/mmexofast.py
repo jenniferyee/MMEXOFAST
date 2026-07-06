@@ -3078,9 +3078,9 @@ class MMEXOFASTFitter:
             for key in self._iter_parallax_point_lens_keys():
                 record = self.all_fit_results.get(key)
                 if record is not None:
-                    params = record.params.copy() #astoneew
-                    if params < 2450000.0: #astoneew  
-                        params["t_0"] += 2450000.0 #astoneew
+                    params = record.params.copy() 
+                    if params < 2450000.0: 
+                        params["t_0"] += 2450000.0 
                     fits.append(
                         {
                             'parameters': record.params,
@@ -3092,7 +3092,8 @@ class MMEXOFASTFitter:
                 'fits':        fits,
                 'errfacs':     self.renorm_factors,
                 'mag_methods': self.mag_methods,
-                'coords': str(self.coords) if self.coords is not None else None, #astoneew
+                'coords': str(self.coords) if self.coords is not None else None
+                }
             }
         if self.fit_type == 'binary_lens':
             fits = []
@@ -3104,10 +3105,9 @@ class MMEXOFASTFitter:
             if len(binary_lens_fits) > 0:
                 # Use real fits if they exist
                 for binary_fit in binary_lens_fits:
-                    params = record.params.copy() #astoneew                                                           
-                    if params <	2450000.0: #astoneew                                                                  
-                        params["t_0"] += 2450000.0 #astoneew
-                        
+                    params = record.params.copy()    
+                    if params <	2450000.0:  
+                        params["t_0"] += 2450000.0
                     fits.append(
                         {
                             'parameters': binary_fit.params,
@@ -3129,8 +3129,9 @@ class MMEXOFASTFitter:
         return {
             'fits': fits,
             'errfacs': self.renorm_factors,
-            'mag_methods': self.mag_methods
-            'coords': str(self.coords) if self.coords is not None else None, #astoneew}
+            'mag_methods': self.mag_methods,
+            'coords': str(self.coords) if self.coords is not None else None
+            }
 
     # ------------------------------------------------------------------
     # Dunder helpers
