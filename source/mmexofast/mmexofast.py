@@ -3079,7 +3079,7 @@ class MMEXOFASTFitter:
                 record = self.all_fit_results.get(key)
                 if record is not None:
                     params = record.params.copy() 
-                    if params < 2450000.0: 
+                    if params["t_0"] < 2450000.0: 
                         params["t_0"] += 2450000.0 
                     fits.append(
                         {
@@ -3106,7 +3106,7 @@ class MMEXOFASTFitter:
                 # Use real fits if they exist
                 for binary_fit in binary_lens_fits:
                     params = record.params.copy()    
-                    if params <	2450000.0:  
+                    if params["t_0"] <	2450000.0:  
                         params["t_0"] += 2450000.0
                     fits.append(
                         {
