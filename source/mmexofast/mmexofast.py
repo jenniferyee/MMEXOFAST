@@ -3083,7 +3083,7 @@ class MMEXOFASTFitter:
                         params["t_0"] += 2450000.0 
                     fits.append(
                         {
-                            'parameters': record.params,
+                            'parameters': params,
                             'sigmas':     record.sigmas,
                         }
                     )
@@ -3094,7 +3094,7 @@ class MMEXOFASTFitter:
                 'mag_methods': self.mag_methods,
                 'coords': str(self.coords) if self.coords is not None else None
                 }
-            }
+
         if self.fit_type == 'binary_lens':
             fits = []
 
@@ -3105,14 +3105,13 @@ class MMEXOFASTFitter:
             if len(binary_lens_fits) > 0:
                 # Use real fits if they exist
                 for binary_fit in binary_lens_fits:
-                    params = record.params.copy()    
+                    params = binary_fit.params.copy()    
                     if params["t_0"] <	2450000.0:  
                         params["t_0"] += 2450000.0
                     fits.append(
                         {
-                            'parameters': binary_fit.params,
+                            'parameters': params,
                             'sigmas': binary_fit.sigmas,
-
                         }
                     )
             elif self.intermediate_results.est_binary_params is not None:
