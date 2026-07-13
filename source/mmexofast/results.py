@@ -783,29 +783,29 @@ class IntermediateResults:
     ------
     best_ef_grid_point : dict or None
         Best grid point from the EventFinder grid search.
-        Set by: run_ef_grid
+        Set by: run_event_search
         Format: {'t_0': float, 't_eff': float, 'j': int, 'chi2': float}
 
     best_af_grid_point : dict or None
         Best grid point from the AnomalyFinder grid search.
-        Set by: run_af_grid
+        Set by: run_anomaly_search
         Format: TBD
 
-    est_pl_params : dict or None
+    estimate_point_lens_parameters : dict or None
         Estimated point-lens parameters from the EF grid result.
-        Set by: est_pl_params
+        Set by: estimate_point_lens_parameters
         Format: {'t_0': float, 'u_0': float, 't_E': float}
 
-    est_binary_params : dict of dicts or None
+    estimate_binary_lens_parameters : dict of dicts or None
         Estimated binary lens parameters from the AF grid result. Some anomaly
         types may have multiple possible solutions.
-        Set by: est_binary_params
+        Set by: estimate_binary_lens_parameters
         Format: {solution: {'t_0': float, 'u_0': float, 't_E': float,
                  'rho': float, 'q': float, 's': float, 'alpha': float}, ...}
 
-    anomaly_lc_params : dict or None
+    get_anomaly_light_curve_parameters : dict or None
         PSPL properties + observed anomaly properties.
-        Set by: get_anomaly_lc_params
+        Set by: get_anomaly_light_curve_parameters
         Format: {'t_0': float, 'u_0': float, 't_E': float,
                   'dmag': float, 'dt': float, 't_pl': float}
 
@@ -817,9 +817,9 @@ class IntermediateResults:
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None
-    est_pl_params: Optional[dict] = None
-    est_binary_params: Optional[dict] = None
-    anomaly_lc_params: Optional[dict] = None
+    estimate_point_lens_parameters: Optional[dict] = None
+    estimate_binary_lens_parameters: Optional[dict] = None
+    get_anomaly_light_curve_parameters: Optional[dict] = None
 
     def __init__(self):
         self._anomaly_type: Optional[str] = None

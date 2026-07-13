@@ -395,7 +395,7 @@ class MMEXOFASTFitter:
         ``_load_initial_results`` for the expected key/value format.
         Mutually exclusive with ``restart_from``.  Only two entry points
         are supported: ``fit_type='point_lens'`` with a PSPL result
-        (starts at ``fit_pspl``), and ``fit_type='binary_lens'`` with any
+        (starts at ``fit_static_point_source_point_lens``), and ``fit_type='binary_lens'`` with any
         PSPL result (starts at ``select_best_point_lens_model``,
         skipping all point-lens stages).
     output_config : OutputConfig, optional
@@ -427,8 +427,8 @@ class MMEXOFASTFitter:
          - First step executed
        * - ``'point_lens'``
          - Static PSPL (``lens_type=POINT``, ``parallax_branch=NONE``)
-         - ``fit_pspl`` — the supplied params are used as the fitting
-           seed; ``est_pl_params`` is skipped
+         - ``fit_static_point_source_point_lens`` — the supplied params are used as the fitting
+           seed; ``estimate_point_lens_parameters`` is skipped
        * - ``'binary_lens'``
          - Any PSPL (static or parallax)
          - ``select_best_point_lens_model`` — all point-lens stages are
@@ -450,7 +450,7 @@ class MMEXOFASTFitter:
 
     ``stop_before`` and ``stop_after`` accept either a stage name
     (e.g. ``'fit_static_point_lens'``) or a ``stage:step`` string
-    (e.g. ``'fit_static_point_lens:fit_pspl'``).  When a stage name is
+    (e.g. ``'fit_static_point_lens:fit_static_point_source_point_lens'``).  When a stage name is
     used, ``stop_before`` halts before the first step of that stage and
     ``stop_after`` halts after the last step of that stage.
 
@@ -1024,8 +1024,8 @@ class MMEXOFASTFitter:
     def _build_event_search_steps(self) -> list[WorkflowStep]:
         return [
             WorkflowStep(
-                name='run_ef_grid',
-                func=self.run_ef_grid,
+                name='run_event_search',
+                func=self.run_event_search,
                 stage='event_search',
                 description='Run EventFinder grid search',
             ),
@@ -1037,7 +1037,7 @@ class MMEXOFASTFitter:
 
         If a PSPL record already exists in ``all_fit_results`` (e.g. from
         user-supplied ``initial_results``), its params are passed to
-        ``fit_pspl`` as the initial seed.
+        ``fit_static_point_source_point_lens`` as the initial seed.
 
         Includes an FSPL step when ``self.finite_source`` is True.
 
@@ -1045,7 +1045,7 @@ class MMEXOFASTFitter:
         -------
         list of WorkflowStep
         """
-        if self._initial_entry_point == 'fit_pspl':
+        if self._initial_entry_point == 'fit_static_point_source_point_lens':
             static_pspl_key = FitKey(
                 lens_type=LensType.POINT,
                 source_type=SourceType.POINT,
@@ -1058,8 +1058,8 @@ class MMEXOFASTFitter:
         else:
             steps = [
                 WorkflowStep(
-                    name='est_pl_params',
-                    func=self.est_pl_params,
+                    name='estimate_point_lens_parameters',
+                    func=self.estimate_point_lens_parameters,
                     stage='fit_static_point_lens',
                     description='Estimate point-lens parameters from EF grid result',
                 )]
@@ -1067,8 +1067,9 @@ class MMEXOFASTFitter:
 
         steps.append(
             WorkflowStep(
-                name='fit_pspl',
-                func=lambda p=pspl_seed: self.fit_pspl(initial_params=p),
+                name='fit_static_point_source_point_lens',
+                func=lambda p=pspl_seed: self.fit_static_point_source_point_lens(
+                    initial_params=p),
                 stage='fit_static_point_lens',
                 description='Fit static PSPL model',
             ),
@@ -1077,8 +1078,8 @@ class MMEXOFASTFitter:
         if self.finite_source:
             steps.append(
                 WorkflowStep(
-                    name='fit_fspl',
-                    func=self.fit_fspl,
+                    name='fit_static_finite_source_point_lens',
+                    func=self.fit_static_finite_source_point_lens,
                     stage='fit_static_point_lens',
                     description='Fit static FSPL model',
                 )
@@ -1162,20 +1163,20 @@ class MMEXOFASTFitter:
             #    description='Select the best point-lens model for anomaly search',
             #),
             WorkflowStep(
-                name='compute_residuals',
-                func=self.compute_residuals,
+                name='compute_point_lens_residuals',
+                func=self.compute_point_lens_residuals,
                 stage='search_for_anomaly',
                 description='Compute residuals from best point-lens model',
             ),
             WorkflowStep(
-                name='run_af_grid',
-                func=self.run_af_grid,
+                name='run_anomaly_search',
+                func=self.run_anomaly_search,
                 stage='search_for_anomaly',
                 description='Run AnomalyFinder grid search',
             ),
             WorkflowStep(
-                name='get_anomaly_lc_params',
-                func=self.get_anomaly_lc_params,
+                name='get_anomaly_light_curve_parameters',
+                func=self.get_anomaly_light_curve_parameters,
                 stage='search_for_anomaly',
                 description='Measure observable anomaly properties',
             ),
@@ -1190,15 +1191,15 @@ class MMEXOFASTFitter:
     def _build_binary_fit_steps(self) -> list[WorkflowStep]:
         return [
             WorkflowStep(
-                name='est_binary_params',
-                func=self.est_binary_params,
-                stage='fit_binary_lens',
+                name='estimate_binary_lens_parameters',
+                func=self.estimate_binary_lens_parameters,
+                stage='fit_binary_lens_models',
                 description='Estimate binary-lens parameters from AF grid result',
             ),
             WorkflowStep(
-                name='fit_binary_models',
-                func=self.fit_binary_models,
-                stage='fit_binary_lens',
+                name='fit_binary_lens_models',
+                func=self.fit_binary_lens_models,
+                stage='fit_binary_lens_models',
                 description=(
                     'Fit binary-lens models; may return dynamic follow-up steps'
                 ),
@@ -1290,7 +1291,7 @@ class MMEXOFASTFitter:
     # Step action methods
     # ------------------------------------------------------------------
 
-    def run_ef_grid(self) -> None:
+    def run_event_search(self) -> None:
         """
         Run the EventFinder grid.
 
@@ -1313,20 +1314,20 @@ class MMEXOFASTFitter:
         logger.info('Best EF grid point: %s', ef_grid.best)
         self.intermediate_results.best_ef_grid_point = ef_grid.best
 
-    def est_pl_params(self) -> None:
+    def estimate_point_lens_parameters(self) -> None:
         """
         Estimate point-lens parameters from the EventFinder grid result.
 
-        Stores estimates in ``self.intermediate_results.est_pl_params``.
+        Stores estimates in ``self.intermediate_results.estimate_point_lens_parameters``.
         """
         est = get_PSPL_params(
             self.intermediate_results.best_ef_grid_point,
             self.datasets,
         )
         logger.info('Estimated point-lens params: %s', est)
-        self.intermediate_results.est_pl_params = est
+        self.intermediate_results.estimate_point_lens_parameters = est
 
-    def fit_pspl(self, initial_params=None) -> None:
+    def fit_static_point_source_point_lens(self, initial_params=None) -> None:
         """
         Fit a static PSPL model.
 
@@ -1334,14 +1335,14 @@ class MMEXOFASTFitter:
         ----------
         initial_params : dict, optional
             Starting parameter values.  If None, uses
-            ``self.intermediate_results.est_pl_params``.
+            ``self.intermediate_results.estimate_point_lens_parameters``.
 
         Notes
         -----
         Stores the resulting ``FitRecord`` in ``self.all_fit_results``.
         """
         if initial_params is None:
-            initial_params = self.intermediate_results.est_pl_params
+            initial_params = self.intermediate_results.estimate_point_lens_parameters
 
         fitter = SFitFitter(
             initial_model_params=initial_params,
@@ -1369,7 +1370,7 @@ class MMEXOFASTFitter:
             )
         )
 
-    def fit_fspl(self, initial_params=None) -> None:
+    def fit_static_finite_source_point_lens(self, initial_params=None) -> None:
         """
         Fit a static FSPL model.
 
@@ -1866,7 +1867,7 @@ class MMEXOFASTFitter:
             return best_binary
         return best_point
 
-    def compute_residuals(self) -> None:
+    def compute_point_lens_residuals(self) -> None:
         """
         Compute residuals from the best point-lens model.
 
@@ -1874,7 +1875,7 @@ class MMEXOFASTFitter:
         -----
         Residuals are stored in ``self.residuals`` as a list of
         ``MulensData`` objects in flux format, for use by
-        ``run_af_grid()``.
+        ``run_anomaly_search()``.
         """
         reference_fit = self.select_best_point_lens_model()
         reference_model = reference_fit.full_result.fitter.get_model()
@@ -1900,7 +1901,7 @@ class MMEXOFASTFitter:
                 )
             )
 
-    def run_af_grid(self) -> None:
+    def run_anomaly_search(self) -> None:
         """
         Run the AnomalyFinder grid.
 
@@ -1925,7 +1926,7 @@ class MMEXOFASTFitter:
         logger.info('Best AF grid point: %s', af_grid.best)
         self.intermediate_results.best_af_grid_point = af_grid.best
 
-    def get_anomaly_lc_params(self):
+    def get_anomaly_light_curve_parameters(self):
         """
         Estimate anomaly properties from the AnomalyFinder grid
         result.
@@ -1957,13 +1958,13 @@ class MMEXOFASTFitter:
         self.intermediate_results.anomaly_type = classifier.classify(self.intermediate_results.anomaly_lc_params)
         logger.info('Anomaly classified as anomaly_type = %s', self.intermediate_results.anomaly_type)
 
-    def est_binary_params(self) -> None:
+    def estimate_binary_lens_parameters(self) -> None:
         """
         Estimate binary-lens parameters from the AnomalyFinder grid
         result.
 
         Stores estimates in
-        ``self.intermediate_results.est_binary_params``.
+        ``self.intermediate_results.estimate_binary_lens_parameters``.
         """
         est_params = {}
         estimator_classes = None
@@ -2009,11 +2010,11 @@ class MMEXOFASTFitter:
 
                 self.mag_methods = params.mag_methods
 
-        self.intermediate_results.est_binary_params = est_params
+        self.intermediate_results.estimate_binary_lens_parameters = est_params
         if (self._output_config is not None) and self._output_config.save_plots:
             self._plot_initial_2L1S_guess()
 
-    def fit_binary_models(self) -> Optional[list[WorkflowStep]]:
+    def fit_binary_lens_models(self) -> Optional[list[WorkflowStep]]:
         """
         Fit binary lens models.
 
@@ -2032,7 +2033,7 @@ class MMEXOFASTFitter:
         # TODO: Separate models (key/param items) into separate steps.
         # TODO: Check for and implement point source binary lens models.
 
-        for key, params in self.intermediate_results.est_binary_params.items():
+        for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
             model = self.model_config.build(
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,
@@ -2350,7 +2351,7 @@ class MMEXOFASTFitter:
         Rules
         -----
         - ``fit_type='point_lens'`` with PSPL params supplied →
-          ``'fit_pspl'`` (``est_pl_params`` is skipped; supplied params
+          ``'fit_static_point_source_point_lens'`` (``estimate_point_lens_parameters`` is skipped; supplied params
           used as seed).
         - ``fit_type='binary_lens'`` with any PSPL params supplied →
           ``search_for_anomaly`` (all point-lens stages
@@ -2371,7 +2372,7 @@ class MMEXOFASTFitter:
             return None
 
         if self.fit_type == 'point_lens':
-            return 'fit_pspl'
+            return 'fit_static_point_source_point_lens'
         if self.fit_type == 'binary_lens':
             return 'search_for_anomaly'
 
@@ -2625,8 +2626,8 @@ class MMEXOFASTFitter:
         plt.tight_layout()
 
     def _plot_initial_2L1S_guess(self):
-        #print(self.intermediate_results.est_binary_params)
-        for key, params in self.intermediate_results.est_binary_params.items():
+        #print(self.intermediate_results.estimate_binary_lens_parameters)
+        for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
             print(key)
             print(params.ulens)
             print(params.mag_methods)
@@ -3107,9 +3108,9 @@ class MMEXOFASTFitter:
 
                         }
                     )
-            elif self.intermediate_results.est_binary_params is not None:
+            elif self.intermediate_results.estimate_binary_lens_parameters is not None:
                 # otherwise, return the initial estimates
-                for key, params in self.intermediate_results.est_binary_params.items():
+                for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
                     fits.append({'parameters': params.ulens})
 
         else:
