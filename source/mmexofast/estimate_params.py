@@ -594,16 +594,11 @@ class BinaryLensParams():
                 else:
                     # Skip the intermediate method since it has zero width.
                     continue
-<<<<<<< Updated upstream
-            new_mag_methods.append(self.mag_methods[-1])
-            self.mag_methods = new_mag_methods
-=======
             if len(self.mag_methods) < 3:
                 raise RuntimeError(
                     "All method windows have zero length after refinement. "
             self.mag_methods = new_mag_methods
 
->>>>>>> Stashed changes
 
 def get_wide_params(params, limit='GG97'):
     """
