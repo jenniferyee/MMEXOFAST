@@ -2123,6 +2123,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         if rho is not None:
             self._rho = rho
         self._eta_not, self._mu, self._phi = None, None, None
+        self._trajectory_1L = None
 
     def setup_close_ulens_params(self):
         """
