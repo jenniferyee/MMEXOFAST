@@ -596,7 +596,7 @@ class BinaryLensParams():
                     continue
             if len(self.mag_methods) < 3:
                 raise RuntimeError(
-                    "All method windows have zero length after refinement. "
+                    "All method windows have zero length after refinement.")
             self.mag_methods = new_mag_methods
 
 

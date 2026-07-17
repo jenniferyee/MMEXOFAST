@@ -813,7 +813,7 @@ class IntermediateResults:
        Type of anomaly. Allowed types are given in VALID_ANOMALY_TYPES
 
     """
-    VALID_ANOMALY_TYPES = {'close', 'wide', 'high_mag'}
+    VALID_ANOMALY_TYPES = {'negative', 'positive', 'high_mag'}
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None
