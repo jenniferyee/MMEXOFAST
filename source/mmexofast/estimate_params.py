@@ -577,26 +577,25 @@ class BinaryLensParams():
                     self.ulens, self.mag_methods))
 
     def _remove_zero_length_methods(self):
-            """
-            Remove any zero-length method windows from mag_methods.
-
-            If two adjacent boundaries are equal, the intermediate method is
-            removed.
-            """
-            new_mag_methods = [self.mag_methods[0]]
-            for i in range(1, len(self.mag_methods) - 1, 2):
-                t_left = self.mag_methods[i - 1]
-                t_right = self.mag_methods[i + 1]
-                if t_left < t_right:
-                    new_mag_methods.append(self.mag_methods[i])
-                    new_mag_methods.append(t_right)
-                else:
-                    # Skip the intermediate method since it has zero width.
-                    continue
-            if len(self.mag_methods) < 3:
-                raise RuntimeError(
-                    "All method windows have zero length after refinement.")
-            self.mag_methods = new_mag_methods
+        """
+        Remove any zero-length method windows from mag_methods.
+        If two adjacent boundaries are equal, the intermediate method is
+        removed.
+        """
+        new_mag_methods = [self.mag_methods[0]]
+        for i in range(1, len(self.mag_methods) - 1, 2):
+            t_left = self.mag_methods[i - 1]
+            t_right = self.mag_methods[i + 1]
+            if t_left < t_right:
+                new_mag_methods.append(self.mag_methods[i])
+                new_mag_methods.append(t_right)
+            else:
+                # Skip the intermediate method since it has zero width.
+                continue
+        if len(self.mag_methods) < 3:
+            raise RuntimeError(
+                "All method windows have zero length after refinement.")
+        self.mag_methods = new_mag_methods
 
 
 def get_wide_params(params, limit='GG97'):
