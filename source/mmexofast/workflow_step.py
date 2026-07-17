@@ -9,11 +9,11 @@ logger = logging.getLogger(__name__)
 
 
 class StepStatus(Enum):
-    PENDING  = auto()
-    SKIPPED  = auto()
-    RUNNING  = auto()
+    PENDING = auto()
+    SKIPPED = auto()
+    RUNNING = auto()
     COMPLETE = auto()
-    FAILED   = auto()
+    FAILED = auto()
 
 
 class WorkflowStep:
@@ -60,18 +60,18 @@ class WorkflowStep:
         required: bool = True,
         max_retries: int = 0,
     ) -> None:
-        self.name         = name
-        self.func         = func
-        self.stage        = stage
-        self.description  = description
+        self.name = name
+        self.func = func
+        self.stage = stage
+        self.description = description
         self.dependencies = dependencies or []
-        self.required     = required
-        self.max_retries  = max_retries
+        self.required = required
+        self.max_retries = max_retries
 
-        self.status:   StepStatus          = StepStatus.PENDING
-        self.result:   Any                 = None
-        self.error:    Optional[Exception] = None
-        self._attempts: int                = 0
+        self.status: StepStatus = StepStatus.PENDING
+        self.result: Any = None
+        self.error: Optional[Exception] = None
+        self._attempts: int = 0
 
     # ------------------------------------------------------------------
     # Public interface
@@ -152,9 +152,9 @@ class WorkflowStep:
 
         Clears ``result``, ``error``, and ``_attempts``.
         """
-        self.status    = StepStatus.PENDING
-        self.result    = None
-        self.error     = None
+        self.status = StepStatus.PENDING
+        self.result = None
+        self.error = None
         self._attempts = 0
 
     # ------------------------------------------------------------------

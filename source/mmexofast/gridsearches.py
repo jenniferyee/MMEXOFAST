@@ -21,6 +21,8 @@ from .fitters import SFitFitter, AnomalyFitter
 # ---------------------------------------------------------------------
 # EventFinder & AnomalyFinder Grid searches:
 # ---------------------------------------------------------------------
+
+
 class EventFinderGridSearch():
     """
     Based on Kim et al. 2018, AJ, 155, 76
@@ -273,7 +275,7 @@ class FlatSFitFunction(sfit_minimizer.SFitFunction):
         self.n_params = len(self.datasets)
         self._theta = None
         self.data_len = None
-        self.flatten_data() # destroys self.theta
+        self.flatten_data()  # destroys self.theta
         self.data_indices = self._set_data_indices()
         self.theta = np.zeros(self.n_params)
 
@@ -380,8 +382,7 @@ class EFSFitFunction(FlatSFitFunction):
         self.df = dfunc
 
     def _get_q(self, time):
-        q_ = 1. + ((time - self.parameters['t_0']) /
-                       self.parameters['t_eff']) ** 2
+        q_ = 1. + ((time - self.parameters['t_0']) / self.parameters['t_eff']) ** 2
         return q_
 
     @property
@@ -438,15 +439,14 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
     https://ui.adsabs.harvard.edu/abs/2021AJ....162..163Z/abstract
     """
 
-    def __init__(self,
-        residuals=None, t_eff_3=0.75, d_t_eff=1/3., t_eff_max=10.,
-        d_t_0=1/6., z_t_eff=3, n_min=2, **kwargs):
+    def __init__(self, residuals=None, t_eff_3=0.75, d_t_eff=1/3., t_eff_max=10., d_t_0=1/6., z_t_eff=3, n_min=2,
+                 **kwargs):
         EventFinderGridSearch.__init__(
             self,
             datasets=residuals, t_eff_3=t_eff_3, d_t_eff=d_t_eff,
             t_eff_max=t_eff_max, d_t_0=d_t_0, z_t_eff=z_t_eff, n_min=n_min,
             **kwargs)
-        #print('max flux AF input',
+        # print('max flux AF input',
         #      [np.max(residuals.flux) for residuals in self.datasets])
         self._anomalies = None
 
@@ -465,7 +465,7 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
     def get_zero_chi2(self, trimmed_datasets):
         chi2 = 0.
         for dataset in trimmed_datasets:
-            chi2 += np.sum( (dataset.flux / dataset.err_flux)**2 )
+            chi2 += np.sum((dataset.flux / dataset.err_flux)**2)
 
         return chi2
 
@@ -496,23 +496,23 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
 
         trimmed_datasets = self.get_trimmed_datasets(
             parameters, verbose=verbose)
-        #plt.figure()
-        #for dataset in trimmed_datasets:
+        # plt.figure()
+        # for dataset in trimmed_datasets:
         #    dataset.plot()
-        #plt.show()
+        # plt.show()
 
         do_fit = False
         # Only fit the window if there's enough data to do so.
         if len(trimmed_datasets) >= 1:
-            #print('max flux AF trimmed input',
+            # print('max flux AF trimmed input',
             #      [np.max(residuals.flux) for residuals in trimmed_datasets])
 
             # Check for a minimum of 5 datapoints
             n_tot = np.sum(np.hstack(
                 [dataset.good for dataset in trimmed_datasets]))
-            #print('n_tot', n_tot)
+            # print('n_tot', n_tot)
             successive = self.check_successive(trimmed_datasets)
-            #print('successive', successive)
+            # print('successive', successive)
             if (n_tot > 5) and (successive):
                 do_fit = True
 
@@ -573,13 +573,8 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
                           't_eff': self.anomalies[index, 1],
                           'j': self.anomalies[index, 2],
                           'chi2': self.anomalies[index, 3],
-                          'dchi2_zero':
-                              (self.anomalies[index, 5] -
-                              self.anomalies[index, 3]),
-                          'dchi2_flat':
-                              (self.anomalies[index, 4] -
-                               self.anomalies[index, 3])
-                          }
+                          'dchi2_zero': (self.anomalies[index, 5] - self.anomalies[index, 3]),
+                          'dchi2_flat': (self.anomalies[index, 4] - self.anomalies[index, 3])}
 
         return self._best
 
@@ -1397,8 +1392,7 @@ class BaseRectGridSearch(ABC):
             return np.concatenate([new_slice, arr], axis=dim)
         return np.concatenate([arr, new_slice], axis=dim)
 
-    def _apply_expansion(self, chi2_grid, result_grid, metadata,
-                          edge_dims, n_expand):
+    def _apply_expansion(self, chi2_grid, result_grid, metadata, edge_dims, n_expand):
         """Expand arrays simultaneously in all edge dimensions.
 
         Parameters
@@ -1563,10 +1557,8 @@ class BaseRectGridSearch(ABC):
     # Edge expansion entry point
     # ----------------------------------------------------------------
 
-    def _expand_edge_minimum(self, minimum, level_data, n_expand,
-                              strip_width, nn_init, max_expansions):
+    def _expand_edge_minimum(self, minimum, level_data, n_expand, strip_width, nn_init, max_expansions):
         """Expand grid around an edge minimum until interior or limit reached.
-
         Parameters
         ----------
         minimum : dict
@@ -1765,8 +1757,7 @@ class BaseRectGridSearch(ABC):
     # Refinement: convergence
     # ----------------------------------------------------------------
 
-    def _count_below_threshold_1d(self, chi2_slice, center_pos,
-                                   threshold, direction):
+    def _count_below_threshold_1d(self, chi2_slice, center_pos, threshold, direction):
         """Count consecutive points at or below threshold in one direction.
 
         Parameters
@@ -2328,9 +2319,7 @@ class BaseRectGridSearch(ABC):
         """
         n_cols = max(n_2d, n_1d, 1)
         n_rows = 1 if n_2d == 0 else 2
-        fig, axes = plt.subplots(n_rows, n_cols,
-                                  figsize=(4 * n_cols, 4 * n_rows),
-                                  squeeze=False)
+        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
         for ax in axes.ravel():
             ax.set_visible(False)
         axes_2d = list(axes[0, :n_2d]) if n_2d > 0 else []
@@ -2961,7 +2950,8 @@ class ParallaxGridSearch(BaseRectGridSearch):
         model_params['pi_E_E'] = grid_params['pi_E_E']
         model_params['pi_E_N'] = grid_params['pi_E_N']
 
-        # TODO: investigate whether skip_optimization and non-skip branches can be unified (differ in fitter.run() call and chi2 retrieval method)
+        # TODO: investigate whether skip_optimization and non-skip branches can be unified
+        # (differ in fitter.run() call and chi2 retrieval method)
         # TODO: implement emcee fitter for binary lenses.
         if self.skip_optimization:
             try:

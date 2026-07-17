@@ -24,10 +24,11 @@ from scipy.special import erfcinv
 from .results import AllFitResults, FitRecord, IntermediateResults, MMEXOFASTFitResults
 from .workflow_step import WorkflowStep, StepStatus
 from .estimate_params import (get_PSPL_params, AnomalyPropertyEstimator, WidePlanetGridSearchEstimator,
-                              ClosePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator, CloseLowerBinaryGridSearchEstimator
-                            )
+                              ClosePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
+                              CloseLowerBinaryGridSearchEstimator)
 from .fitters import SFitFitter, AnomalyFitter, EmceeFitResults
-from .fit_types import label_to_model_key, model_key_to_label, FitKey, LensType, SourceType, ParallaxBranch, LensOrbMotion
+from .fit_types import label_to_model_key, model_key_to_label, FitKey, LensType, SourceType, \
+    ParallaxBranch, LensOrbMotion
 from .gridsearches import EventFinderGridSearch, AnomalyFinderGridSearch, ParallaxGridSearch
 from .classifier import AnomalyClassifier
 from .observatories import get_kwargs, get_telescope_band_from_filename
@@ -298,12 +299,8 @@ class OutputConfig:
 # Module-level convenience wrapper
 # ===========================================================================
 
-def fit(
-    datasets=None,
-    files=None,
-    fit_type: str = 'point_lens',
-    **kwargs,
-) -> 'MMEXOFASTFitter':
+
+def fit(datasets=None, files=None, fit_type: str = 'point_lens', **kwargs,) -> 'MMEXOFASTFitter':
     """
     Convenience wrapper: construct an ``MMEXOFASTFitter`` and run it.
 
@@ -851,9 +848,9 @@ class MMEXOFASTFitter:
         while i < len(self.planned_steps):
             step = self.planned_steps[i]
 
-            #debugging:
+            # debugging:
             logger.info(f'\nRunning step: {step.stage}:{step.name}')
-            #logger.info(f'DEBUG remaining steps: %s', [f'{s.stage}:{s.name}' for s in self.planned_steps])
+            # logger.info(f'DEBUG remaining steps: %s', [f'{s.stage}:{s.name}' for s in self.planned_steps])
 
             if (self.stop_before is not None
                     and self._matches_stop_point(
@@ -874,7 +871,7 @@ class MMEXOFASTFitter:
 
                 # Insert any dynamically generated follow-up steps
                 if isinstance(step.result, list) and step.result:
-                    #logger.info('DEBUG: steps to insert: %s', [f'{s.stage}:{s.name}' for s in step.result])
+                    # logger.info('DEBUG: steps to insert: %s', [f'{s.stage}:{s.name}' for s in step.result])
 
                     for j, dynamic_step in enumerate(step.result):
                         self.planned_steps.insert(i + 1 + j, dynamic_step)
@@ -1095,7 +1092,7 @@ class MMEXOFASTFitter:
         list of WorkflowStep
         """
         if self.no_parallax:
-           return []
+            return []
 
         steps = []
         for key in self._iter_parallax_point_lens_keys():
@@ -1156,12 +1153,12 @@ class MMEXOFASTFitter:
         list of WorkflowStep
         """
         return [
-            #WorkflowStep( # This step doesn't do anything.
+            # WorkflowStep( # This step doesn't do anything.
             #    name='select_best_point_lens_model',
             #    func=self.select_best_point_lens_model,
             #    stage='search_for_anomaly',
             #    description='Select the best point-lens model for anomaly search',
-            #),
+            # ),
             WorkflowStep(
                 name='compute_point_lens_residuals',
                 func=self.compute_point_lens_residuals,
@@ -1229,10 +1226,10 @@ class MMEXOFASTFitter:
         """
         steps = [
             WorkflowStep(
-                name=f'run_parallax_grids',
+                name='run_parallax_grids',
                 func=self.run_parallax_grids,
                 stage='parallax_grids',
-                description=f'Run both parallax grid searches',
+                description='Run both parallax grid searches',
             )
         ]
         return steps
@@ -1668,7 +1665,7 @@ class MMEXOFASTFitter:
             k: getattr(dataset, k)
             for k in sig.parameters
             if k not in ('self', 'data_list', 'good', 'phot_fmt', 'file_name')
-               and hasattr(dataset, k)
+            and hasattr(dataset, k)
         }
         return MulensModel.MulensData(
             data_list=[dataset.time, dataset.flux, errfac * dataset.err_flux],
@@ -1723,7 +1720,8 @@ class MMEXOFASTFitter:
             If no fits of the requested lens type are available, or if
             multiple incomplete records exist and none have chi-squared.
         """
-        # TODO: ADD a THRESHOLDS parameter (dict) that can hold all the thresholds like DELTA_CHI2 so the user can control them.
+        # TODO: ADD a THRESHOLDS parameter (dict) that can hold all the thresholds like DELTA_CHI2
+        # so the user can control them.
         # TODO: ADD support for choosing between FSPL and PSPL models.
         DELTA_CHI2 = 50.0
         label = lens_type.name.lower()
@@ -1755,16 +1753,13 @@ class MMEXOFASTFitter:
 
         static_fits = [
             rec for key, rec in self.all_fit_results.items()
-            if key.lens_type == lens_type
-               and key.parallax_branch == ParallaxBranch.NONE
-               and rec.chi2() is not None
-        ]
+            if key.lens_type == lens_type and key.parallax_branch == ParallaxBranch.NONE
+            and rec.chi2() is not None]
+
         parallax_fits = [
             rec for key, rec in self.all_fit_results.items()
-            if key.lens_type == lens_type
-               and key.parallax_branch != ParallaxBranch.NONE
-               and rec.chi2() is not None
-        ]
+            if key.lens_type == lens_type and key.parallax_branch != ParallaxBranch.NONE
+            and rec.chi2() is not None]
 
         best_static = (
             min(static_fits, key=lambda r: r.chi2()) if static_fits else None
@@ -1980,7 +1975,6 @@ class MMEXOFASTFitter:
 
         if estimator_classes is not None:
             for estimator_class in estimator_classes:
-                s_dagger = None
                 estimator = estimator_class(
                     datasets=self.datasets,
                     params=self.intermediate_results.anomaly_lc_params,
@@ -2043,10 +2037,10 @@ class MMEXOFASTFitter:
                 model=model,
                 datasets=self.datasets,
             )
-            binary_chi2 =event.get_chi2()
+            binary_chi2 = event.get_chi2()
             logger.info(f'{key} initial chi2: {binary_chi2:.1f}')
             if (pspl_chi2 - binary_chi2) * n_data / np.min((binary_chi2, pspl_chi2)) < 3.:
-                logger.info(f'Binary model does not improve chi2 enough, skipping.')
+                logger.info('Binary model does not improve chi2 enough, skipping.')
                 # TODO: if model is "alt" try seeding from the fitted regular solution.
                 continue
 
@@ -2264,9 +2258,8 @@ class MMEXOFASTFitter:
                     and other_key.parallax_branch in BRANCH_SIGNS
                     and other_key.parallax_branch != key.parallax_branch
                     and ((other_rec.sigmas is None) or
-                         (np.abs(other_rec.sigmas['pi_E_E'] / other_rec.params['pi_E_E']) < 0.5)
-                    )  # don't bother if the parallax isn't well constrained.
-            ):
+                         (np.abs(other_rec.sigmas['pi_E_E'] / other_rec.params['pi_E_E']) < 0.5))):
+                # don't bother if the parallax isn't well constrained.
                 su0_src, spi_src = BRANCH_SIGNS[other_key.parallax_branch]
                 base = dict(other_rec.params)
                 if 'u_0' in base:
@@ -2342,7 +2335,6 @@ class MMEXOFASTFitter:
 
         return False
 
-
     def _infer_entry_point_from_initial_results(self) -> Optional[str]:
         """
         Determine the workflow entry point from user-supplied
@@ -2397,8 +2389,8 @@ class MMEXOFASTFitter:
         }
 
         # debugging:
-        #step = self.completed_steps[-1]
-        #logger.info(f'DEBUG save_restart_state called after: {step.stage}:{step.name}')
+        # step = self.completed_steps[-1]
+        # logger.info(f'DEBUG save_restart_state called after: {step.stage}:{step.name}')
 
         with open(self._restart_path, 'wb') as f:
             pickle.dump(restart_data, f)
@@ -2470,7 +2462,7 @@ class MMEXOFASTFitter:
             Mapping of ``mmexo.ParallaxBranch`` to
             ``ParallaxGridSearch`` objects.
         """
-        #logger.info('Plotting piE grids: %s.', grids.keys())
+        # logger.info('Plotting piE grids: %s.', grids.keys())
         all_chi2 = [
             r['chi2_grid']
             for grid in grids.values()
@@ -2535,7 +2527,7 @@ class MMEXOFASTFitter:
         if model.methods is not None and (model.n_lenses > 1):
             if model.methods is dict:
                 raise NotImplementedError('Plotting for Binary Source models not implemented, yet.')
-                #probably want to loop over the sources and find min/max values of hexadecapole
+                # probably want to loop over the sources and find min/max values of hexadecapole
             else:
                 hex_indices = [i for i in range(1, len(model.methods), 2) if model.methods[i] == "hexadecapole"]
                 first_idx = hex_indices[0] - 1 if hex_indices else 0
@@ -2545,8 +2537,10 @@ class MMEXOFASTFitter:
 
         elif self.intermediate_results.best_af_grid_point is not None:
             n_teff = 3
-            start = self.intermediate_results.best_af_grid_point['t_0'] - n_teff * self.intermediate_results.best_af_grid_point['t_eff']
-            stop = self.intermediate_results.best_af_grid_point['t_0'] + n_teff * self.intermediate_results.best_af_grid_point['t_eff']
+            start = self.intermediate_results.best_af_grid_point['t_0'] - \
+                n_teff * self.intermediate_results.best_af_grid_point['t_eff']
+            stop = self.intermediate_results.best_af_grid_point['t_0'] + \
+                n_teff * self.intermediate_results.best_af_grid_point['t_eff']
             return [start, stop]
         else:
             return self._get_event_t_range(event, n_tE=n_tE)
@@ -2556,20 +2550,22 @@ class MMEXOFASTFitter:
         if self.intermediate_results.best_af_grid_point is not None:
             plt.axvline(self.intermediate_results.best_af_grid_point['t_0'] - 2450000., color='black', linestyle=':')
             plt.axvline(
-                self.intermediate_results.best_af_grid_point['t_0'] - self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
+                self.intermediate_results.best_af_grid_point['t_0'] -
+                self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
                 color='black', linestyle='--')
             plt.axvline(
-                self.intermediate_results.best_af_grid_point['t_0'] + self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
+                self.intermediate_results.best_af_grid_point['t_0'] +
+                self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
                 color='black', linestyle='--')
 
     def _get_anomaly_source_plane_region(self, event, planet_t_range):
         traj = event.model.get_trajectory(planet_t_range)
-        #for i in [0, -1]:
+        # for i in [0, -1]:
         #    print(planet_t_range[i], traj.times[i], traj.x[i], traj.y[i])
 
         xlim = np.min(traj.x), np.max(traj.x)
         ylim = np.min(traj.y), np.max(traj.y)
-        #print(xlim, ylim)
+        # print(xlim, ylim)
         delta = np.max((xlim[1] - xlim[0], ylim[1] - ylim[0]))
         xlim = np.mean(xlim) + 0.5 * np.array([-delta, delta])
         ylim = np.mean(ylim) + 0.5 * np.array([-delta, delta])
@@ -2626,7 +2622,7 @@ class MMEXOFASTFitter:
         plt.tight_layout()
 
     def _plot_initial_2L1S_guess(self):
-        #print(self.intermediate_results.estimate_binary_lens_parameters)
+        # print(self.intermediate_results.estimate_binary_lens_parameters)
         for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
             print(key)
             print(params.ulens)
@@ -2661,7 +2657,7 @@ class MMEXOFASTFitter:
         event = best_fit.full_result.fitter.get_event()
 
         # plot the light curve
-        #event.plot(trajectory=False)
+        # event.plot(trajectory=False)
         self._plot_event(event)
         path = self._output_config.plot_path('lc')
         plt.savefig(path)
@@ -3157,4 +3153,3 @@ class MMEXOFASTFitter:
             handler.close()
             _mod_logger.removeHandler(handler)
         self._log_handlers.clear()
-

@@ -5,6 +5,7 @@ from typing import Optional
 
 import MulensModel
 
+
 @dataclasses.dataclass
 class ModelConfig:
     """

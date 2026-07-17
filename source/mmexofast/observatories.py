@@ -74,6 +74,7 @@ def get_telescope_band_from_filename(filename):
 # Observatory Class and Registry
 # ============================================================================
 
+
 class Observatory:
     """
     Container for observatory-specific MulensData configuration.
@@ -139,6 +140,7 @@ EPHEMERIDES_TO_OBSERVATORY = {
 # ============================================================================
 # Utility Functions
 # ============================================================================
+
 
 def list_observatories():
     """
@@ -252,8 +254,8 @@ def load_observatories_from_config(config_file):
 # ============================================================================
 # Built-in Observatories
 # ============================================================================
-
 # Fake
+
 
 register_observatory(Observatory(
     name='WFIRST18',
@@ -300,7 +302,4 @@ register_observatory(Observatory(
     usecols=[0, 1, 2],
     bands={
         'I': {'color': 'black', 'marker': 'o'},
-        'V': {'color': 'black', 'marker': 'v', 'facecolor': 'none'}
-    }
-))
-
+        'V': {'color': 'black', 'marker': 'v', 'facecolor': 'none'}}))

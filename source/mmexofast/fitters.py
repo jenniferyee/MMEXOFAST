@@ -67,7 +67,7 @@ class EmceeFitResults:
         """
         if self._percentiles is None:
             n_burn = self.emcee_settings['n_burn']
-            n_dim  = self.emcee_settings['n_dim']
+            n_dim = self.emcee_settings['n_dim']
             samples = self.sampler.chain[:, n_burn:, :].reshape((-1, n_dim))
             self._percentiles = np.percentile(samples, [16, 50, 84], axis=0)
         return self._percentiles
@@ -435,7 +435,6 @@ class SFitFitter(MulensFitter):
                 options={'step': 0.001}, verbose=self.verbose)
             if self.verbose:
                 print(result)
-
 
         self.results = result
         best = my_func.event.model.parameters.parameters
@@ -910,11 +909,12 @@ class EmceeLCFitter(MulensFitter):
         samples = self.sampler.chain[:, n_burn:, :].reshape((-1, n_dim))
 
         if len(samples) == 0:
-            msg = f"No samples remain after burn-in. " + \
+            msg = "No samples remain after burn-in. " + \
                   f"Sampler ran {self.sampler.iteration} iterations but " + \
                   f"n_burn={n_burn}."
             if mean_af < self.emcee_settings['acceptance_fraction']:
-                msg += f"Acceptance fraction {mean_af:.3f} too low! Minimum set to: {self.emcee_settings['acceptance_fraction']}"
+                msg += f"Acceptance fraction {mean_af:.3f} too low! Minimum set to:"
+                msg += f" {self.emcee_settings['acceptance_fraction']}"
 
             return msg
 
@@ -1116,6 +1116,7 @@ class AnomalyFitter(EmceeLCFitter):
         return sigmas
 
 # TODO: ADD child class of AnomalyFitter that uses dxsi parameter.
+
 
 class WidePlanetEnsembleInitialization(AnomalyFitter):
     """

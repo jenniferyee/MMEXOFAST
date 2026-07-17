@@ -221,12 +221,12 @@ class MMEXOFASTFitResults(BaseFitResults):
         """
         if self._is_emcee():
             df_fitted = self._get_df_fitted_parameters_emcee()
-            df_fixed  = self._get_df_fixed_parameters_emcee()
-            df_flux   = self._get_df_flux_parameters_emcee()
+            df_fixed = self._get_df_fixed_parameters_emcee()
+            df_flux = self._get_df_flux_parameters_emcee()
         else:
             df_fitted = self._get_df_fitted_parameters_sfit()
-            df_fixed  = self._get_df_fixed_parameters_sfit()
-            df_flux   = self._get_df_flux_parameters_sfit()
+            df_fixed = self._get_df_fixed_parameters_sfit()
+            df_flux = self._get_df_flux_parameters_sfit()
 
         df_ulens = pd.concat((df_fitted, df_fixed))
         return pd.concat((df_ulens, df_flux), ignore_index=True)
@@ -248,8 +248,8 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = list(self.parameters_to_fit)
-        values     = list(self.results.x[0:len(parameters)])
-        sigmas     = list(self.results.sigmas[0:len(parameters)])
+        values = list(self.results.x[0:len(parameters)])
+        sigmas = list(self.results.sigmas[0:len(parameters)])
 
         return pd.DataFrame({
             'parameter_names': parameters,
@@ -301,8 +301,8 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = []
-        values     = []
-        sigmas     = []
+        values = []
+        sigmas = []
 
         for i, dataset in enumerate(self.datasets):
             obs, band = get_telescope_band_from_filename(
@@ -321,7 +321,7 @@ class MMEXOFASTFitResults(BaseFitResults):
                     )
                 else:
                     # TODO: Maybe it would be better to give the blend ratio instead of neg flux
-                    mag     = 'neg flux'
+                    mag = 'neg flux'
                     err_mag = np.nan
 
                 values.append(mag)
@@ -464,10 +464,10 @@ class MMEXOFASTFitResults(BaseFitResults):
         return self.fitter.results
 
 
-
 # ============================================================================
 # FitRecord and AllFitResults
 # ============================================================================
+
 @dataclass
 class FitRecord:
     """
@@ -669,6 +669,7 @@ class FitRecord:
             return None
 
         return self.full_result.chi2
+
 
 @dataclass
 class GridSearchResult:
