@@ -2088,6 +2088,8 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
     """
     Analytic parameter estimator for close binary lens models (upper caustic).
 
+    NEW base one Mróz, M.,J. (2026) use the trajectory of single-lens model
+
     Extends :class:`WidePlanetParameterEstimator` to compute binary lens
     parameters appropriate for a close binary (s < 1). The binary lens
     separation uses the close-topology solution, and ``alpha`` is computed
@@ -2146,6 +2148,19 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
         return new_params
 
+    def setup_trajectory_of_single_lens(self):
+        """
+        Get the trajectory of the single-lens model at t_pl
+        Returns
+        -------
+        numpy.ndarray
+            The trajectory of the single-lens model. 
+            TODO : add not static models 
+        """
+        parameters_1L = MulensModel.ModelParameters({'t_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E})
+        model_1L = MulensModel.Model(parameters=parameters_1L)
+        self._trajectory_1L = model_1L.get_trajectory([self.params['t_pl']])
+
     def calc_binary_ulens_params(self):
         """
         Compute the binary lens parameter dictionary including alpha.
@@ -2186,18 +2201,20 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         """
         Binary lens separation in Einstein radius units.
 
-        Computed from ``u_pl`` as ``0.5 * (sqrt(u_pl^2 + 4) - u_pl)``.
+        Computed from single-lens model trajectory 
         This is the close-topology solution (s < 1).
 
         Returns
         -------
         float
         """
-        # TODO: Is the correct way to calculate s for this type of solution?
+        shift = (1.+2.*self.q)/(1.+self.q) #from  center of magnification to center mass, A.18 in Skowron (2011)
         if self._s is None:
-            u = self.u_pl
-            self._s = 0.5 * (np.sqrt(u ** 2 + 4) - u)
-
+            if self._trajectory_1L is None:
+                self.setup_trajectory_of_single_lens()
+            distance = -1 * (np.sqrt(self._trajectory_1L.x[0]**2 + self._trajectory_1L.y[0]**2)) #from center of light to casp
+            p = 0.5  * distance / shift
+            self._s =  p + np.sqrt(p**2 + 1.0)
         return self._s
 
     @property
@@ -2229,8 +2246,8 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         """
         Angle between the lens axis and the direction to the caustic.
 
-        Computed as ``arctan2(eta_not, (s - 1/s) / (1 + q))``. Includes a
-        correction from the primary lens position to the center of mass.
+        Computed as ``arctan2(eta_not, (s - 1/s) * (1.+2.*q)/(1.+q)``. Includes a
+        correction from the center of magnification for sigle-lens model to the center of mass.
         Used to calculate :attr:`alpha`.
 
         Returns
@@ -2239,8 +2256,8 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             Angle in radians.
         """
         if self._mu is None:
-            self._mu = np.arctan2(self.eta_not, (self.s - 1 / self.s) / (1 + self.q))
-            # correction for primary --> COM
+            self._mu = np.arctan2(
+                self.eta_not, (self.s - 1 / self.s) * (1.+2.*self.q)/(1.+self.q))
 
         return self._mu
 
@@ -2258,7 +2275,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             Angle in radians.
         """
         if self._phi is None:
-            self._phi = np.arctan2(self.u_0, self.tau_pl)
+            self._phi = np.arctan2(self._trajectory_1L.y[0], self._trajectory_1L.x[0])
 
         return self._phi
 
