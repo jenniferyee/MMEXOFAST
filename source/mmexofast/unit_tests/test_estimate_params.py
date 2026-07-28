@@ -553,6 +553,29 @@ class TestBinaryLensParams(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             blp.refine_mag_methods()
 
+    # ------------------------------------------------------------------ #
+    # _remove_zero_length_methods
+    # ------------------------------------------------------------------ #
+
+    def test_remove_zero_length_methods_drops_empty_window(self):
+        """A zero-width window drops its method and duplicate boundary."""
+        blp = self._make_fresh_blp(next(iter(self.test_cases)))
+        blp.mag_methods = [1.0, 'point_source', 2.0, 'VBBL', 2.0,
+                           'hexadecapole', 3.0]
+        blp._remove_zero_length_methods()
+        self.assertEqual(
+            blp.mag_methods, [1.0, 'point_source', 2.0, 'hexadecapole', 3.0])
+
+    def test_remove_zero_length_methods_raises_when_all_empty(self):
+        """
+        If every window is zero-width the result would be a degenerate
+        single-element list, so refinement must raise rather than store it.
+        """
+        blp = self._make_fresh_blp(next(iter(self.test_cases)))
+        blp.mag_methods = [10.0, 'VBBL', 10.0, 'VBBL', 10.0]
+        with self.assertRaises(RuntimeError):
+            blp._remove_zero_length_methods()
+
     def test_hard_limits_unchanged_after_refinement(self):
         """The outer hard limits (indices 0 and 10) should not be
         modified by refine_mag_methods."""

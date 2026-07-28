@@ -592,9 +592,13 @@ class BinaryLensParams():
             else:
                 # Skip the intermediate method since it has zero width.
                 continue
-        if len(self.mag_methods) < 3:
+
+        if len(new_mag_methods) < 3:
             raise RuntimeError(
-                "All method windows have zero length after refinement.")
+                "All method windows have zero length after refinement.\n"
+                "parameters: {0}\nmag_methods: {1}".format(
+                    self.ulens, self.mag_methods))
+
         self.mag_methods = new_mag_methods
 
 

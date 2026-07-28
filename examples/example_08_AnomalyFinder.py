@@ -69,7 +69,7 @@ class AnomalyFinderTest:
 
     def run_grid_search(self):
         self.fitter.pspl_params = self.pspl_params
-        self.fitter.compute_residuals()
+        self.fitter.compute_point_lens_residuals()
         self.af = mmexo.gridsearches.AnomalyFinderGridSearch(
             residuals=self.fitter.residuals,
             t_0_min=self.t_start,

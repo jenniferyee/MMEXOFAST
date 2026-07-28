@@ -804,7 +804,7 @@ class IntermediateResults:
         Format: {solution: {'t_0': float, 'u_0': float, 't_E': float,
                  'rho': float, 'q': float, 's': float, 'alpha': float}, ...}
 
-    get_anomaly_light_curve_parameters : dict or None
+    anomaly_lc_params : dict or None
         PSPL properties + observed anomaly properties.
         Set by: get_anomaly_light_curve_parameters
         Format: {'t_0': float, 'u_0': float, 't_E': float,
@@ -814,13 +814,13 @@ class IntermediateResults:
        Type of anomaly. Allowed types are given in VALID_ANOMALY_TYPES
 
     """
-    VALID_ANOMALY_TYPES = {'negative', 'positive', 'high_mag'}
+    VALID_ANOMALY_TYPES = {'close', 'wide', 'high_mag'}
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None
     estimate_point_lens_parameters: Optional[dict] = None
     estimate_binary_lens_parameters: Optional[dict] = None
-    get_anomaly_light_curve_parameters: Optional[dict] = None
+    anomaly_lc_params: Optional[dict] = None
 
     def __init__(self):
         self._anomaly_type: Optional[str] = None

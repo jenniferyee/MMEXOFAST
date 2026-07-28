@@ -6,7 +6,7 @@ class AnomalyClassifier(object):
     Classifies a microlensing event anomaly as 'close', 'wide', or 'high_mag'.
 
     Uses lightcurve and anomaly parameters from
-    AnomalyPropertyEstimator.get_anomaly_light_curve_parameters() to determine
+    AnomalyPropertyEstimator.get_anomaly_lc_parameters() to determine
     the classification of the event.
     """
 
@@ -20,22 +20,21 @@ class AnomalyClassifier(object):
         Parameters
         ----------
         params : dict
-            Results of AnomalyPropertyEstimator.get_anomaly_light_curve_parameters()
+            Results of AnomalyPropertyEstimator.get_anomaly_lc_parameters()
 
         Returns
         -------
         str
-            One of 'negative', 'positive', 'high_mag'
-            (TODO: better could be caustic_crossing, bump, dip, high_mag?)
+            One of 'close', 'wide', 'high_mag'
         """
         if np.abs(params['u_0']) < 0.01:
             return 'high_mag'
 
         if params['dmag'] < 0:
             if np.abs(params['u_0']) > 0.05:
-                return 'positive'
+                return 'wide'
             else:
                 return 'high_mag'
 
         if params['dmag'] > 0:
-            return 'negative'
+            return 'close'

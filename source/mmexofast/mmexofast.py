@@ -1190,13 +1190,13 @@ class MMEXOFASTFitter:
             WorkflowStep(
                 name='estimate_binary_lens_parameters',
                 func=self.estimate_binary_lens_parameters,
-                stage='fit_binary_lens_models',
+                stage='fit_binary_lens',
                 description='Estimate binary-lens parameters from AF grid result',
             ),
             WorkflowStep(
                 name='fit_binary_lens_models',
                 func=self.fit_binary_lens_models,
-                stage='fit_binary_lens_models',
+                stage='fit_binary_lens',
                 description=(
                     'Fit binary-lens models; may return dynamic follow-up steps'
                 ),
@@ -1964,11 +1964,11 @@ class MMEXOFASTFitter:
         est_params = {}
         estimator_classes = None
         # TODO: Consider running all Estimators in all cases
-        if self.intermediate_results.anomaly_type == 'positive':
+        if self.intermediate_results.anomaly_type == 'wide':
             estimator_classes = [WidePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
                                  CloseLowerBinaryGridSearchEstimator]
             # TODO: Implement checking for large vs. small rho solutions. Maybe add a second estimator?
-        elif self.intermediate_results.anomaly_type == 'negative':
+        elif self.intermediate_results.anomaly_type == 'close':
             estimator_classes = [ClosePlanetGridSearchEstimator]
         else:
             logger.info('Binary params estimate not implemented for %s', self.intermediate_results.anomaly_type)
@@ -1992,7 +1992,7 @@ class MMEXOFASTFitter:
                 logger.info('mag_methods: %s', params.mag_methods)
                 est_params[class_name] = params
 
-                if self.intermediate_results.anomaly_type in ['negative', 'positive']:
+                if self.intermediate_results.anomaly_type in ['close', 'wide']:
                     if self.intermediate_results.anomaly_lc_params['u_0'] < 0.05:
                         s_alt = estimator.get_binary_lens_params()
                         s_alt.ulens['s'] = 1. / s_alt.ulens['s']
