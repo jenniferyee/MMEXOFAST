@@ -19,6 +19,7 @@ TestPlaceholders     — documented coverage gaps (all skipped)
 See TestPlaceholders for behaviors not yet tested.
 """
 
+import json
 import os
 import numpy as np
 import pytest
@@ -890,6 +891,74 @@ class TestSaveLoad:
         filepath = tmp_path / "no_results.json"
         with pytest.raises(ValueError):
             searcher.save_results(filepath)
+
+    @staticmethod
+    def _make_saveable_searcher():
+        """A searcher with just enough state for save_results() to run.
+
+        results_history only has to be non-None for save_results() to
+        proceed, so this avoids the multi-minute run() that the fixtures in
+        TestRefinement need.
+        """
+        searcher = ParallaxGridSearch(
+            static_params=STATIC_PARAMS_PAR,
+            datasets=DATASETS,
+            grid_params=COARSE_GRID_PARAMS,
+            fitter_kwargs=FITTER_KWARGS,
+        )
+        searcher.results_history = []
+
+        return searcher
+
+    def test_save_drops_unserializable_fitter_kwargs(self, tmp_path):
+        """
+        save_results() writes a valid file even though fitter_kwargs holds
+        ModelConfig and EventConfig objects, which json cannot encode.
+        The dropped entries are recorded by name.
+        """
+        searcher = self._make_saveable_searcher()
+        filepath = tmp_path / "configs.json"
+        searcher.save_results(filepath)
+
+        with open(filepath) as f:
+            state = json.load(f)
+
+        assert state['extra']['dropped_fitter_kwargs'] == [
+            'event_config', 'model_config']
+        assert state['extra']['fitter_kwargs'] == {}
+
+    def test_load_warns_about_dropped_fitter_kwargs(self, tmp_path):
+        """
+        load_results() warns that the dropped entries were not restored, so
+        the loaded instance cannot fit until they are supplied again.
+        """
+        filepath = tmp_path / "configs.json"
+        self._make_saveable_searcher().save_results(filepath)
+
+        with pytest.warns(UserWarning, match="fitter_kwargs entries"):
+            loaded = ParallaxGridSearch.load_results(filepath)
+
+        assert 'event_config' not in loaded.fitter_kwargs
+
+    def test_load_accepts_replacement_fitter_kwargs(self, tmp_path):
+        """
+        Passing fitter_kwargs to load_results() restores the configs that
+        could not be serialized, and validates them as __init__ does.
+        """
+        filepath = tmp_path / "configs.json"
+        self._make_saveable_searcher().save_results(filepath)
+
+        with pytest.warns(UserWarning, match="fitter_kwargs entries"):
+            loaded = ParallaxGridSearch.load_results(
+                filepath, datasets=DATASETS, fitter_kwargs=FITTER_KWARGS)
+
+        assert loaded.fitter_kwargs['event_config'].coords == COORDS
+        assert loaded.datasets is DATASETS
+
+        with pytest.warns(UserWarning, match="fitter_kwargs entries"):
+            with pytest.raises(ValueError):
+                ParallaxGridSearch.load_results(
+                    filepath, fitter_kwargs={'model_config': ModelConfig()})
 
     @pytest.mark.skip(
         reason=(

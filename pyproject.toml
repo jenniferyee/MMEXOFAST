@@ -1,0 +1,31 @@
+[project]
+name = "mmexofast"
+version = "0.1.0"
+description = "Automated fitting of microlensing light curves"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy",
+  "scipy",
+  "matplotlib",
+  "pandas",
+  "astropy",
+  "emcee",
+  "pyyaml",
+  "MulensModel",
+  # Not on PyPI, so it has to be a direct reference.
+  "sfit_minimizer @ git+https://github.com/jenniferyee/sfit_minimizer.git",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "source" }
+
+[tool.setuptools.packages.find]
+where = ["source"]
+include = ["mmexofast*"]

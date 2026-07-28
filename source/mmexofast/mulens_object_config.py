@@ -116,8 +116,21 @@ class ModelConfig:
         if magnification_methods is not None:
             model.set_magnification_methods(magnification_methods)
         if magnification_methods_parameters is not None:
+            # Copy the per-method dicts. MulensModel passes them straight
+            # through to the magnification objects and injects a
+            # 'trajectory' key into them: magnificationcurve._setup_kwargs
+            # returns our inner dict by reference, then
+            # _setup_magnification_objects does kwargs['trajectory'] = ...
+            # Callers hold one parameters dict and build many models from
+            # it (e.g. MulensFitter.mag_methods_parameters across an emcee
+            # run), so without this the first model poisons the dict and
+            # the next build dies in validation with
+            # KeyError: "vbbl method allows ['accuracy',
+            # 'relative_accuracy'] parameters, but got '{'trajectory'}'".
             model.set_magnification_methods_parameters(
-                magnification_methods_parameters
+                {method: dict(parameters)
+                 for method, parameters
+                 in magnification_methods_parameters.items()}
             )
         if default_magnification_method is not None:
             model.default_magnification_method = default_magnification_method

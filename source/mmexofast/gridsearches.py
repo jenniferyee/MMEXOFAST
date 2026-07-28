@@ -3016,6 +3016,35 @@ class ParallaxGridSearch(BaseRectGridSearch):
                     'error': str(e)
                 }
 
+    def _split_fitter_kwargs_for_saving(self):
+        """Split fitter_kwargs into the part that can be written to JSON and
+        the names of the entries that cannot.
+
+        ``fitter_kwargs`` always holds at least an ``EventConfig`` (it is
+        required by :meth:`_set_fitter_kwargs`) and usually a
+        ``ModelConfig``.  Those wrap live MulensModel objects -- sky
+        coordinates, per-dataset flux constraints -- so, like ``datasets``,
+        they cannot be serialized and must be supplied again on load.
+
+        Returns
+        -------
+        tuple of (dict, list)
+            JSON-safe kwargs, and the sorted names of the dropped entries.
+        """
+        mjs = self._make_json_serializable
+        saved = {}
+        dropped = []
+        for key, value in self.fitter_kwargs.items():
+            candidate = mjs(value)
+            try:
+                json.dumps(candidate)
+            except TypeError:
+                dropped.append(key)
+            else:
+                saved[key] = candidate
+
+        return saved, sorted(dropped)
+
     def _get_extra_save_state(self):
         """Gather ParallaxGridSearch-specific state for saving.
 
@@ -3024,10 +3053,12 @@ class ParallaxGridSearch(BaseRectGridSearch):
         dict
         """
         mjs = self._make_json_serializable
+        fitter_kwargs, dropped = self._split_fitter_kwargs_for_saving()
         return {
             'static_params': mjs(self.static_params),
             'parameters_to_fit': list(self.parameters_to_fit),
-            'fitter_kwargs': mjs(self.fitter_kwargs),
+            'fitter_kwargs': fitter_kwargs,
+            'dropped_fitter_kwargs': dropped,
             'skip_optimization': bool(self.skip_optimization)
         }
 
@@ -3039,11 +3070,52 @@ class ParallaxGridSearch(BaseRectGridSearch):
         ----------
         instance : ParallaxGridSearch
         extra_data : dict
+
+        Warns
+        -----
+        UserWarning
+            If the saved file dropped any fitter_kwargs entries, which must
+            then be supplied through ``load_results(fitter_kwargs=...)``
+            before the loaded instance can fit anything.
         """
         instance.static_params = extra_data.get('static_params', {})
         instance.parameters_to_fit = extra_data.get('parameters_to_fit', [])
         instance.fitter_kwargs = extra_data.get('fitter_kwargs', {})
         instance.skip_optimization = extra_data.get('skip_optimization', False)
+
+        dropped = extra_data.get('dropped_fitter_kwargs', [])
+        if dropped:
+            warnings.warn(
+                "fitter_kwargs entries {0} were not saved (they hold live "
+                "MulensModel objects) and are not restored. Pass "
+                "fitter_kwargs=... to load_results() before running or "
+                "refitting this instance.".format(dropped)
+            )
+
+    @classmethod
+    def load_results(cls, filepath, datasets=None, fitter_kwargs=None):
+        """Load grid search results from a JSON file.
+
+        Parameters
+        ----------
+        filepath : str or Path
+        datasets : list or None, optional
+            Data to fit. Required before running or re-fitting.
+        fitter_kwargs : dict or None, optional
+            Replacement for the ``model_config`` / ``event_config`` entries
+            that :meth:`save_results` could not serialize. Required before
+            running or re-fitting; validated as in ``__init__``.
+
+        Returns
+        -------
+        ParallaxGridSearch
+        """
+        instance = super().load_results(filepath, datasets=datasets)
+        if fitter_kwargs is not None:
+            instance.fitter_kwargs = instance._set_fitter_kwargs(
+                fitter_kwargs)
+
+        return instance
 
     def plot_grid_points(self, ax=None, cmap='Set1', min_chi2=None):
         """

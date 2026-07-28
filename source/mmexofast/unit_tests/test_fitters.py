@@ -117,7 +117,13 @@ class TestAnomalyFitter(unittest.TestCase):
 
     @pytest.mark.slow
     def test_event_update(self):
-        fitter = fitters.AnomalyFitter(datasets=[self.data], initial_guess=self.true_params, anomaly_lc_params=self.anomaly_lc_params)
+        fitter = fitters.AnomalyFitter(
+            datasets=[self.data], initial_guess=self.true_params,
+            anomaly_lc_params=self.anomaly_lc_params,
+            mag_methods=[
+                self.anomaly_lc_params['t_pl'] - 10. * self.anomaly_lc_params['dt'],
+                'VBBL',
+                self.anomaly_lc_params['t_pl'] + 10. * self.anomaly_lc_params['dt']])
         theta = 9 + np.arange(len(fitter.parameters_to_fit), dtype=int)
         #print(dict(zip(fitter.parameters_to_fit, theta)))
         with self.assertRaises(AttributeError):
