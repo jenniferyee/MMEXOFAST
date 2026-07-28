@@ -842,10 +842,15 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
 
     def test_action_returning_steps_inserts_at_front_of_queue(self):
         """
-        check_needs_renorm runs for real with a binary FitRecord that causes
-        _needs_renormalization() to return True. The dynamic renorm steps are
-        inserted at the front of the queue and visible in planned_steps before
-        they execute.
+        check_needs_renorm runs for real with a binary FitRecord present.
+        The dynamic renorm steps are inserted at the front of the queue and
+        visible in planned_steps before they execute.
+
+        _needs_renormalization is patched because re-renormalization after
+        the binary fit is currently disabled in the fitter (it returns False
+        and logs a warning; see the TODO in _needs_renormalization). The
+        subject here is the execution loop's handling of an action that
+        returns steps, not the renormalization criterion itself.
         """
         fitter = MMEXOFASTFitter(
             files=OB05390_FILES,
@@ -873,7 +878,9 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
             full_result=mmexo.MMEXOFASTFitResults(binary_fitter))
 
         fitter.all_fit_results.set(binary_record)
-        fitter.fit()
+        with patch.object(fitter, '_needs_renormalization',
+                          return_value=True):
+            fitter.fit()
 
         completed_names = [(step.name, step.stage)
                            for step in fitter.completed_steps]
