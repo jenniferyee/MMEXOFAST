@@ -114,6 +114,36 @@ class TestModelConfig:
         )
         assert model.default_magnification_method == DEFAULT_MAG_METHOD
 
+    def test_magnification_methods_parameters_survive_repeated_builds(self):
+        """One parameters dict can build many models.
+
+        MulensModel hands the per-method dict straight to the magnification
+        objects and injects a 'trajectory' key into it, so a caller that
+        holds one dict and builds repeatedly (MulensFitter across an emcee
+        run) used to have its dict poisoned by the first model and rejected
+        by the second. build() must copy.
+        """
+        binary_params = {
+            't_0': 2458271.6, 'u_0': 0.91, 't_E': 27.7,
+            's': 1.64, 'alpha': 35.9, 'rho': 0.30, 'q': 3.4e-3,
+        }
+        methods = [2458182.7, 'VBBL', 2458310.6]
+        methods_parameters = {'VBBL': {'accuracy': 0.01}}
+        times = [2458270.0, 2458271.0, 2458272.0]
+
+        config = ModelConfig()
+        for _ in range(3):
+            model = config.build(
+                parameters=binary_params,
+                magnification_methods=methods,
+                magnification_methods_parameters=methods_parameters,
+            )
+            # Forces the magnification objects to be built, which is what
+            # injects 'trajectory'.
+            model.get_magnification(times)
+
+        assert methods_parameters == {'VBBL': {'accuracy': 0.01}}
+
 
 # ===========================================================================
 # TestEventConfig

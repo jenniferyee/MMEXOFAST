@@ -25,7 +25,7 @@ from .results import AllFitResults, FitRecord, IntermediateResults, MMEXOFASTFit
 from .workflow_step import WorkflowStep, StepStatus
 from .estimate_params import (get_PSPL_params, AnomalyPropertyEstimator, WidePlanetGridSearchEstimator,
                               ClosePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
-                              CloseLowerBinaryGridSearchEstimator)
+                              CloseLowerBinaryGridSearchEstimator, BinaryLensParams)
 from .fitters import SFitFitter, AnomalyFitter, EmceeFitResults
 from .fit_types import label_to_model_key, model_key_to_label, FitKey, LensType, SourceType, \
     ParallaxBranch, LensOrbMotion
@@ -352,6 +352,11 @@ class MMEXOFASTFitter:
         If True, include FSPL fitting steps after PSPL.
     mag_methods : list, optional
         Magnification methods in MulensModel convention.
+    vbbl_accuracy : float, optional
+        VBBL/VBM integration tolerance for binary-lens models. Default
+        0.01, which is VBMicrolensing's own default; MulensModel
+        otherwise applies 0.001, roughly 3x slower for a magnification
+        difference of ~6e-4. See :class:`BinaryLensParams`.
     limb_darkening_coeffs_u : dict, optional
         Linear limb-darkening coefficients keyed by bandpass.
     limb_darkening_coeffs_gamma : dict, optional
@@ -467,6 +472,7 @@ class MMEXOFASTFitter:
         'coords',
         'finite_source',
         'mag_methods',
+        'vbbl_accuracy',
         'limb_darkening_coeffs_u',
         'limb_darkening_coeffs_gamma',
         'fix_blend_flux',
@@ -503,6 +509,7 @@ class MMEXOFASTFitter:
         fit_type: str = 'point_lens',
         finite_source: bool = False,
         mag_methods=None,  # TODO: Check whether mag_methods does anything
+        vbbl_accuracy: float = BinaryLensParams._DEFAULT_VBBL_ACCURACY,
         limb_darkening_coeffs_u=None,
         limb_darkening_coeffs_gamma=None,
         fix_blend_flux=None,  # TODO: Check whether fixed fluxes are implemented
@@ -557,6 +564,10 @@ class MMEXOFASTFitter:
         self._restart_path = Path(restart_file) if restart_file is not None else None
         config = self._merge_config(saved_config, locals())
         self._set_config_attributes(config)
+
+        # Derived from the binary parameter estimators once they run; see
+        # est_binary_params.
+        self.mag_methods_parameters = None
 
         # Execution-time controls (not persisted in CONFIG_KEYS)
         self.dry_run = dry_run
@@ -1981,6 +1992,9 @@ class MMEXOFASTFitter:
                     model_config=self.model_config,
                     event_config=self.event_config
                 )
+                # Overrides the class-level default on ParameterEstimator so
+                # every BinaryLensParams it builds carries this tolerance.
+                estimator.vbbl_accuracy = self.vbbl_accuracy
                 estimator.run()
 
                 class_name = estimator_class.__name__
@@ -2003,6 +2017,7 @@ class MMEXOFASTFitter:
                     est_params[class_name + '_alt'] = s_alt
 
                 self.mag_methods = params.mag_methods
+                self.mag_methods_parameters = params.mag_methods_parameters
 
         self.intermediate_results.estimate_binary_lens_parameters = est_params
         if (self._output_config is not None) and self._output_config.save_plots:
@@ -2031,6 +2046,7 @@ class MMEXOFASTFitter:
             model = self.model_config.build(
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,
+                magnification_methods_parameters=params.mag_methods_parameters,
                 default_magnification_method='point_source_point_lens',
             )
             event = self.event_config.build(
@@ -2050,6 +2066,7 @@ class MMEXOFASTFitter:
                 initial_guess=params.ulens,
                 anomaly_lc_params=self.intermediate_results.anomaly_lc_params,
                 mag_methods=params.mag_methods,
+                mag_methods_parameters=params.mag_methods_parameters,
                 model_config=self.model_config,
                 event_config=self.event_config
             )
@@ -2529,21 +2546,25 @@ class MMEXOFASTFitter:
                 raise NotImplementedError('Plotting for Binary Source models not implemented, yet.')
                 # probably want to loop over the sources and find min/max values of hexadecapole
             else:
-                hex_indices = [i for i in range(1, len(model.methods), 2) if model.methods[i] == "hexadecapole"]
-                first_idx = hex_indices[0] - 1 if hex_indices else 0
-                last_idx = min(hex_indices[-1] + 1, len(model.methods) - 1) if hex_indices else len(model.methods) - 1
+                # mag_methods is now a single VBBL window spanning the whole
+                # event (see BinaryLensParams.set_mag_method), so the method
+                # list no longer brackets the anomaly the way the old
+                # hexadecapole windows did. Prefer the anomaly finder window.
+                if self.intermediate_results.best_af_grid_point is not None:
+                    return self._get_af_grid_point_t_range()
 
-                return [model.methods[first_idx], model.methods[last_idx]]
+                return [model.methods[0], model.methods[-1]]
 
         elif self.intermediate_results.best_af_grid_point is not None:
-            n_teff = 3
-            start = self.intermediate_results.best_af_grid_point['t_0'] - \
-                n_teff * self.intermediate_results.best_af_grid_point['t_eff']
-            stop = self.intermediate_results.best_af_grid_point['t_0'] + \
-                n_teff * self.intermediate_results.best_af_grid_point['t_eff']
-            return [start, stop]
+            return self._get_af_grid_point_t_range()
         else:
             return self._get_event_t_range(event, n_tE=n_tE)
+
+    def _get_af_grid_point_t_range(self, n_teff=3):
+        """Time range around the anomaly found by the anomaly finder grid."""
+        point = self.intermediate_results.best_af_grid_point
+        return [point['t_0'] - n_teff * point['t_eff'],
+                point['t_0'] + n_teff * point['t_eff']]
 
     def _plot_planet_window(self):
         # TODO: Consider updating to use anomaly_lc_params? how different is best_af_grid_point from anomaly_lc_params?
@@ -2630,6 +2651,7 @@ class MMEXOFASTFitter:
             model = self.model_config.build(
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,
+                magnification_methods_parameters=params.mag_methods_parameters,
                 default_magnification_method='point_source_point_lens',
             )
             event = self.event_config.build(
@@ -2798,6 +2820,10 @@ class MMEXOFASTFitter:
             'mag_methods': (
                 None if source_type == SourceType.POINT
                 else self.mag_methods
+            ),
+            'mag_methods_parameters': (
+                None if source_type == SourceType.POINT
+                else self.mag_methods_parameters
             ),
         }
 

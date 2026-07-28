@@ -18,7 +18,7 @@ estimation, and ensemble initialization for MCMC sampling.
 from itertools import product
 import pandas as pd
 import numpy as np
-from scipy.optimize import minimize, brentq
+from scipy.optimize import minimize
 from scipy.signal import find_peaks
 import scipy.stats
 from matplotlib.gridspec import GridSpec
@@ -85,35 +85,76 @@ class BinaryLensParams():
         ``MulensModel.Model``.
     mag_methods : list or None
         Magnification methods in MulensModel convention. Set by
-        :meth:`set_mag_method` and refined by :meth:`refine_mag_methods`.
+        :meth:`set_mag_method`.
     params : dict or None
         Anomaly light curve parameters. Stored by :meth:`set_mag_method`.
+    vbbl_accuracy : float or None
+        VBBL/VBM integration tolerance. See Notes.
     t_star : float
         Half the anomaly duration, ``params['dt'] / 2``. Derived from
         ``params``; raises ``RuntimeError`` if accessed before
         :meth:`set_mag_method` is called.
 
+    Parameters
+    ----------
+    ulens : dict
+        Binary lens parameter dictionary.
+    vbbl_accuracy : float or None, optional
+        VBBL/VBM integration tolerance, exposed to MulensModel through
+        :attr:`mag_methods_parameters`. Default
+        ``_DEFAULT_VBBL_ACCURACY``. Pass None to leave MulensModel's own
+        default (0.001) in place.
+
     Notes
     -----
-    The mag_methods list alternates between time boundaries and method names:
+    The mag_methods list is a single VBBL window covering the event:
 
-        [t_start, 'point_source', t1, 'hexadecapole', t2, 'VBBL',
-         t3, 'hexadecapole', t4, 'point_source', t_end]
+        [t_start, 'VBBL', t_end]
 
-    Boundaries are refined outward from the most precise method (VBBL)
-    to the least (point_source), guaranteeing monotonicity by construction.
-    After refinement, ``mag_methods[0]`` and ``mag_methods[-1]`` are
-    updated to lie ``4 * _N_TSTAR_WINDOW_HW * t_star`` outside the
-    outermost refined boundaries.
+    Following EXOZIPPy, VBBL (VBMicrolensing) is used everywhere the
+    binary lens matters rather than bracketing it with hexadecapole and
+    point_source windows, which had to be placed by a brentq search that
+    could fail outright, and which left magnification discontinuities at
+    each window edge.
+
+    Unlike EXOZIPPy this is not a speed win in itself. EXOZIPPy calls
+    VBM's BinaryMag2 directly, but MulensModel calls the same VBM library
+    at the same tolerance, so the two cost the same (measured: 44.7 ms vs
+    43.5 ms per 1600-epoch light curve, agreeing to 8e-14). What does
+    change the cost is the integration tolerance, and MulensModel
+    overrides VBM's own default of 0.01 with 0.001. Measured on
+    OB180383, VBBL everywhere costs 45 ms at 0.001 but 17 ms at 0.01,
+    for a maximum magnification difference of 6e-4 -- 26x smaller than
+    the 1.4e-2 error the old bracket scheme was making where it used
+    point_source or hexadecapole in a region needing the full
+    finite-source calculation. Hence the 0.01 default here: strictly
+    more accurate than the brackets it replaces, at comparable cost.
     """
 
-    _METHOD_PRECISION = {'point_source': 10, 'hexadecapole': 20, 'VBBL': 30}
-    _N_TSTAR_WINDOW_HW = 5  # half-width of each method window, in units of t_star
+    _N_TSTAR_WINDOW_HW = 5  # half-width of the anomaly window, in units of t_star
+    _DEFAULT_VBBL_ACCURACY = 0.01
 
-    def __init__(self, ulens):
+    def __init__(self, ulens, vbbl_accuracy=_DEFAULT_VBBL_ACCURACY):
         self.ulens = ulens
+        self.vbbl_accuracy = vbbl_accuracy
         self.mag_methods = None
         self.params = None
+
+    @property
+    def mag_methods_parameters(self):
+        """
+        Magnification method parameters in MulensModel convention.
+
+        Returns
+        -------
+        dict or None
+            ``{'VBBL': {'accuracy': vbbl_accuracy}}``, or None when
+            ``vbbl_accuracy`` is None (leaving MulensModel's default).
+        """
+        if self.vbbl_accuracy is None:
+            return None
+
+        return {'VBBL': {'accuracy': self.vbbl_accuracy}}
 
     @property
     def t_star(self):
@@ -133,11 +174,13 @@ class BinaryLensParams():
         """
         Set the magnification calculation method based on input parameters.
 
-        Sets up a sequence of magnification methods transitioning from
-        point_source to hexadecapole to VBBL and back, centered on the
-        anomaly time. Window half-widths are multiples of
-        ``_N_TSTAR_WINDOW_HW * t_star``. Also stores ``params`` as
-        ``self.params`` for use by :meth:`refine_mag_methods`.
+        Sets up a single VBBL window spanning the event: from
+        ``min(t_0 - t_E, t_pl - t_E/2, t_pl - 4 * width)`` to
+        ``max(t_0 + t_E, t_pl + t_E/2, t_pl + 4 * width)``, where
+        ``width = _N_TSTAR_WINDOW_HW * t_star``. Outside that span the
+        model's ``default_magnification_method`` applies, which the
+        callers set to a point-lens or point-source approximation.
+        Also stores ``params`` as ``self.params``.
 
         Parameters
         ----------
@@ -164,442 +207,8 @@ class BinaryLensParams():
         width = self._N_TSTAR_WINDOW_HW * self.t_star
         self.mag_methods = [
             np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 4. * width)),
-            'point_source',
-            t_pl - 2. * width,
-            'hexadecapole',
-            t_pl - width,
             'VBBL',
-            t_pl + width,
-            'hexadecapole',
-            t_pl + 2. * width,
-            'point_source',
             np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 4. * width))]
-
-    @staticmethod
-    def _mag_threshold(mag_precise, base=0.0001):
-        """
-        Return the acceptable absolute difference in magnification between
-        two methods.
-
-        For low magnification (A < 3), applies a relative threshold to
-        avoid over-constraining the boundary in regions where the absolute
-        difference between methods is naturally small. For high
-        magnification (A >= 3), applies a fixed absolute threshold since
-        relative differences can become unphysically tight near caustics.
-
-        Parameters
-        ----------
-        mag_precise : float
-            Magnification from the more precise model at the evaluation
-            point. Used to determine which regime applies and to scale the
-            relative threshold.
-        base : float, optional
-            Base precision level. Controls both the relative precision
-            (as a fraction) for A < 3 and the absolute threshold for
-            A >= 3. Default 0.0001.
-
-        Returns
-        -------
-        float
-            Absolute threshold on ``|mag_precise - mag_approx|``.
-        """
-        if mag_precise >= 3.0:
-            return base
-        else:
-            return base * mag_precise
-
-    def _make_model(self, default_method):
-        """
-        Build a ``MulensModel.Model`` from ``self.ulens`` with a fixed
-        default magnification method.
-
-        Parameters
-        ----------
-        default_method : str
-            One of ``'VBBL'``, ``'hexadecapole'``, or ``'point_source'``.
-
-        Returns
-        -------
-        MulensModel.Model
-        """
-        if default_method == 'point_source':
-            ulens_params = {
-                k: v for k, v in self.ulens.items()
-                if k not in ('rho', 't_star')
-            }
-        else:
-            ulens_params = {k: v for k, v in self.ulens.items()}
-
-        # Give some buffer for larger q.
-        if ulens_params['q'] < 0.01:
-            ulens_params['q'] = 0.01
-        else:
-            ulens_params['q'] *= 10
-
-        model = MulensModel.Model(ulens_params)
-        model.default_magnification_method = default_method
-        return model
-
-    def _parse_transitions(self, models):
-        """
-        Parse mag_methods to identify all method transition boundaries,
-        sorted from most to least precise.
-
-        Iterates over the time entries in mag_methods (even indices,
-        excluding the first and last), identifies the methods on either
-        side of each boundary, and sorts the resulting list so that the
-        highest-precision transitions are processed first.
-
-        Parameters
-        ----------
-        models : dict
-            Dictionary mapping method name to MulensModel.Model, as built
-            in :meth:`refine_mag_methods`.
-
-        Returns
-        -------
-        list of dict
-            Each dict has keys:
-                'idx' : int
-                    Index in mag_methods of the boundary time.
-                'method_precise' : str
-                    The more precise of the two adjacent methods.
-                'method_approx' : str
-                    The less precise of the two adjacent methods.
-                'model_precise' : MulensModel.Model
-                    Model for the more precise method.
-                'model_approx' : MulensModel.Model
-                    Model for the less precise method.
-        """
-        transitions = []
-        for idx in range(2, len(self.mag_methods) - 1, 2):
-            left_method = self.mag_methods[idx - 1]
-            right_method = self.mag_methods[idx + 1]
-            if self._METHOD_PRECISION[left_method] >= self._METHOD_PRECISION[right_method]:
-                method_precise, method_approx = left_method, right_method
-            else:
-                method_precise, method_approx = right_method, left_method
-            transitions.append({
-                'idx': idx,
-                'method_precise': method_precise,
-                'method_approx': method_approx,
-                'model_precise': models[method_precise],
-                'model_approx': models[method_approx],
-            })
-        transitions.sort(
-            key=lambda trans: self._METHOD_PRECISION[trans['method_precise']],
-            reverse=True)
-        return transitions
-
-    def _compute_boundary_start(self, transition):
-        """
-        Compute the starting time for the boundary search for a given
-        transition.
-
-        If the current boundary estimate in mag_methods is already outside
-        the adjacent inner boundary (i.e. further from ``t_pl``), returns
-        it unchanged. Otherwise returns a starting point offset outward
-        from the inner boundary by ``_N_TSTAR_WINDOW_HW * t_star``.
-
-        The adjacent inner boundary is the already-refined transition at
-        the next time index toward ``t_pl``. For the innermost transition
-        pair (e.g. VBBL), there is no valid inner boundary and the current
-        estimate is returned unchanged.
-
-        Parameters
-        ----------
-        transition : dict
-            Transition dict as built by :meth:`_parse_transitions`.
-            Uses key ``'idx'``.
-
-        Returns
-        -------
-        float
-            Starting time for :meth:`_find_method_boundary`.
-        """
-        idx = transition['idx']
-        t_current = float(self.mag_methods[idx])
-        t_pl = float(self.params['t_pl'])
-        direction = int(np.sign(t_current - t_pl))
-
-        inner_idx = idx - 2 * direction
-        if inner_idx < 2 or inner_idx > len(self.mag_methods) - 3:
-            return t_current
-
-        inner_boundary = float(self.mag_methods[inner_idx])
-        width = self._N_TSTAR_WINDOW_HW * self.t_star
-        if direction * t_current > direction * inner_boundary:
-            return t_current
-        else:
-            return inner_boundary + direction * width
-
-    def _make_mag_diff(self, transition, base):
-        """
-        Build a signed magnification-difference function for a transition.
-
-        Returns a callable ``mag_diff(t)`` that evaluates to
-        ``|mag_precise - mag_approx| - threshold``, where threshold is
-        determined by :meth:`_mag_threshold`. Positive values indicate the
-        methods disagree beyond the threshold; non-positive values indicate
-        agreement. Results are cached to avoid redundant model evaluations.
-
-        Parameters
-        ----------
-        transition : dict
-            Must contain ``'model_precise'`` and ``'model_approx'``.
-        base : float
-            Base precision level passed to :meth:`_mag_threshold`.
-
-        Returns
-        -------
-        callable
-            Function of a single float argument ``t`` returning float.
-        """
-        model_precise = transition['model_precise']
-        model_approx = transition['model_approx']
-        cache = {}
-
-        def mag_diff(t):
-            if t not in cache:
-                mag_p = float(model_precise.get_magnification(t)[0])
-                mag_a = float(model_approx.get_magnification(t)[0])
-                threshold = self._mag_threshold(mag_p, base=base)
-                cache[t] = abs(mag_p - mag_a) - threshold
-            return cache[t]
-
-        return mag_diff
-
-    def _find_method_boundary(self, transition, refinement_settings):
-        """
-        Find the refined boundary time for a single method transition.
-
-        Searches outward from ``transition['t_start']`` (away from
-        ``t_pl``) for the outermost time at which the precise and
-        approximate methods disagree beyond the threshold. If the methods
-        already agree at ``t_start``, returns ``t_start`` unchanged.
-        Otherwise uses exponential search to bracket the transition, then
-        ``scipy.optimize.brentq`` to refine it.
-
-        Parameters
-        ----------
-        transition : dict
-            Built by :meth:`_parse_transitions` and augmented in the
-            :meth:`refine_mag_methods` loop. Must contain keys:
-                'idx' : int
-                    Index in mag_methods of the boundary time.
-                'method_precise' : str
-                    The more precise of the two adjacent methods.
-                'method_approx' : str
-                    The less precise of the two adjacent methods.
-                'model_precise' : MulensModel.Model
-                    Model for the more precise method.
-                'model_approx' : MulensModel.Model
-                    Model for the less precise method.
-                't_start' : float
-                    Starting time for the search, as computed by
-                    :meth:`_compute_boundary_start`.
-        refinement_settings : dict
-            Must contain:
-                'base' : float
-                    Magnification tolerance passed to :meth:`_mag_threshold`.
-                'xtol' : float
-                    Time precision in days for brentq.
-                't_left_limit' : float
-                    Hard left limit for boundary searches.
-                't_right_limit' : float
-                    Hard right limit for boundary searches.
-
-        Returns
-        -------
-        float
-            Refined boundary time.
-
-        Raises
-        ------
-        ValueError
-            If ``t_start`` equals ``t_pl``, making search direction
-            indeterminate.
-
-        Warns
-        -----
-        UserWarning
-            If ``t_start`` is already at or past the hard limit, or if the
-            exponential search reaches the hard limit before finding
-            agreement.
-        """
-        t_start = float(transition['t_start'])
-        t_pl = float(self.params['t_pl'])
-        direction = int(np.sign(t_start - t_pl))
-        if direction == 0:
-            raise ValueError(
-                "t_start equals t_pl; cannot determine search direction.")
-
-        xtol = refinement_settings['xtol']
-        if direction < 0:
-            t_limit = float(refinement_settings['t_left_limit'])
-        else:
-            t_limit = float(refinement_settings['t_right_limit'])
-
-        mag_diff = self._make_mag_diff(transition, refinement_settings['base'])
-
-        if direction * t_start >= direction * t_limit:
-            warnings.warn(
-                f"t_start {t_start:.3f} is at or beyond hard limit "
-                f"{t_limit:.3f}; returning hard limit.",
-                UserWarning)
-            return float(t_limit)
-
-        if mag_diff(t_start) <= 0:
-            return t_start
-
-        t_inner = t_start
-        step_size = abs(t_start - t_pl)
-        while True:
-            t_outer = t_inner + direction * step_size
-            if direction * t_outer >= direction * t_limit:
-                warnings.warn(
-                    f"Boundary search reached hard limit {t_limit:.3f}; "
-                    "methods may still disagree.",
-                    UserWarning)
-                return float(t_limit)
-            if mag_diff(t_outer) <= 0:
-                break
-            t_inner = t_outer
-            step_size *= 2.0
-
-        return float(brentq(
-            mag_diff,
-            min(t_inner, t_outer),
-            max(t_inner, t_outer),
-            xtol=xtol))
-
-    def _boundaries_monotonic(self):
-        """
-        Check whether all time values in mag_methods are strictly
-        increasing.
-
-        Used as a post-refinement sanity check in
-        :meth:`refine_mag_methods`. Failure indicates a bug in
-        :meth:`_compute_boundary_start` or :meth:`_find_method_boundary`
-        rather than a recoverable runtime condition.
-
-        Returns
-        -------
-        bool
-            True if the time entries in mag_methods (even indices) are
-            strictly increasing.
-        """
-        times = self.mag_methods[0::2]
-        return all(times[i] < times[i + 1] for i in range(len(times) - 1))
-
-    def refine_mag_methods(self, base=0.0001, xtol=0.01, t_left_limit=None, t_right_limit=None):
-        """
-        Refine the magnification method boundaries using model comparisons.
-
-        Processes transitions from most precise to least precise (VBBL
-        boundaries first, then hexadecapole boundaries), ensuring that each
-        outer boundary search starts from outside the already-refined inner
-        window. Monotonicity of the refined boundaries is guaranteed by
-        construction.
-
-        After all boundaries are refined, ``mag_methods[0]`` and
-        ``mag_methods[-1]`` are updated to lie ``4 * _N_TSTAR_WINDOW_HW *
-        t_star`` outside the outermost refined boundaries.
-
-        Must be called after :meth:`set_mag_method`.
-
-        Parameters
-        ----------
-        base : float, optional
-            Base precision level for the magnification threshold.
-            Default 0.0001.
-        xtol : float, optional
-            Time precision in days for each refined boundary.
-            Default 0.01.
-        t_left_limit : float or None, optional
-            Hard left limit for boundary searches. If None, defaults to
-            ``min(t_0 - 2*t_E, t_pl - t_E/2)``.
-        t_right_limit : float or None, optional
-            Hard right limit for boundary searches. If None, defaults to
-            ``max(t_0 + 2*t_E, t_pl + t_E/2)``.
-
-        Returns
-        -------
-        None
-
-        Raises
-        ------
-        RuntimeError
-            If :meth:`set_mag_method` has not been called first, or if
-            the refined boundaries are not monotonic (indicating a bug).
-        """
-        if self.mag_methods is None or self.params is None:
-            raise RuntimeError(
-                "set_mag_method() must be called before refine_mag_methods().")
-
-        t_0 = self.params['t_0']
-        t_E = self.params['t_E']
-        t_pl = self.params['t_pl']
-        if t_left_limit is None:
-            t_left_limit = min(t_0 - 2.*t_E, t_pl - t_E / 2.)
-        if t_right_limit is None:
-            t_right_limit = max(t_0 + 2.*t_E, t_pl + t_E / 2.)
-
-        models = {
-            method: self._make_model(method)
-            for method in self._METHOD_PRECISION
-        }
-        transitions = self._parse_transitions(models)
-        refinement_settings = {
-            'base': base,
-            'xtol': xtol,
-            't_left_limit': t_left_limit,
-            't_right_limit': t_right_limit,
-        }
-
-        for transition in transitions:
-            transition['t_start'] = self._compute_boundary_start(transition)
-            self.mag_methods[transition['idx']] = self._find_method_boundary(
-                transition, refinement_settings)
-
-        width = self._N_TSTAR_WINDOW_HW * self.t_star
-        self.mag_methods[0] = self.mag_methods[2] - 4. * width
-        self.mag_methods[-1] = self.mag_methods[-3] + 4. * width
-
-        self._remove_zero_length_methods()
-
-        if not self._boundaries_monotonic():
-            # TODO: Change default behavior to NOT raise an error. maybe a warning instead?
-            raise RuntimeError(
-                "Refined mag_method boundaries are not monotonic. "
-                "This indicates a bug in _compute_boundary_start or "
-                "_find_method_boundary.\nparameters: {0}\nmag_methods: {1}".format(
-                    self.ulens, self.mag_methods))
-
-    def _remove_zero_length_methods(self):
-        """
-        Remove any zero-length method windows from mag_methods.
-        If two adjacent boundaries are equal, the intermediate method is
-        removed.
-        """
-        new_mag_methods = [self.mag_methods[0]]
-        for i in range(1, len(self.mag_methods) - 1, 2):
-            t_left = self.mag_methods[i - 1]
-            t_right = self.mag_methods[i + 1]
-            if t_left < t_right:
-                new_mag_methods.append(self.mag_methods[i])
-                new_mag_methods.append(t_right)
-            else:
-                # Skip the intermediate method since it has zero width.
-                continue
-
-        if len(new_mag_methods) < 3:
-            raise RuntimeError(
-                "All method windows have zero length after refinement.\n"
-                "parameters: {0}\nmag_methods: {1}".format(
-                    self.ulens, self.mag_methods))
-
-        self.mag_methods = new_mag_methods
 
 
 def get_wide_params(params, limit='GG97'):
@@ -706,7 +315,16 @@ class ParameterEstimator():
     limit : str, optional
         Method to use for estimating ``rho``. One of ``'dwarf'``,
         ``'giant'``, or ``'point'``.
+
+    Attributes
+    ----------
+    vbbl_accuracy : float or None
+        VBBL/VBM integration tolerance handed to every
+        :class:`BinaryLensParams` this estimator produces. Class-level
+        default; assign on the instance to override for one fit.
     """
+
+    vbbl_accuracy = BinaryLensParams._DEFAULT_VBBL_ACCURACY
 
     def __init__(self, params, limit=None):
         self.params = params
@@ -975,9 +593,9 @@ class WidePlanetParameterEstimator(ParameterEstimator):
             Wide binary lens model parameters with magnification methods set.
         """
         binary_ulens_params = self.calc_binary_ulens_params()
-        out = BinaryLensParams(binary_ulens_params)
+        out = BinaryLensParams(
+            binary_ulens_params, vbbl_accuracy=self.vbbl_accuracy)
         out.set_mag_method(self.params)
-        out.refine_mag_methods()
         return out
 
     @property
@@ -1280,7 +898,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         """
         base_params = self.get_binary_lens_params()
         s_new = base_params.ulens['s'] ** 2 / self.best_params['s']
-        alt_params = BinaryLensParams(base_params.ulens)
+        alt_params = BinaryLensParams(
+            base_params.ulens, vbbl_accuracy=base_params.vbbl_accuracy)
         alt_params.mag_methods = base_params.mag_methods
         alt_params.ulens['s'] = s_new
         return alt_params
@@ -1795,6 +1414,8 @@ class WidePlanetEnsembleInitializer():
     """
     # TODO: Hypothesis that this is very slow because the event/Estimator class is getting created anew every time.
 
+    vbbl_accuracy = BinaryLensParams._DEFAULT_VBBL_ACCURACY
+
     def __init__(self, datasets, anomaly_params, sigmas, model_config=None,
                  event_config=None, n_estimators=40, pspl_chi2=None):
         self.datasets = datasets
@@ -1897,6 +1518,7 @@ class WidePlanetEnsembleInitializer():
             log_q_values=log_q_values,
             log_rho_values=log_rho_values,
         )
+        estimator.vbbl_accuracy = self.vbbl_accuracy
         estimator.run()
         return estimator.binary_params.ulens.copy(), estimator.binary_params.mag_methods
 
@@ -1919,6 +1541,7 @@ class WidePlanetEnsembleInitializer():
         model = self.model_config.build(
             parameters=best,
             magnification_methods=mag_methods,
+            magnification_methods_parameters=self.mag_methods_parameters,
             default_magnification_method='point_source_point_lens',
         )
         event = self.event_config.build(
@@ -2019,6 +1642,22 @@ class WidePlanetEnsembleInitializer():
         return self._mag_methods
 
     @property
+    def mag_methods_parameters(self):
+        """
+        Magnification method parameters matching :attr:`mag_methods`.
+
+        Returns
+        -------
+        dict or None
+            ``{'VBBL': {'accuracy': vbbl_accuracy}}``, or None when
+            ``vbbl_accuracy`` is None.
+        """
+        if self.vbbl_accuracy is None:
+            return None
+
+        return {'VBBL': {'accuracy': self.vbbl_accuracy}}
+
+    @property
     def initial_model(self):
         """
         Best-fit binary lens parameters across all estimators (lowest chi2).
@@ -2067,12 +1706,18 @@ class WidePlanetEnsembleInitializer():
         colour-coded by chi2 (red=worst, green=best).
         """
         df = self.results
-        t_range_anomaly = [self.mag_methods[2], self.mag_methods[8]]
-        t_range_vbbl = [self.mag_methods[4], self.mag_methods[6]]
+        # mag_methods is a single VBBL window spanning the whole event, so
+        # the zoom ranges come from the anomaly parameters directly. These
+        # reproduce the old windows: +/- 2 * width and +/- width about t_pl.
+        t_pl = self.anomaly_params['t_pl']
+        width = BinaryLensParams._N_TSTAR_WINDOW_HW * self.anomaly_params['dt'] / 2.
+        t_range_anomaly = [t_pl - 2. * width, t_pl + 2. * width]
+        t_range_inner = [t_pl - width, t_pl + width]
 
         ref_model = self.model_config.build(
             parameters=self.initial_model,
             magnification_methods=self.mag_methods,
+            magnification_methods_parameters=self.mag_methods_parameters,
             default_magnification_method='point_source_point_lens',
         )
         ref_event = self.event_config.build(
@@ -2085,7 +1730,7 @@ class WidePlanetEnsembleInitializer():
         cmap = plt.cm.get_cmap('RdYlGn', self.n_estimators)
 
         for fig_title, t_range in [('Anomaly region', t_range_anomaly),
-                                   ('VBBL zoom', t_range_vbbl)]:
+                                   ('Anomaly zoom', t_range_inner)]:
             fig, ax = plt.subplots(figsize=(10, 5))
             plt.sca(ax)
             ref_event.plot_data()
@@ -2097,6 +1742,7 @@ class WidePlanetEnsembleInitializer():
                 model = self.model_config.build(
                     parameters=params,
                     magnification_methods=self.mag_methods,
+                    magnification_methods_parameters=self.mag_methods_parameters,
                     default_magnification_method='point_source_point_lens',
                 )
                 model.plot_lc(source_flux=source_flux, blend_flux=blend_flux,
@@ -2366,6 +2012,7 @@ def get_close_params(params, q=None, rho=None):
     """
     Transform initial parameters into two close model parameters for a binary lens.
     One for upper and one for lower caustics.
+
     Arguments:
         params: *dictionary*
             Initial parameters.
