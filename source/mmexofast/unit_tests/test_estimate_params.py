@@ -278,6 +278,22 @@ class TestCloseUpperParameterEstimatorOB180383(TestParameterEstimatorOB180383, O
     def test_alpha(self):
         pass
 
+    def test_alpha_without_s_accessed_first(self):
+        """
+        alpha is computable on a fresh estimator without accessing s first.
+
+        Both alpha and s depend on the single-lens trajectory, which is set
+        up lazily. _grid_iterator() evaluates alpha_values before s_values,
+        so alpha must not rely on s having initialized the trajectory.
+        """
+        estimator = type(self.estimator)(self.params, limit='point')
+        self.assertIsNone(estimator._trajectory_1L)
+        alpha_first = estimator.alpha
+
+        estimator = type(self.estimator)(self.params, limit='point')
+        _ = estimator.s
+        np.testing.assert_allclose(estimator.alpha, alpha_first, rtol=self.tol)
+
 
 class TestCloseLowerParameterEstimatorOB180383(TestCloseUpperParameterEstimatorOB180383, OB180383):
 
