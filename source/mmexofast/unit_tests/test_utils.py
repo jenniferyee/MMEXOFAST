@@ -91,25 +91,47 @@ def create_mock_fitter():
 
     parameters_to_fit = ['t_0', 'u_0', 't_E']
 
-    # Create MulensData objects
-    dataset1 = MulensModel.MulensData(
-        data_list=[[t_0, t_0 + 1.0], [110.0, 100.0], [1.0, 1.0]],
-        phot_fmt='flux'
-    )
-    dataset1.plot_properties['label'] = 'n20200101.I.test.dataset_1.txt'
+    # Epochs spread well past the peak, and enough of them, so that the fit
+    # is over-determined: 24 points against the 7 unknowns sfit solves for
+    # (t_0, u_0, t_E plus a source and blend flux per dataset).
+    #
+    # The previous fixture used two epochs per dataset, i.e. 4 points for
+    # those same 7 unknowns, which made sfit's covariance matrix exactly
+    # singular. That surfaced only as
+    # "RuntimeWarning: invalid value encountered in sqrt" and NaN sigmas on
+    # a machine whose LAPACK inverts it anyway; on other LAPACK builds
+    # (GitHub's runners) numpy raises LinAlgError instead and every test
+    # using this fixture fails.
+    #
+    # The +/- 3 t_E span matters as much as the count: it is the baseline
+    # points that pin the blend fluxes. Over +/- 1.5 t_E the matrix is full
+    # rank but has condition number ~3e12, which is asking for the same
+    # class of platform-dependent trouble; over +/- 3 t_E it is ~4e6.
+    model = MulensModel.Model(
+        DEFAULT_PARAMS.copy(), coords='18:00:00 -30:00:00')
 
-    dataset2 = MulensModel.MulensData(
-        data_list=[[t_0 + 0.01, t_0 + 1.01], [210.0, 200.0], [2.0, 2.0]],
-        phot_fmt='flux'
-    )
-    dataset2.plot_properties['label'] = 'n20200101.I.test.dataset_2.txt'
+    def _make_dataset(times, f_source, f_blend, err, label):
+        """Flux data generated from the model itself, so the fit is
+        self-consistent and well conditioned rather than arbitrary."""
+        fluxes = f_source * model.get_magnification(times) + f_blend
+        dataset = MulensModel.MulensData(
+            data_list=[times, fluxes, np.full(len(times), err)],
+            phot_fmt='flux'
+        )
+        dataset.plot_properties['label'] = label
+        return dataset
+
+    times_1 = t_0 + np.linspace(-3.0, 3.0, 12) * t_E
+    times_2 = times_1 + 0.01
+
+    dataset1 = _make_dataset(
+        times_1, f1_S, f1_B, 0.01, 'n20200101.I.test.dataset_1.txt')
+    dataset2 = _make_dataset(
+        times_2, f2_S, f2_B, 0.02, 'n20200101.I.test.dataset_2.txt')
 
     mock_event = MulensModel.Event(
         datasets=[dataset1, dataset2],
-        model=MulensModel.Model(
-            DEFAULT_PARAMS.copy(),
-            coords='18:00:00 -30:00:00'
-        )
+        model=model
     )
     mock_event.fit_fluxes()
     chi2 = mock_event.get_chi2()
