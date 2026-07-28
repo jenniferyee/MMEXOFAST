@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
-
 import numpy as np
 
 from .results import GridSearchResult   # defined in results.py

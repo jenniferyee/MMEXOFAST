@@ -221,12 +221,12 @@ class MMEXOFASTFitResults(BaseFitResults):
         """
         if self._is_emcee():
             df_fitted = self._get_df_fitted_parameters_emcee()
-            df_fixed  = self._get_df_fixed_parameters_emcee()
-            df_flux   = self._get_df_flux_parameters_emcee()
+            df_fixed = self._get_df_fixed_parameters_emcee()
+            df_flux = self._get_df_flux_parameters_emcee()
         else:
             df_fitted = self._get_df_fitted_parameters_sfit()
-            df_fixed  = self._get_df_fixed_parameters_sfit()
-            df_flux   = self._get_df_flux_parameters_sfit()
+            df_fixed = self._get_df_fixed_parameters_sfit()
+            df_flux = self._get_df_flux_parameters_sfit()
 
         df_ulens = pd.concat((df_fitted, df_fixed))
         return pd.concat((df_ulens, df_flux), ignore_index=True)
@@ -248,8 +248,8 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = list(self.parameters_to_fit)
-        values     = list(self.results.x[0:len(parameters)])
-        sigmas     = list(self.results.sigmas[0:len(parameters)])
+        values = list(self.results.x[0:len(parameters)])
+        sigmas = list(self.results.sigmas[0:len(parameters)])
 
         return pd.DataFrame({
             'parameter_names': parameters,
@@ -301,8 +301,8 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = []
-        values     = []
-        sigmas     = []
+        values = []
+        sigmas = []
 
         for i, dataset in enumerate(self.datasets):
             obs, band = get_telescope_band_from_filename(
@@ -321,7 +321,7 @@ class MMEXOFASTFitResults(BaseFitResults):
                     )
                 else:
                     # TODO: Maybe it would be better to give the blend ratio instead of neg flux
-                    mag     = 'neg flux'
+                    mag = 'neg flux'
                     err_mag = np.nan
 
                 values.append(mag)
@@ -464,10 +464,10 @@ class MMEXOFASTFitResults(BaseFitResults):
         return self.fitter.results
 
 
-
 # ============================================================================
 # FitRecord and AllFitResults
 # ============================================================================
+
 @dataclass
 class FitRecord:
     """
@@ -670,6 +670,7 @@ class FitRecord:
 
         return self.full_result.chi2
 
+
 @dataclass
 class GridSearchResult:
     """
@@ -783,29 +784,29 @@ class IntermediateResults:
     ------
     best_ef_grid_point : dict or None
         Best grid point from the EventFinder grid search.
-        Set by: run_ef_grid
+        Set by: run_event_search
         Format: {'t_0': float, 't_eff': float, 'j': int, 'chi2': float}
 
     best_af_grid_point : dict or None
         Best grid point from the AnomalyFinder grid search.
-        Set by: run_af_grid
+        Set by: run_anomaly_search
         Format: TBD
 
-    est_pl_params : dict or None
+    estimate_point_lens_parameters : dict or None
         Estimated point-lens parameters from the EF grid result.
-        Set by: est_pl_params
+        Set by: estimate_point_lens_parameters
         Format: {'t_0': float, 'u_0': float, 't_E': float}
 
-    est_binary_params : dict of dicts or None
+    estimate_binary_lens_parameters : dict of dicts or None
         Estimated binary lens parameters from the AF grid result. Some anomaly
         types may have multiple possible solutions.
-        Set by: est_binary_params
+        Set by: estimate_binary_lens_parameters
         Format: {solution: {'t_0': float, 'u_0': float, 't_E': float,
                  'rho': float, 'q': float, 's': float, 'alpha': float}, ...}
 
     anomaly_lc_params : dict or None
         PSPL properties + observed anomaly properties.
-        Set by: get_anomaly_lc_params
+        Set by: get_anomaly_light_curve_parameters
         Format: {'t_0': float, 'u_0': float, 't_E': float,
                   'dmag': float, 'dt': float, 't_pl': float}
 
@@ -817,8 +818,8 @@ class IntermediateResults:
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None
-    est_pl_params: Optional[dict] = None
-    est_binary_params: Optional[dict] = None
+    estimate_point_lens_parameters: Optional[dict] = None
+    estimate_binary_lens_parameters: Optional[dict] = None
     anomaly_lc_params: Optional[dict] = None
 
     def __init__(self):

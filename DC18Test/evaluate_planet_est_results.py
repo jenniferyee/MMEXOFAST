@@ -156,7 +156,7 @@ def get_results() -> pd.DataFrame:
 
     print('\nclassified as hm:', sorted(hm))
     print('Total: ', len(hm), '\n')
-    print('\nest_binary_params failed: ', sorted(failed), '\nTotal: ', len(failed), '\n')
+    print('\nestimate_binary_lens_parameters failed: ', sorted(failed), '\nTotal: ', len(failed), '\n')
 
     return pd.DataFrame(results)
 

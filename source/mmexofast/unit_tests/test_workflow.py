@@ -87,11 +87,11 @@ INITIAL_RESULTS = {
 # ---------------------------------------------------------------------------
 
 _STEPS_EVENT_SEARCH = [
-    ('run_ef_grid', 'event_search'),
+    ('run_event_search', 'event_search'),
 ]
 _STEPS_STATIC_PL = [
-    ('est_pl_params', 'fit_static_point_lens'),
-    ('fit_pspl',      'fit_static_point_lens'),
+    ('estimate_point_lens_parameters', 'fit_static_point_lens'),
+    ('fit_static_point_source_point_lens',      'fit_static_point_lens'),
 ]
 _STEPS_PL_PARALLAX = [
     ('fit_parallax_u0+', 'fit_point_lens_parallax'),
@@ -102,14 +102,14 @@ _STEPS_RENORM = [
     ('refit_all',            'renormalize'),
 ]
 _STEPS_SEARCH_ANOMALY = [
-    ('compute_residuals',            'search_for_anomaly'),
-    ('run_af_grid',                  'search_for_anomaly'),
-    ('get_anomaly_lc_params',        'search_for_anomaly'),
-    ('classify_anomaly',             'search_for_anomaly'),
+    ('compute_point_lens_residuals',        'search_for_anomaly'),
+    ('run_anomaly_search',                  'search_for_anomaly'),
+    ('get_anomaly_light_curve_parameters',  'search_for_anomaly'),
+    ('classify_anomaly',                    'search_for_anomaly'),
 ]
 _STEPS_FIT_BINARY = [
-    ('est_binary_params', 'fit_binary_lens'),
-    ('fit_binary_models', 'fit_binary_lens'),
+    ('estimate_binary_lens_parameters', 'fit_binary_lens'),
+    ('fit_binary_lens_models', 'fit_binary_lens'),
 ]
 _STEPS_CHECK_BINARY_RENORM = [
     ('check_needs_renorm', 'check_binary_renorm'),
@@ -188,28 +188,29 @@ def steps_through(steps, step_name):
 # ---------------------------------------------------------------------------
 
 _STEP_TO_METHOD = {
-    'run_ef_grid':                  'run_ef_grid',
-    'est_pl_params':                'est_pl_params',
-    'fit_pspl':                     'fit_pspl',
-    'fit_parallax_u0+':             'fit_parallax',   # shared method
-    'fit_parallax_u0-':             'fit_parallax',   # shared method
-    'renormalize_datasets':         'renormalize_datasets',
-    'refit_all':                    'refit_all',
-    'select_best_point_lens_model': 'select_best_point_lens_model',
-    'compute_residuals':            'compute_residuals',
-    'run_af_grid':                  'run_af_grid',
-    'get_anomaly_lc_params':        'get_anomaly_lc_params',
-    'classify_anomaly':             'classify_anomaly',
-    'est_binary_params':            'est_binary_params',
-    'fit_binary_models':            'fit_binary_models',
-    'check_needs_renorm':           'check_needs_renorm',
-    'run_parallax_grids':           'run_parallax_grids',
+    'run_event_search':                       'run_event_search',
+    'estimate_point_lens_parameters':         'estimate_point_lens_parameters',
+    'fit_static_point_source_point_lens':     'fit_static_point_source_point_lens',
+    'fit_static_finite_source_point_lens':    'fit_static_finite_source_point_lens',
+    'fit_parallax_u0+':                       'fit_parallax',   # shared method
+    'fit_parallax_u0-':                       'fit_parallax',   # shared method
+    'renormalize_datasets':                   'renormalize_datasets',
+    'refit_all':                              'refit_all',
+    'select_best_point_lens_model':           'select_best_point_lens_model',
+    'compute_point_lens_residuals':           'compute_point_lens_residuals',
+    'run_anomaly_search':                     'run_anomaly_search',
+    'get_anomaly_light_curve_parameters':     'get_anomaly_light_curve_parameters',
+    'classify_anomaly':                       'classify_anomaly',
+    'estimate_binary_lens_parameters':                      'estimate_binary_lens_parameters',
+    'fit_binary_lens_models':                      'fit_binary_lens_models',
+    'check_needs_renorm':                     'check_needs_renorm',
+    'run_parallax_grids':                     'run_parallax_grids',
 }
 
 # Methods whose no-op return value must be something other than None.
 _METHOD_RETURN_VALUES = {
-    'run_ef_grid':   {},
-    'est_pl_params': {},
+    'run_event_search':   {},
+    'estimate_point_lens_parameters': {},
 }
 
 
@@ -322,11 +323,11 @@ class TestPointLensWorkflow(unittest.TestCase):
 
     def test_stop_before_first_step_of_stage(self):
         """
-        stop_before='fit_static_point_lens:est_pl_params' executes only
-        steps before est_pl_params (i.e. the event_search stage only).
+        stop_before='fit_static_point_lens:estimate_point_lens_parameters' executes only
+        steps before estimate_point_lens_parameters (i.e. the event_search stage only).
         """
         fitter = self._make_fitter(
-            stop_before='fit_static_point_lens:est_pl_params')
+            stop_before='fit_static_point_lens:estimate_point_lens_parameters')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
@@ -337,16 +338,16 @@ class TestPointLensWorkflow(unittest.TestCase):
 
     def test_stop_before_second_step_of_stage(self):
         """
-        stop_before='fit_static_point_lens:fit_pspl' executes steps through
-        est_pl_params but not fit_pspl.
+        stop_before='fit_static_point_lens:fit_static_point_source_point_lens' executes steps through
+        estimate_point_lens_parameters but not fit_static_point_source_point_lens.
         """
         fitter = self._make_fitter(
-            stop_before='fit_static_point_lens:fit_pspl')
+            stop_before='fit_static_point_lens:fit_static_point_source_point_lens')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS, 'est_pl_params')
+        expected = steps_through(EXPECTED_STEPS, 'estimate_point_lens_parameters')
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
@@ -354,31 +355,31 @@ class TestPointLensWorkflow(unittest.TestCase):
 
     def test_stop_after_first_step_of_stage(self):
         """
-        stop_after='fit_static_point_lens:est_pl_params' executes steps
-        through and including est_pl_params.
+        stop_after='fit_static_point_lens:estimate_point_lens_parameters' executes steps
+        through and including estimate_point_lens_parameters.
         """
         fitter = self._make_fitter(
-            stop_after='fit_static_point_lens:est_pl_params')
+            stop_after='fit_static_point_lens:estimate_point_lens_parameters')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS, 'est_pl_params')
+        expected = steps_through(EXPECTED_STEPS, 'estimate_point_lens_parameters')
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
     def test_stop_after_second_step_of_stage(self):
         """
-        stop_after='fit_static_point_lens:fit_pspl' executes steps through
-        and including fit_pspl.
+        stop_after='fit_static_point_lens:fit_static_point_source_point_lens' executes steps through
+        and including fit_static_point_source_point_lens.
         """
         fitter = self._make_fitter(
-            stop_after='fit_static_point_lens:fit_pspl')
+            stop_after='fit_static_point_lens:fit_static_point_source_point_lens')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS, 'fit_pspl')
+        expected = steps_through(EXPECTED_STEPS, 'fit_static_point_source_point_lens')
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
@@ -403,14 +404,14 @@ class TestPointLensWorkflow(unittest.TestCase):
     def test_stop_after_stage_halts_after_last_step(self):
         """
         stop_after='fit_static_point_lens' halts after the last step
-        of that stage (i.e. after fit_pspl).
+        of that stage (i.e. after fit_static_point_source_point_lens).
         """
         fitter = self._make_fitter(stop_after='fit_static_point_lens')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS, 'fit_pspl')
+        expected = steps_through(EXPECTED_STEPS, 'fit_static_point_source_point_lens')
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
@@ -418,12 +419,12 @@ class TestPointLensWorkflow(unittest.TestCase):
 
     def test_resume_after_stop_before_planned_steps(self):
         """
-        When completed_steps contains only run_ef_grid, planned_steps
-        starts at est_pl_params.
+        When completed_steps contains only run_event_search, planned_steps
+        starts at estimate_point_lens_parameters.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.completed_steps = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'run_ef_grid'))
+            steps_through(EXPECTED_STEPS, 'run_event_search'))
         fitter.fit()
 
         expected = _STEPS_STATIC_PL + _STEPS_PL_PARALLAX
@@ -432,12 +433,12 @@ class TestPointLensWorkflow(unittest.TestCase):
 
     def test_resume_after_stop_after_planned_steps(self):
         """
-        When completed_steps contains run_ef_grid and est_pl_params,
-        planned_steps starts at fit_pspl.
+        When completed_steps contains run_event_search and estimate_point_lens_parameters,
+        planned_steps starts at fit_static_point_source_point_lens.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.completed_steps = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'est_pl_params'))
+            steps_through(EXPECTED_STEPS, 'estimate_point_lens_parameters'))
         fitter.fit()
 
         expected = _STEPS_STATIC_PL[1:] + _STEPS_PL_PARALLAX
@@ -568,25 +569,25 @@ class TestBinaryLensWorkflow(unittest.TestCase):
 
     def test_stop_after_fit_binary(self):
         """
-        stop_after='fit_binary_lens' halts after fit_binary_models.
+        stop_after='fit_binary_lens' halts after fit_binary_lens_models.
         """
         fitter = self._make_fitter(stop_after='fit_binary_lens')
 
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_models')
+        expected = steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_lens_models')
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
     def test_resume_after_stop_before_fit_binary(self):
         """
-        When completed_steps ends at est_binary_params,
-        planned_steps starts at fit_binary_models.
+        When completed_steps ends at estimate_binary_lens_parameters,
+        planned_steps starts at fit_binary_lens_models.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.completed_steps = _make_noop_steps(
-            steps_through(EXPECTED_STEPS_BINARY, 'est_binary_params'))
+            steps_through(EXPECTED_STEPS_BINARY, 'estimate_binary_lens_parameters'))
         fitter.fit()
 
         expected = (
@@ -618,7 +619,7 @@ class TestBinaryLensWorkflow(unittest.TestCase):
         """
         fitter = self._make_fitter()
         fitter.completed_steps = _make_noop_steps(
-            steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_models'))
+            steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_lens_models'))
 
         with ExitStack() as stack:
             stack.enter_context(
@@ -669,11 +670,11 @@ class TestPointLensWorkflowWithInitialResults(unittest.TestCase):
         # is harmless and keeps the guard meaningful.
         return patch_fitter_methods(self, fitter, EXPECTED_STEPS)
 
-    def test_dry_run_skips_est_pl_params(self):
+    def test_dry_run_skips_estimate_point_lens_parameters(self):
         """
         When a static PSPL is supplied via initial_results with
-        fit_type='point_lens', planned_steps starts at fit_pspl,
-        skipping est_pl_params.
+        fit_type='point_lens', planned_steps starts at fit_static_point_source_point_lens,
+        skipping estimate_point_lens_parameters.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.fit()
@@ -682,16 +683,16 @@ class TestPointLensWorkflowWithInitialResults(unittest.TestCase):
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, expected)
 
-    def test_fit_pspl_uses_supplied_params_as_seed(self):
+    def test_fit_static_point_source_point_lens_uses_supplied_params_as_seed(self):
         """
-        fit_pspl is called with the user-supplied PSPL params as seed.
+        fit_static_point_source_point_lens is called with the user-supplied PSPL params as seed.
         """
         fitter = self._make_fitter()
 
         with self._patch_fit_methods(fitter) as stack:
             fitter.fit()
 
-        call_args = stack.mocks['fit_pspl'].call_args
+        call_args = stack.mocks['fit_static_point_source_point_lens'].call_args
         self.assertEqual(
             call_args.kwargs.get('initial_params'), STATIC_PSPL_PARAMS)
 
@@ -821,24 +822,24 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
 
     def test_action_returning_none_does_not_insert_steps(self):
         """
-        est_pl_params runs for real, returns None from the step action,
+        estimate_point_lens_parameters runs for real, returns None from the step action,
         and the execution loop continues normally without inserting steps.
-        The result is stored in intermediate_results.est_pl_params.
+        The result is stored in intermediate_results.estimate_point_lens_parameters.
         """
         fitter = MMEXOFASTFitter(
             files=GROUND_DATA_FILES,
             coords=COORDS,
             fit_type='point_lens',
             renormalize_errors=False,
-            stop_after='fit_static_point_lens:est_pl_params')
+            stop_after='fit_static_point_lens:estimate_point_lens_parameters')
 
         fitter.completed_steps = _make_noop_steps(_STEPS_EVENT_SEARCH)
         fitter.intermediate_results.best_ef_grid_point = BEST_EF_GRID_POINT
 
         fitter.fit()
 
-        self.assertIsNotNone(fitter.intermediate_results.est_pl_params)
-        self.assertEqual(fitter.completed_steps[-1].name, 'est_pl_params')
+        self.assertIsNotNone(fitter.intermediate_results.estimate_point_lens_parameters)
+        self.assertEqual(fitter.completed_steps[-1].name, 'estimate_point_lens_parameters')
 
     def test_action_returning_steps_inserts_at_front_of_queue(self):
         """
@@ -861,7 +862,7 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
             stop_after='check_binary_renorm:check_needs_renorm')
 
         fitter.completed_steps = _make_noop_steps(
-            steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_models'))
+            steps_through(EXPECTED_STEPS_BINARY, 'fit_binary_lens_models'))
 
         binary_fitter = MulensFitter(
             datasets=fitter.datasets,
@@ -1018,8 +1019,8 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
        the pickle's completed_steps → planned_steps must be empty (nothing
        to re-run).
 
-    2. The previous run halted after 'fit_binary_lens:est_binary_params';
-       the resumed run must plan fit_binary_models as its first step.
+    2. The previous run halted after 'fit_binary_lens:estimate_binary_lens_parameters';
+       the resumed run must plan fit_binary_lens_models as its first step.
     """
 
     def setUp(self):
@@ -1065,16 +1066,16 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         named in stop_after, planned_steps is empty: the target has already
         been reached and there is nothing left to run.
         """
-        # Pickle records est_pl_params as done; stop_after points to the
+        # Pickle records estimate_point_lens_parameters as done; stop_after points to the
         # same step → no remaining work within the stop window.
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'est_pl_params'))
+            steps_through(EXPECTED_STEPS, 'estimate_point_lens_parameters'))
         pkl = self._pkl_path()
         _make_fake_pickle(pkl, completed)
 
         fitter = self._make_point_lens_fitter(
             restart_file=pkl,
-            stop_after='fit_static_point_lens:est_pl_params',
+            stop_after='fit_static_point_lens:estimate_point_lens_parameters',
             dry_run=True)
         fitter.fit()
 
@@ -1091,17 +1092,17 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         named in stop_before, the workflow has gone past the intended
         stopping point; planned_steps is empty.
         """
-        # Pickle records fit_pspl as done; stop_before points to fit_pspl
+        # Pickle records fit_static_point_source_point_lens as done; stop_before points to fit_static_point_source_point_lens
         # → all steps admissible under the stop_before constraint are
         # already completed.
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'fit_pspl'))
+            steps_through(EXPECTED_STEPS, 'fit_static_point_source_point_lens'))
         pkl = self._pkl_path()
         _make_fake_pickle(pkl, completed)
 
         fitter = self._make_point_lens_fitter(
             restart_file=pkl,
-            stop_before='fit_static_point_lens:fit_pspl',
+            stop_before='fit_static_point_lens:fit_static_point_source_point_lens',
             dry_run=True)
         fitter.fit()
 
@@ -1109,18 +1110,18 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         self.assertEqual(actual, [])
 
     # ------------------------------------------------------------------
-    # Scenario 2 – resume after est_binary_params
+    # Scenario 2 – resume after estimate_binary_lens_parameters
     # ------------------------------------------------------------------
 
-    def test_restart_after_est_binary_params_plans_fit_binary_models(self):
+    def test_restart_after_estimate_binary_lens_parameters_plans_fit_binary_lens_models(self):
         """
         Restarting from a pickle where the previous binary-lens run halted
-        after 'fit_binary_lens:est_binary_params' produces a plan whose
-        first step is fit_binary_models, followed by check_binary_renorm
+        after 'fit_binary_lens:estimate_binary_lens_parameters' produces a plan whose
+        first step is fit_binary_lens_models, followed by check_binary_renorm
         and parallax_grids.
         """
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS_BINARY, 'est_binary_params'))
+            steps_through(EXPECTED_STEPS_BINARY, 'estimate_binary_lens_parameters'))
         pkl = self._pkl_path()
         _make_fake_pickle(pkl, completed)
 
@@ -1129,7 +1130,7 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         fitter.fit()
 
         expected = (
-            _STEPS_FIT_BINARY[1:] +          # fit_binary_models only
+            _STEPS_FIT_BINARY[1:] +          # fit_binary_lens_models only
             _STEPS_CHECK_BINARY_RENORM +
             _STEPS_PARALLAX_GRIDS
         )
@@ -1189,57 +1190,57 @@ class TestRestartIgnoresPickledStopConditions(unittest.TestCase):
 
     def test_pickled_stop_before_is_not_restored(self):
         """
-        A pickle whose config contains stop_before='fit_static_point_lens:fit_pspl'
+        A pickle whose config contains stop_before='fit_static_point_lens:fit_static_point_source_point_lens'
         must not re-impose that stop when the new fitter is constructed
-        without an explicit stop_before. fit_pspl and later steps must appear
+        without an explicit stop_before. fit_static_point_source_point_lens and later steps must appear
         in planned_steps.
 
-        completed_steps ends at run_ef_grid — well before the stop point.
+        completed_steps ends at run_event_search — well before the stop point.
         If stop_before were incorrectly restored it would truncate the plan
-        to [est_pl_params] only (everything before fit_pspl that remains).
-        Asserting fit_pspl is present is therefore a genuine discriminator
+        to [estimate_point_lens_parameters] only (everything before fit_static_point_source_point_lens that remains).
+        Asserting fit_static_point_source_point_lens is present is therefore a genuine discriminator
         between bug-present and bug-absent.
 
-        The previous version ended completed_steps at est_pl_params
-        (immediately before fit_pspl). Both the buggy and correct
-        implementations then plan fit_pspl as the next step — by coincidence
+        The previous version ended completed_steps at estimate_point_lens_parameters
+        (immediately before fit_static_point_source_point_lens). Both the buggy and correct
+        implementations then plan fit_static_point_source_point_lens as the next step — by coincidence
         in the buggy case — so the test could not catch the bug.
         """
-        # End at run_ef_grid so there is a real gap between completed work
+        # End at run_event_search so there is a real gap between completed work
         # and the stop_before cutoff.
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'run_ef_grid'))
+            steps_through(EXPECTED_STEPS, 'run_event_search'))
         pkl = self._pkl_path()
         _make_fake_pickle_with_stop_conditions(
             pkl, completed,
-            stop_before='fit_static_point_lens:est_pl_params')  # ← bug bait
+            stop_before='fit_static_point_lens:estimate_point_lens_parameters')  # ← bug bait
 
         fitter = self._make_fitter(restart_file=pkl)  # no stop_before
         fitter.fit()
 
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
-        # fit_pspl must appear; if stop_before were restored it would be absent
-        self.assertIn(('fit_pspl', 'fit_static_point_lens'), actual)
+        # fit_static_point_source_point_lens must appear; if stop_before were restored it would be absent
+        self.assertIn(('fit_static_point_source_point_lens', 'fit_static_point_lens'), actual)
 
     def test_pickled_stop_after_is_not_restored(self):
         """
-        A pickle whose config contains stop_after='event_search:run_ef_grid'
+        A pickle whose config contains stop_after='event_search:run_event_search'
         must not re-impose that stop when the new fitter is constructed
-        without an explicit stop_after. est_pl_params and later steps must
+        without an explicit stop_after. estimate_point_lens_parameters and later steps must
         appear in planned_steps.
         """
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'run_ef_grid'))
+            steps_through(EXPECTED_STEPS, 'run_event_search'))
         pkl = self._pkl_path()
         _make_fake_pickle_with_stop_conditions(
             pkl, completed,
-            stop_after='event_search:run_ef_grid')           # ← bug bait
+            stop_after='event_search:run_event_search')           # ← bug bait
 
         fitter = self._make_fitter(restart_file=pkl)         # no stop_after
         fitter.fit()
 
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
-        self.assertIn(('est_pl_params', 'fit_static_point_lens'), actual)
+        self.assertIn(('estimate_point_lens_parameters', 'fit_static_point_lens'), actual)
 
     def test_pickled_dry_run_is_not_restored(self):
         """
@@ -1249,7 +1250,7 @@ class TestRestartIgnoresPickledStopConditions(unittest.TestCase):
         that the execution loop actually ran rather than being skipped.
         """
         completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS, 'run_ef_grid'))
+            steps_through(EXPECTED_STEPS, 'run_event_search'))
         pkl = self._pkl_path()
         _make_fake_pickle_with_stop_conditions(
             pkl, completed,
@@ -1274,7 +1275,7 @@ class TestRestartIgnoresPickledStopConditions(unittest.TestCase):
                 renormalize_errors=False,
                 restart_file=pkl,
                 dry_run=False,                               # explicit False
-                stop_after='fit_static_point_lens:est_pl_params')
+                stop_after='fit_static_point_lens:estimate_point_lens_parameters')
 
             # Re-attach mocks to the real fitter's methods.
             for step_name, method_name in _STEP_TO_METHOD.items():
@@ -1284,10 +1285,10 @@ class TestRestartIgnoresPickledStopConditions(unittest.TestCase):
                                             MagicMock(return_value=None)))
             fitter.fit()
 
-        # At least est_pl_params must have been executed, not just planned.
+        # At least estimate_point_lens_parameters must have been executed, not just planned.
         completed_names = [step.name for step in fitter.completed_steps
-                           if step.name != 'run_ef_grid']   # pre-loaded step
-        self.assertIn('est_pl_params', completed_names)
+                           if step.name != 'run_event_search']   # pre-loaded step
+        self.assertIn('estimate_point_lens_parameters', completed_names)
 
 
 class TestWorkflowStepValueError(unittest.TestCase):

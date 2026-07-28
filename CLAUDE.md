@@ -60,12 +60,12 @@ results = fitter.fit()
 
 | Stage | Key steps |
 |---|---|
-| `event_search` | `run_ef_grid` — EventFinder grid (Kim+2018) to locate t_0 |
-| `fit_static_point_lens` | `est_pl_params`, `fit_pspl`, (optionally `fit_fspl`) |
+| `event_search` | `run_event_search` — EventFinder grid (Kim+2018) to locate t_0 |
+| `fit_static_point_lens` | `estimate_point_lens_parameters`, `fit_static_point_source_point_lens`, (optionally `fit_static_finite_source_point_lens`) |
 | `fit_point_lens_parallax` | `fit_parallax_u0+`, `fit_parallax_u0-` |
 | `renormalize` | `renormalize_datasets`, `refit_all` |
-| `search_for_anomaly` | `compute_residuals`, `run_af_grid`, `get_anomaly_lc_params`, `classify_anomaly` |
-| `fit_binary_lens` | `est_binary_params`, `fit_binary_models` (uses emcee) |
+| `search_for_anomaly` | `compute_point_lens_residuals`, `run_anomaly_search`, `get_anomaly_light_curve_parameters`, `classify_anomaly` |
+| `fit_binary_lens` | `estimate_binary_lens_parameters`, `fit_binary_lens_models` (uses emcee) |
 | `check_binary_renorm` | dynamically inserted if renormalization is needed post-binary-fit |
 | `parallax_grids` | `run_parallax_grids` — full piE grid search |
 

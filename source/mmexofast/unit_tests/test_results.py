@@ -705,8 +705,8 @@ class TestIntermediateResults(unittest.TestCase):
         ir = results.IntermediateResults()
         self.assertIsNone(ir.best_ef_grid_point)
         self.assertIsNone(ir.best_af_grid_point)
-        self.assertIsNone(ir.est_pl_params)
-        self.assertIsNone(ir.est_binary_params)
+        self.assertIsNone(ir.estimate_point_lens_parameters)
+        self.assertIsNone(ir.estimate_binary_lens_parameters)
         self.assertIsNone(ir.anomaly_type)
         self.assertIsNone(ir.anomaly_lc_params)
 
@@ -733,18 +733,18 @@ class TestIntermediateResults(unittest.TestCase):
         ir.best_af_grid_point = value
         self.assertEqual(ir.best_af_grid_point, value)
 
-    def test_est_pl_params_can_be_set(self):
+    def test_estimate_point_lens_parameters_can_be_set(self):
         """
-        est_pl_params can be set and retrieved.
+        estimate_point_lens_parameters can be set and retrieved.
         """
         ir = results.IntermediateResults()
         value = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
-        ir.est_pl_params = value
-        self.assertEqual(ir.est_pl_params, value)
+        ir.estimate_point_lens_parameters = value
+        self.assertEqual(ir.estimate_point_lens_parameters, value)
 
-    def test_est_binary_params_can_be_set(self):
+    def test_estimate_binary_lens_parameters_can_be_set(self):
         """
-        est_binary_params can be set and retrieved.
+        estimate_binary_lens_parameters can be set and retrieved.
         """
         ir = results.IntermediateResults()
         value ={'wide': {
@@ -756,8 +756,8 @@ class TestIntermediateResults(unittest.TestCase):
             's':     1.6044784697939465,
             'alpha': 157.9506556145345,
         }}
-        ir.est_binary_params = value
-        self.assertEqual(ir.est_binary_params, value)
+        ir.estimate_binary_lens_parameters = value
+        self.assertEqual(ir.estimate_binary_lens_parameters, value)
 
     def test_valid_anomaly_types_are_expected_values(self):
         """
@@ -803,8 +803,8 @@ class TestIntermediateResults(unittest.TestCase):
         ir = results.IntermediateResults()
         ir.best_ef_grid_point = {'t_0': 2456836.0}
         self.assertIsNone(ir.best_af_grid_point)
-        self.assertIsNone(ir.est_pl_params)
-        self.assertIsNone(ir.est_binary_params)
+        self.assertIsNone(ir.estimate_point_lens_parameters)
+        self.assertIsNone(ir.estimate_binary_lens_parameters)
         self.assertIsNone(ir.anomaly_type)
         self.assertIsNone(ir.anomaly_lc_params)
 
@@ -814,15 +814,15 @@ class TestIntermediateResults(unittest.TestCase):
         """
         ir = results.IntermediateResults()
         ir.best_ef_grid_point = {'t_0': 2456836.0, 't_eff': 23.67}
-        ir.est_pl_params = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
+        ir.estimate_point_lens_parameters = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
         ir.anomaly_type = 'close'
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
         restored = pickle.loads(pickle.dumps(ir))
         self.assertEqual(restored.best_ef_grid_point, ir.best_ef_grid_point)
         self.assertEqual(restored.best_af_grid_point, ir.best_af_grid_point)
-        self.assertEqual(restored.est_pl_params, ir.est_pl_params)
-        self.assertEqual(restored.est_binary_params, ir.est_binary_params)
+        self.assertEqual(restored.estimate_point_lens_parameters, ir.estimate_point_lens_parameters)
+        self.assertEqual(restored.estimate_binary_lens_parameters, ir.estimate_binary_lens_parameters)
         self.assertEqual(restored.anomaly_type, ir.anomaly_type)
         self.assertEqual(restored.anomaly_lc_params, ir.anomaly_lc_params)
 
@@ -842,8 +842,8 @@ class TestIntermediateResults(unittest.TestCase):
         self.assertIsInstance(fitter.intermediate_results, results.IntermediateResults)
         self.assertIsNone(fitter.intermediate_results.best_ef_grid_point)
         self.assertIsNone(fitter.intermediate_results.best_af_grid_point)
-        self.assertIsNone(fitter.intermediate_results.est_pl_params)
-        self.assertIsNone(fitter.intermediate_results.est_binary_params)
+        self.assertIsNone(fitter.intermediate_results.estimate_point_lens_parameters)
+        self.assertIsNone(fitter.intermediate_results.estimate_binary_lens_parameters)
         self.assertIsNone(fitter.intermediate_results.anomaly_type)
         self.assertIsNone(fitter.intermediate_results.anomaly_lc_params)
 
@@ -861,7 +861,7 @@ class TestIntermediateResults(unittest.TestCase):
 
         ir = results.IntermediateResults()
         ir.best_ef_grid_point = {'t_0': 2456836.0}
-        ir.est_pl_params = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
+        ir.estimate_point_lens_parameters = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
         ir.anomaly_type = 'wide'
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
@@ -871,14 +871,14 @@ class TestIntermediateResults(unittest.TestCase):
             fitter.intermediate_results.best_ef_grid_point,
             {'t_0': 2456836.0})
         self.assertEqual(
-            fitter.intermediate_results.est_pl_params,
+            fitter.intermediate_results.estimate_point_lens_parameters,
             {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48})
         self.assertEqual(
             fitter.intermediate_results.anomaly_type, 'wide')
         self.assertEqual(
             fitter.intermediate_results.anomaly_lc_params, ANOMALY_LC_PARAMS)
         self.assertIsNone(fitter.intermediate_results.best_af_grid_point)
-        self.assertIsNone(fitter.intermediate_results.est_binary_params)
+        self.assertIsNone(fitter.intermediate_results.estimate_binary_lens_parameters)
 
 
 if __name__ == '__main__':

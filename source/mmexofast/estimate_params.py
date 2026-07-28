@@ -1036,7 +1036,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         self._refinement_results = df_refine
         self._refinement_result = opt_result
 
-        # TODO: It would be better to recalculate mag_methods from the best model, i.e. create a new object rather than updating. Can this be done by calling get_binary_params()?
+        # TODO: It would be better to recalculate mag_methods from the best model,
+        # i.e. create a new object rather than updating. Can this be done by calling get_binary_params()?
         best_params = self._select_best_params(best_grid_params, opt_result)
         self._binary_params.ulens.update(best_params)
         self._all_results = self._build_all_results()
@@ -2043,7 +2044,8 @@ class CloseLowerBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLo
 
 def get_close_params(params, q=None, rho=None):
     """
-    Transform initial parameters into two close model parameters for a binary lens. One for upper and one for lower caustics.
+    Transform initial parameters into two close model parameters for a binary lens.
+    One for upper and one for lower caustics.
 
     Arguments:
         params: *dictionary*
