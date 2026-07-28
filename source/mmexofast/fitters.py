@@ -137,6 +137,12 @@ class MulensFitter():
         Magnification methods specification; see
         MulensModel.Model.set_magnification_methods. Passed directly to
         ``get_model()`` since it varies per model type.
+    mag_methods_parameters : dict, optional
+        Parameters for those methods, e.g.
+        ``{'VBBL': {'accuracy': 0.01}}``; see
+        MulensModel.Model.set_magnification_methods_parameters. Like
+        ``mag_methods`` it varies per model type. Usually supplied as
+        ``BinaryLensParams.mag_methods_parameters``.
     model_config : ModelConfig, optional
         Configuration for Model construction (coords, limb darkening, etc.).
         If None, a default ``ModelConfig`` is used.
@@ -151,7 +157,8 @@ class MulensFitter():
 
     def __init__(
             self, datasets=None, initial_model_params=None, parameters_to_fit=None, sigmas=None,
-            mag_methods=None, model_config=None, event_config=None,
+            mag_methods=None, mag_methods_parameters=None,
+            model_config=None, event_config=None,
             verbose=False, pool=None):
         self._initial_model = None
         self._best = None
@@ -164,6 +171,7 @@ class MulensFitter():
         self.sigmas = sigmas
 
         self.mag_methods = mag_methods
+        self.mag_methods_parameters = mag_methods_parameters
         self.model_config = (
             model_config if model_config is not None else ModelConfig()
         )
@@ -214,6 +222,7 @@ class MulensFitter():
         return self.model_config.build(
             parameters=params,
             magnification_methods=self.mag_methods,
+            magnification_methods_parameters=self.mag_methods_parameters,
         )
 
     def get_event(self):
@@ -628,6 +637,7 @@ class EmceeLCFitter(MulensFitter):
         model = self.model_config.build(
             parameters=params,
             magnification_methods=self.mag_methods,
+            magnification_methods_parameters=self.mag_methods_parameters,
         )
         self._event = self.event_config.build(
             model=model,

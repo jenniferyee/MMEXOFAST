@@ -311,8 +311,14 @@ class TestGetWideParams(unittest.TestCase, KB160625):
             np.testing.assert_allclose(self.ulens_params.ulens['alpha'], np.rad2deg(self.alpha[index]), rtol=self.tol)
 
     def test_mag_methods(self):
-        expected_values = [self.t_pl - 5. * self.dt / 2., 'VBBL', self.t_pl + 5. * self.dt / 2.]
-        for actual, expected in zip(self.ulens_params.mag_methods[4:7], expected_values):
+        t_star = self.dt / 2.
+        expected_values = [
+            np.min((self.t_0 - self.t_E, self.t_pl - self.t_E / 2.,
+                    self.t_pl - 20. * t_star)),
+            'VBBL',
+            np.max((self.t_0 + self.t_E, self.t_pl + self.t_E / 2.,
+                    self.t_pl + 20. * t_star))]
+        for actual, expected in zip(self.ulens_params.mag_methods, expected_values):
             if isinstance(actual, str):
                 assert actual == expected
             else:
@@ -437,46 +443,20 @@ class TestBinaryLensParams(unittest.TestCase):
     ----------
     KB160625 : KMT-2016-BLG-0625 (Shin et al. 2024), wide topology.
     OB180383 : OGLE-2018-BLG-0383 (Wang et al. 2022), wide topology.
-
-    Notes
-    -----
-    Refined BinaryLensParams instances are built once in setUpClass to
-    avoid repeated VBBL calls across tests.
     """
 
     @classmethod
     def setUpClass(cls):
-        """
-        Build initial and refined BinaryLensParams instances for each
-        test event. VBBL evaluations are expensive; compute once for
-        the whole class.
-        """
         kb = KB160625()
         ob = OB180383()
 
         cls.test_cases = {
-            'KB160625': {
-                'ulens': kb.wide_params,
-                'params': kb.params,
-            },
-            'OB180383': {
-                'ulens': ob.wide_params,
-                'params': ob.params,
-            },
+            'KB160625': {'ulens': kb.wide_params, 'params': kb.params},
+            'OB180383': {'ulens': ob.wide_params, 'params': ob.params},
         }
 
-        cls.blp_refined = {}
-        for name, case in cls.test_cases.items():
-            blp = estimate_params.BinaryLensParams(case['ulens'])
-            blp.set_mag_method(case['params'])
-            blp.refine_mag_methods()
-            cls.blp_refined[name] = blp
-
-    def _make_fresh_blp(self, event_name):
-        """
-        Return a BinaryLensParams with set_mag_method called but not
-        yet refined, for the named event.
-        """
+    def _make_blp(self, event_name):
+        """Return a BinaryLensParams with set_mag_method already called."""
         case = self.test_cases[event_name]
         blp = estimate_params.BinaryLensParams(case['ulens'])
         blp.set_mag_method(case['params'])
@@ -487,29 +467,26 @@ class TestBinaryLensParams(unittest.TestCase):
     # ------------------------------------------------------------------ #
 
     def test_set_mag_method_structure(self):
-        """mag_methods should have 11 elements with method strings at
-        odd indices."""
-        expected_strings = [
-            'point_source', 'hexadecapole', 'VBBL', 'hexadecapole', 'point_source'
-        ]
+        """mag_methods should be a single VBBL window: [t_start, 'VBBL',
+        t_end]."""
         for name in self.test_cases:
             with self.subTest(event=name):
-                blp = self._make_fresh_blp(name)
-                self.assertEqual(len(blp.mag_methods), 11)
-                self.assertEqual(blp.mag_methods[1::2], expected_strings)
+                blp = self._make_blp(name)
+                self.assertEqual(len(blp.mag_methods), 3)
+                self.assertEqual(blp.mag_methods[1], 'VBBL')
 
     def test_set_mag_method_stores_params(self):
         """set_mag_method should store params as self.params."""
         for name, case in self.test_cases.items():
             with self.subTest(event=name):
-                blp = self._make_fresh_blp(name)
+                blp = self._make_blp(name)
                 self.assertIs(blp.params, case['params'])
 
     def test_set_mag_method_boundary_formulas(self):
-        """Initial boundary times should match the defining formulas exactly."""
+        """Window edges should match the defining formulas exactly."""
         for name, case in self.test_cases.items():
             with self.subTest(event=name):
-                blp = self._make_fresh_blp(name)
+                blp = self._make_blp(name)
                 p = case['params']
                 t_E = p['t_E']
                 t_0 = p['t_0']
@@ -517,172 +494,81 @@ class TestBinaryLensParams(unittest.TestCase):
                 t_star = p['dt'] / 2.
                 expected = [
                     np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 20. * t_star)),
-                    t_pl - 10. * t_star,
-                    t_pl - 5. * t_star,
-                    t_pl + 5. * t_star,
-                    t_pl + 10. * t_star,
                     np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 20. * t_star)),
                 ]
-                for i, (exp, act) in enumerate(zip(expected, blp.mag_methods[0::2])):
-                    self.assertAlmostEqual(
-                        act, exp, places=10,
-                        msg=f"Time boundary at index {2*i} mismatch: "
-                            f"expected {exp:.6f}, got {act:.6f}")
+                actual = blp.mag_methods[0::2]
+                for exp, act in zip(expected, actual):
+                    self.assertAlmostEqual(act, exp, places=10)
 
-    def test_set_mag_method_boundaries_monotonic(self):
-        """Initial boundary times should be strictly increasing."""
+    def test_window_brackets_anomaly_and_peak(self):
+        """The VBBL window must cover both the anomaly and the peak, since
+        outside it the callers fall back to a point-lens approximation."""
+        for name, case in self.test_cases.items():
+            with self.subTest(event=name):
+                blp = self._make_blp(name)
+                t_start, t_end = blp.mag_methods[0::2]
+                p = case['params']
+                t_star = p['dt'] / 2.
+                self.assertLess(t_start, t_end)
+                self.assertLessEqual(t_start, p['t_pl'] - 20. * t_star)
+                self.assertGreaterEqual(t_end, p['t_pl'] + 20. * t_star)
+                self.assertLessEqual(t_start, p['t_0'] - p['t_E'])
+                self.assertGreaterEqual(t_end, p['t_0'] + p['t_E'])
+
+    def test_vbbl_accuracy_default(self):
+        """The default tolerance is VBM's own 0.01, exposed to MulensModel
+        as magnification method parameters."""
         for name in self.test_cases:
             with self.subTest(event=name):
-                blp = self._make_fresh_blp(name)
-                times = blp.mag_methods[0::2]
-                for i in range(len(times) - 1):
-                    self.assertLess(
-                        times[i], times[i + 1],
-                        msg=f"Times not monotonic at positions {i} and {i+1}: "
-                            f"{times[i]:.4f} >= {times[i+1]:.4f}")
+                blp = self._make_blp(name)
+                self.assertEqual(blp.vbbl_accuracy, 0.01)
+                self.assertEqual(blp.mag_methods_parameters,
+                                 {'VBBL': {'accuracy': 0.01}})
 
-    # ------------------------------------------------------------------ #
-    # refine_mag_methods: structural
-    # ------------------------------------------------------------------ #
+    def test_vbbl_accuracy_override(self):
+        """An explicit tolerance is passed through, and None falls back to
+        MulensModel's own default by emitting no parameters at all."""
+        ulens = self.test_cases['KB160625']['ulens']
+        blp = estimate_params.BinaryLensParams(ulens, vbbl_accuracy=1e-3)
+        self.assertEqual(blp.mag_methods_parameters,
+                         {'VBBL': {'accuracy': 1e-3}})
 
-    def test_refine_raises_before_set_mag_method(self):
-        """refine_mag_methods should raise RuntimeError if set_mag_method
-        has not been called."""
-        case = next(iter(self.test_cases.values()))
-        blp = estimate_params.BinaryLensParams(case['ulens'])
-        with self.assertRaises(RuntimeError):
-            blp.refine_mag_methods()
+        blp_none = estimate_params.BinaryLensParams(ulens, vbbl_accuracy=None)
+        self.assertIsNone(blp_none.mag_methods_parameters)
 
-    def test_hard_limits_unchanged_after_refinement(self):
-        """The outer hard limits (indices 0 and 10) should not be
-        modified by refine_mag_methods."""
-        for name in self.test_cases:
+    def test_estimator_propagates_vbbl_accuracy(self):
+        """The estimator's tolerance reaches the BinaryLensParams it
+        builds, so a fitter-level override is not silently dropped."""
+        case = KB160625()
+        estimator = estimate_params.WidePlanetParameterEstimator(case.params)
+        self.assertEqual(estimator.get_binary_lens_params().vbbl_accuracy,
+                         0.01)
+
+        estimator.vbbl_accuracy = 3e-3
+        self.assertEqual(estimator.get_binary_lens_params().vbbl_accuracy,
+                         3e-3)
+
+    def test_vbbl_used_throughout_window(self):
+        """Inside the window the model must agree exactly with VBBL
+        everywhere: no hexadecapole/point_source brackets, hence no
+        discontinuities at internal method boundaries."""
+        for name, case in self.test_cases.items():
             with self.subTest(event=name):
-                blp_init = self._make_fresh_blp(name)
-                blp_ref = self.blp_refined[name]
-                self.assertEqual(
-                    blp_ref.mag_methods[0], blp_init.mag_methods[0],
-                    msg="t_start (index 0) changed during refinement")
-                self.assertEqual(
-                    blp_ref.mag_methods[10], blp_init.mag_methods[10],
-                    msg="t_end (index 10) changed during refinement")
+                blp = self._make_blp(name)
+                t_start, t_end = blp.mag_methods[0::2]
+                times = np.linspace(t_start, t_end, 202)[1:-1]
 
-    def test_refined_boundaries_monotonic(self):
-        """Refined boundary times should remain strictly increasing."""
-        for name in self.test_cases:
-            with self.subTest(event=name):
-                times = self.blp_refined[name].mag_methods[0::2]
-                for i in range(len(times) - 1):
-                    self.assertLess(
-                        times[i], times[i + 1],
-                        msg=f"Refined times not monotonic at positions "
-                            f"{i} and {i+1}: "
-                            f"{times[i]:.4f} >= {times[i+1]:.4f}")
+                windowed = MulensModel.Model(case['ulens'])
+                windowed.set_magnification_methods(blp.mag_methods)
+                # Default method for a binary lens Model is point_source, so
+                # this second model is VBBL at every epoch.
+                everywhere = MulensModel.Model(case['ulens'])
+                everywhere.default_magnification_method = 'VBBL'
 
-    def test_refined_boundaries_within_hard_limits(self):
-        """All refined inner boundaries should lie within the outer
-        hard limits."""
-        for name in self.test_cases:
-            with self.subTest(event=name):
-                blp = self.blp_refined[name]
-                t_start = blp.mag_methods[estimate_params.BinaryLensParams._T_START_IDX]
-                t_end = blp.mag_methods[estimate_params.BinaryLensParams._T_END_IDX]
-                for t in blp.mag_methods[2:-1:2]:  # indices 2, 4, 6, 8
-                    self.assertGreaterEqual(
-                        t, t_start,
-                        msg=f"Refined boundary t={t:.4f} < hard limit "
-                            f"t_start={t_start:.4f}")
-                    self.assertLessEqual(
-                        t, t_end,
-                        msg=f"Refined boundary t={t:.4f} > hard limit "
-                            f"t_end={t_end:.4f}")
-
-    def test_method_strings_unchanged_after_refinement(self):
-        """Method name strings should not be altered by
-        refine_mag_methods."""
-        expected = [
-            'point_source', 'hexadecapole', 'VBBL', 'hexadecapole', 'point_source'
-        ]
-        for name in self.test_cases:
-            with self.subTest(event=name):
-                self.assertEqual(
-                    self.blp_refined[name].mag_methods[1::2], expected)
-
-    # ------------------------------------------------------------------ #
-    # Boundary consistency: primary physical test
-    # ------------------------------------------------------------------ #
-    def test_boundary_consistency(self):
-        """
-        At each refined boundary t_b, the less precise method evaluated
-        just outside and the more precise method evaluated just inside
-        should agree within a magnification-dependent threshold.
-
-        With direction = sign(t_b - t_pl):
-          t_outside = t_b + direction * epsilon  (approx method territory)
-          t_inside  = t_b - direction * epsilon  (precise method territory)
-
-        epsilon = 1e-7 days is far smaller than the brentq xtol of 0.01
-        days, so this effectively tests agreement at the boundary itself.
-
-        Threshold rule (base = 0.001):
-          A <  3 : relative, threshold = 0.001 * mag_precise  (0.1%)
-          A >= 3 : absolute, threshold = 0.001
-        """
-        epsilon = 1e-7
-
-        boundary_specs = [
-            (estimate_params.BinaryLensParams._T_HEXA_LEFT_IDX,
-             'hexadecapole', 'point_source', 'hexa/ps left'),
-            (estimate_params.BinaryLensParams._T_VBBL_LEFT_IDX,
-             'VBBL', 'hexadecapole', 'VBBL/hexa left'),
-            (estimate_params.BinaryLensParams._T_VBBL_RIGHT_IDX,
-             'VBBL', 'hexadecapole', 'VBBL/hexa right'),
-            (estimate_params.BinaryLensParams._T_HEXA_RIGHT_IDX,
-             'hexadecapole', 'point_source', 'hexa/ps right'),
-        ]
-
-        for event_name, case in self.test_cases.items():
-            blp = self.blp_refined[event_name]
-            t_pl = float(case['params']['t_pl'])
-            models = {
-                'VBBL': blp._make_model('VBBL'),
-                'hexadecapole': blp._make_model('hexadecapole'),
-                'point_source': blp._make_model('point_source'),
-            }
-
-            for idx, precise_name, approx_name, boundary_name in boundary_specs:
-                with self.subTest(event=event_name, boundary=boundary_name):
-                    t_b = float(blp.mag_methods[idx])
-                    direction = float(np.sign(t_b - t_pl))
-                    t_outside = t_b + direction * epsilon
-                    t_inside = t_b - direction * epsilon
-
-                    mag_outside = float(models[approx_name].get_magnification(t_outside))
-                    mag_inside = float(models[precise_name].get_magnification(t_inside))
-                    diff = abs(mag_outside - mag_inside)
-                    threshold = estimate_params.BinaryLensParams._mag_threshold(mag_inside)
-
-                    self.assertLessEqual(
-                        diff, threshold,
-                        msg=f"Discontinuity at {boundary_name} "
-                            f"(t={t_b:.4f}, A={mag_inside:.3f}): "
-                            f"|{approx_name}(outside) - "
-                            f"{precise_name}(inside)| = "
-                            f"{diff:.6f} > threshold {threshold:.6f}")
-
-    # ------------------------------------------------------------------ #
-    # _make_model
-    # ------------------------------------------------------------------ #
-
-    def test_make_model_default_method(self):
-        """_make_model should return a Model with the correct default
-        magnification method."""
-        case = next(iter(self.test_cases.values()))
-        blp = estimate_params.BinaryLensParams(case['ulens'])
-        for method in ('VBBL', 'hexadecapole', 'point_source'):
-            with self.subTest(method=method):
-                model = blp._make_model(method)
-                self.assertEqual(model.default_magnification_method, method)
+                np.testing.assert_allclose(
+                    windowed.get_magnification(times),
+                    everywhere.get_magnification(times),
+                    rtol=1e-12)
 
 
 class TestParameterUpdateEquivalence(unittest.TestCase):
@@ -719,30 +605,37 @@ class TestParameterUpdateEquivalence(unittest.TestCase):
     def _get_magnifications(self, model):
         return model.get_magnification(self.observation_times)
 
+    # The two update paths take different routes through MulensModel's
+    # caches, so the results agree to roundoff rather than bit-for-bit.
+    # rtol=1e-12 is ~1000x the observed disagreement (a few ulp) and still
+    # far tighter than anything that would matter to a fit.
+    _RTOL = 1e-12
+
     def test_parameter_update_matches_attribute_assignment(self):
         """
-        Verify that model.parameters.parameters.update() gives identical
-        magnification to individual attribute assignment for alpha, s, and q.
+        Verify that model.parameters.parameters.update() gives the same
+        magnification as individual attribute assignment for alpha, s, and q.
         """
         model_attr = self._build_model_with_attribute_assignment(
             self.base_params.copy(), self.updated_values)
         model_update = self._build_model_with_dict_update(
             self.base_params.copy(), self.updated_values)
 
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             self._get_magnifications(model_attr),
-            self._get_magnifications(model_update)
+            self._get_magnifications(model_update),
+            rtol=self._RTOL
         )
 
     def test_parameter_update_with_rho_matches_attribute_assignment(self):
         """
-        Same as above but includes rho using hexadecapole magnification.
+        Same as above but includes rho using VBBL magnification.
         """
         params = {**self.base_params, 'rho': 1e-3}
         updated_values = {**self.updated_values, 'rho': 1e-2}
         mag_methods = [
             self.observation_times[0],
-            'hexadecapole',
+            'VBBL',
             self.observation_times[-1]
         ]
 
@@ -751,9 +644,10 @@ class TestParameterUpdateEquivalence(unittest.TestCase):
         model_update = self._build_model_with_dict_update(
             params, updated_values, mag_methods)
 
-        np.testing.assert_array_equal(
+        np.testing.assert_allclose(
             self._get_magnifications(model_attr),
-            self._get_magnifications(model_update)
+            self._get_magnifications(model_update),
+            rtol=self._RTOL
         )
 
 
