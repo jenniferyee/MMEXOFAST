@@ -3254,6 +3254,54 @@ class MMEXOFASTFitter:
 
         return 0.0 if max(times) >= 2450000.0 else 2450000.0
 
+    def _exozippy_excluded_points(self, jd_offset: float) -> dict:
+        """
+        Per-dataset record of the points excluded from the fit.
+
+        Reported as indices rather than an ``n_data``-length boolean mask.
+        Rejection is iterative and stops once nothing exceeds
+        ``max(sqrt(2) * erfcinv(1/dof), 3)``, so roughly 0.3% of points are
+        dropped; JSON has no packed boolean form, so a full mask would cost
+        about 7 bytes per point of mostly ``false`` -- some 270 kB for a
+        38568-epoch Data Challenge light curve, against a few hundred bytes
+        for the indices.
+
+        Times are given alongside the indices, and are the safer identifier:
+        indices are positions in the photometry as loaded, in file order,
+        which requires the consumer to skip the same header and comment lines
+        MulensModel does, whereas a time matches regardless.
+
+        This is every excluded point, not only those
+        :meth:`renormalize_datasets` rejected -- it includes anything flagged
+        bad in the input. That union is what EXOZIPPy needs in order to fit
+        the same points, and it is empty when nothing was excluded.
+
+        Parameters
+        ----------
+        jd_offset : float
+            Applied to the reported times, so they share the time system of
+            the epochs in ``'fits'``.
+
+        Returns
+        -------
+        dict
+            Keyed by dataset label, as ``'errfacs'`` is. Each value has
+            ``'n_data'``, ``'indices'`` and ``'times'``.
+        """
+        excluded = {}
+        for dataset in self.datasets or []:
+            bad = np.asarray(dataset.bad, dtype=bool)
+            indices = np.where(bad)[0]
+            excluded[dataset.plot_properties["label"]] = {
+                "n_data": int(bad.size),
+                "indices": [int(index) for index in indices],
+                "times": [
+                    float(time) + jd_offset for time in dataset.time[indices]
+                ],
+            }
+
+        return excluded
+
     @staticmethod
     def _shift_epochs(params: dict, offset: float) -> dict:
         """
@@ -3311,6 +3359,10 @@ class MMEXOFASTFitter:
                 them on a full JD scale; see
                 :meth:`_exozippy_jd_offset`. Subtract it to recover the
                 epochs as fitted.
+            ``'excluded_points'``
+                Per-dataset indices and times of the points excluded from
+                the fit, chiefly the outliers rejected during
+                renormalization; see :meth:`_exozippy_excluded_points`.
 
         Raises
         ------
@@ -3319,6 +3371,7 @@ class MMEXOFASTFitter:
         """
         jd_offset = self._exozippy_jd_offset()
         coords = str(self.coords) if self.coords is not None else None
+        excluded = self._exozippy_excluded_points(jd_offset)
         if self.fit_type == "point_lens":
             fits = []
             for key in self._iter_parallax_point_lens_keys():
@@ -3339,6 +3392,7 @@ class MMEXOFASTFitter:
                 "mag_methods": self.mag_methods,
                 "coords": coords,
                 "jd_offset": jd_offset,
+                "excluded_points": excluded,
             }
         if self.fit_type == "binary_lens":
             fits = []
@@ -3387,6 +3441,7 @@ class MMEXOFASTFitter:
             "mag_methods": self.mag_methods,
             "coords": coords,
             "jd_offset": jd_offset,
+            "excluded_points": excluded,
         }
 
     # ------------------------------------------------------------------

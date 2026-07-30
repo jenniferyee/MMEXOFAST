@@ -103,7 +103,13 @@ class TestInitializeExozippy(unittest.TestCase):
         fitter.renorm_factors = {"OGLE": 1.0}
         fitter.mag_methods = []
         fitter.coords = None
-        fitter.datasets = [SimpleNamespace(time=np.array(times))]
+        fitter.datasets = [
+            SimpleNamespace(
+                time=np.array(times),
+                bad=np.zeros(len(times), dtype=bool),
+                plot_properties={"label": "OGLE_I.dat"},
+            )
+        ]
         fitter.all_fit_results = {}
         keys = []
         for i, params in enumerate(records):
@@ -232,6 +238,81 @@ class TestInitializeExozippy(unittest.TestCase):
         fitter = self._make_fitter("something_else")
         with self.assertRaises(NotImplementedError):
             fitter.initialize_exozippy()
+
+
+class TestExozippyExcludedPoints(unittest.TestCase):
+    """
+    The outlier mask handed to EXOZIPPy, reported as indices rather than an
+    n_data-length boolean array.
+    """
+
+    def _make_fitter(self, bad, times=None, label="OGLE_I.dat"):
+        n = len(bad)
+        if times is None:
+            times = 2455000.0 + np.arange(n, dtype=float)
+        fitter = MMEXOFASTFitter.__new__(MMEXOFASTFitter)
+        fitter.datasets = [
+            SimpleNamespace(
+                bad=np.array(bad, dtype=bool),
+                time=np.asarray(times, dtype=float),
+                plot_properties={"label": label},
+            )
+        ]
+        return fitter
+
+    def test_reports_indices_of_excluded_points(self):
+        fitter = self._make_fitter([False, True, False, False, True])
+        record = fitter._exozippy_excluded_points(0.0)["OGLE_I.dat"]
+
+        self.assertEqual(record["indices"], [1, 4])
+        self.assertEqual(record["n_data"], 5)
+
+    def test_reports_times_of_excluded_points(self):
+        fitter = self._make_fitter([False, True, False])
+        record = fitter._exozippy_excluded_points(0.0)["OGLE_I.dat"]
+
+        self.assertEqual(record["times"], [2455001.0])
+
+    def test_times_share_the_epoch_system_of_the_fits(self):
+        """
+        Reported times carry the same jd_offset as the fitted epochs, so the
+        two cannot end up in different time systems.
+        """
+        fitter = self._make_fitter([False, True], times=[5000.0, 5001.0])
+        record = fitter._exozippy_excluded_points(2450000.0)["OGLE_I.dat"]
+
+        self.assertEqual(record["times"], [2455001.0])
+
+    def test_empty_when_nothing_excluded(self):
+        fitter = self._make_fitter([False, False, False])
+        record = fitter._exozippy_excluded_points(0.0)["OGLE_I.dat"]
+
+        self.assertEqual(record["indices"], [])
+        self.assertEqual(record["times"], [])
+        self.assertEqual(record["n_data"], 3)
+
+    def test_keyed_per_dataset_like_errfacs(self):
+        fitter = self._make_fitter([False, True])
+        fitter.datasets.append(
+            SimpleNamespace(
+                bad=np.array([True, False]),
+                time=np.array([2455010.0, 2455011.0]),
+                plot_properties={"label": "MOA_r.dat"},
+            )
+        )
+        excluded = fitter._exozippy_excluded_points(0.0)
+
+        self.assertEqual(sorted(excluded), ["MOA_r.dat", "OGLE_I.dat"])
+        self.assertEqual(excluded["MOA_r.dat"]["indices"], [0])
+
+    def test_indices_are_plain_ints_for_json(self):
+        """numpy ints do not serialize; these must be Python ints."""
+        fitter = self._make_fitter([False, True])
+        record = fitter._exozippy_excluded_points(0.0)["OGLE_I.dat"]
+
+        self.assertIsInstance(record["indices"][0], int)
+        self.assertNotIsInstance(record["indices"][0], np.integer)
+        json.dumps(record)
 
 
 class TestSatelliteData(unittest.TestCase):
