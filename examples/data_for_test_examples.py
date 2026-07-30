@@ -2,7 +2,9 @@ import os.path
 import mmexofast as mmexo
 import MulensModel
 
-dir_ = os.path.join(mmexo.config.DATA_PATH, "../2018DataChallenge")
+# The 2018 Data Challenge light curves are not shipped with the package;
+# this example needs a source checkout. See mmexofast.config.
+dir_ = os.path.join(mmexo.config.SAMPLE_DATA_PATH, "2018DataChallenge")
 
 # Test data
 lc_num = 4

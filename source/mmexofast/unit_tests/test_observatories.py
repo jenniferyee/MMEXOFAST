@@ -1,8 +1,9 @@
 import os.path
 import unittest
+from unittest import mock
 
 import mmexofast as mmexo
-from mmexofast import observatories
+from mmexofast import config, dc18, observatories
 from mmexofast.config import DATA_PATH
 
 
@@ -110,9 +111,10 @@ class TestObservatory(unittest.TestCase):
 
         self.assertEqual(kwargs['phot_fmt'], 'flux')
         self.assertEqual(kwargs['usecols'], [0, 1, 2])
+        # Resolved by get_dc18_ephemerides: the sample-data copy in a
+        # checkout, a cached download for an installed package.
         self.assertEqual(kwargs['ephemerides_file'],
-                         os.path.join(DATA_PATH, '2018DataChallenge',
-                                      'wfirst_ephemeris_W149.txt'))
+                         observatories.get_dc18_ephemerides())
 
     def test_get_kwargs_basic(self):
         """Test get_kwargs method with basic observatory."""
@@ -166,8 +168,7 @@ class TestGetKwargs(unittest.TestCase):
         self.assertEqual(results['phot_fmt'], 'flux')
         self.assertEqual(results['usecols'], [0, 1, 2])
         self.assertEqual(results['ephemerides_file'],
-                         os.path.join(DATA_PATH, '2018DataChallenge',
-                                      'wfirst_ephemeris_W149.txt'))
+                         observatories.get_dc18_ephemerides())
         self.assertEqual(results['bandpass'], 'Z087')
 
         # Check plot_properties (but label is now filename basename, not TELESCOPE-BAND)
@@ -252,6 +253,57 @@ class TestObservatoriesRegistry(unittest.TestCase):
                     if os.path.isabs(obs.ephemerides_file):
                         self.assertTrue(os.path.exists(obs.ephemerides_file),
                                         f"Ephemerides file not found: {obs.ephemerides_file}")
+
+    def test_spitzer_ephemerides_ships_with_the_package(self):
+        """
+        The Spitzer ephemerides resolves inside the package, so it is present
+        for an installed package too.
+        """
+        spitzer = observatories.OBSERVATORIES['Spitzer']
+        self.assertTrue(
+            spitzer.ephemerides_file.startswith(config.PACKAGE_DATA_PATH),
+            f"Spitzer ephemerides is outside the package: "
+            f"{spitzer.ephemerides_file}")
+        self.assertTrue(os.path.isfile(spitzer.ephemerides_file))
+
+    def test_get_kwargs_names_a_missing_ephemerides_file(self):
+        """
+        A missing ephemerides file raises naming the file, rather than
+        silently passing a bad path through to MulensModel.
+        """
+        obs = observatories.Observatory(
+            name='Nonexistent',
+            ephemerides_file='/no/such/directory/ephemerides.txt')
+        with self.assertRaises(FileNotFoundError) as ctx:
+            obs.get_kwargs()
+
+        self.assertIn('ephemerides.txt', str(ctx.exception))
+        self.assertIn('Nonexistent', str(ctx.exception))
+
+    def test_dc18_observatories_resolve_ephemerides_lazily(self):
+        """
+        WFIRST18 and DC18 name no ephemerides file up front, so importing the
+        module never fetches one; the loader supplies it on first use.
+        """
+        for name in ('WFIRST18', 'DC18'):
+            with self.subTest(observatory=name):
+                obs = observatories.OBSERVATORIES[name]
+                self.assertIsNone(obs.ephemerides_file)
+                self.assertIs(obs.ephemerides_loader, dc18.get_ephemerides)
+
+    def test_ephemerides_loader_is_not_called_until_get_kwargs(self):
+        """The loader runs on use, not on construction or registration."""
+        calls = []
+
+        def loader():
+            calls.append(1)
+            return observatories.OBSERVATORIES['Spitzer'].ephemerides_file
+
+        obs = observatories.Observatory(name='Lazy', ephemerides_loader=loader)
+        self.assertEqual(calls, [])
+
+        obs.get_kwargs()
+        self.assertEqual(calls, [1])
 
     def test_ephemerides_to_observatory_mapping(self):
         """Test EPHEMERIDES_TO_OBSERVATORY mapping consistency."""

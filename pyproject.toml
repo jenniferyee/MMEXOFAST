@@ -47,3 +47,9 @@ package-dir = { "" = "source" }
 [tool.setuptools.packages.find]
 where = ["source"]
 include = ["mmexofast*"]
+
+# The Spitzer ephemerides needed at runtime, plus the sample events and unit
+# test fixtures, so the tests run from an installed package (868 KB). The
+# 2018 Data Challenge is excluded -- see config.SAMPLE_DATA_PATH.
+[tool.setuptools.package-data]
+mmexofast = ["data/*.txt", "data/*/*.txt", "data/*/*.dat"]

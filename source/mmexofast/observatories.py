@@ -1,5 +1,6 @@
 import os.path
-from .config import DATA_PATH
+from .config import PACKAGE_DATA_PATH
+from .dc18 import get_ephemerides as get_dc18_ephemerides
 
 
 # ============================================================================
@@ -89,25 +90,54 @@ class Observatory:
         Columns to read from data file
     ephemerides_file : str or None, optional
         Path to ephemerides file for space-based observatories
+    ephemerides_loader : callable or None, optional
+        Zero-argument callable returning the path to the ephemerides file,
+        for observatories whose ephemerides has to be located or fetched at
+        use time rather than named up front. Called by :meth:`get_kwargs`
+        only when ``ephemerides_file`` is None, so that constructing or
+        registering an observatory never triggers the work. Ignored if
+        ``ephemerides_file`` is given.
     bands : dict, optional
         Dict mapping band names to plot properties dicts
     """
 
     def __init__(self, name, phot_fmt='flux', usecols=None,
-                 ephemerides_file=None, bands=None):
+                 ephemerides_file=None, ephemerides_loader=None, bands=None):
         self.name = name
         self.phot_fmt = phot_fmt
         self.usecols = usecols if usecols is not None else [0, 1, 2]
         self.ephemerides_file = ephemerides_file
+        self.ephemerides_loader = ephemerides_loader
         self.bands = bands if bands is not None else {}
 
     def get_kwargs(self):
-        """Get kwargs dict for MulensData creation."""
+        """
+        Get kwargs dict for MulensData creation.
+
+        Raises
+        ------
+        FileNotFoundError
+            If this observatory needs an ephemerides file that cannot be
+            found, rather than passing a nonexistent path on to MulensModel.
+        """
         kwargs = {'phot_fmt': self.phot_fmt}
         if self.usecols is not None:
             kwargs['usecols'] = self.usecols
-        if self.ephemerides_file is not None:
-            kwargs['ephemerides_file'] = self.ephemerides_file
+
+        ephemerides_file = self.ephemerides_file
+        if ephemerides_file is None and self.ephemerides_loader is not None:
+            ephemerides_file = self.ephemerides_loader()
+
+        if ephemerides_file is not None:
+            if not os.path.isfile(ephemerides_file):
+                raise FileNotFoundError(
+                    "Observatory {0!r} needs the ephemerides file {1!r}, "
+                    "which does not exist. Pass ephemerides_file to "
+                    "MulensData yourself to point at your own copy.".format(
+                        self.name, ephemerides_file))
+
+            kwargs['ephemerides_file'] = ephemerides_file
+
         return kwargs
 
     def get_plot_properties(self, band):
@@ -261,9 +291,7 @@ register_observatory(Observatory(
     name='WFIRST18',
     phot_fmt='flux',
     usecols=[0, 1, 2],
-    ephemerides_file=os.path.join(
-        DATA_PATH, '2018DataChallenge',
-        'wfirst_ephemeris_W149.txt'),
+    ephemerides_loader=get_dc18_ephemerides,
     bands={
         'W149': {'color': 'darkorange', 'marker': 'o'},
         'Z087': {'color': 'darkcyan', 'marker': 's', 'zorder': 5}
@@ -274,9 +302,7 @@ register_observatory(Observatory(
     name='DC18',
     phot_fmt='mag',
     usecols=[0, 1, 2],
-    ephemerides_file=os.path.join(
-        DATA_PATH, '2018DataChallenge',
-        'wfirst_ephemeris_W149.txt'),
+    ephemerides_loader=get_dc18_ephemerides,
     bands={
         'W149': {'color': 'darkorange', 'marker': 'o'},
         'Z087': {'color': 'darkcyan', 'marker': 's', 'zorder': 5}
@@ -289,7 +315,7 @@ register_observatory(Observatory(
     phot_fmt='flux',
     usecols=[0, 1, 2],
     ephemerides_file=os.path.join(
-        DATA_PATH, 'spitzer_ephemerides_2014_to_2019.txt'),
+        PACKAGE_DATA_PATH, 'spitzer_ephemerides_2014_to_2019.txt'),
     bands={
         'L': {'color': 'red', 'marker': 'o'}
     }
