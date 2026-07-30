@@ -55,7 +55,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, FrozenSet, Optional
 
-
 # ============================================================================
 # Enums
 # ============================================================================
@@ -94,16 +93,18 @@ class LensOrbMotion(Enum):
 
 #: Eight recognised binary_model_type strings:
 #: four base topology labels plus their ``_alt`` (degenerate-solution) variants.
-BINARY_MODEL_TYPES: FrozenSet[str] = frozenset([
-    "Wide",
-    "Close",
-    "CloseUpper",
-    "CloseLower",
-    "Wide_alt",
-    "Close_alt",
-    "CloseUpper_alt",
-    "CloseLower_alt",
-])
+BINARY_MODEL_TYPES: FrozenSet[str] = frozenset(
+    [
+        "Wide",
+        "Close",
+        "CloseUpper",
+        "CloseLower",
+        "Wide_alt",
+        "Close_alt",
+        "CloseUpper_alt",
+        "CloseLower_alt",
+    ]
+)
 
 
 # ============================================================================
@@ -194,8 +195,8 @@ LENS_TAGS: Dict[str, LensType] = {
 
 PARALLAX_BRANCH_TAGS: Dict[str, ParallaxBranch] = {
     "none": ParallaxBranch.NONE,
-    "u0+":  ParallaxBranch.U0_PLUS,
-    "u0-":  ParallaxBranch.U0_MINUS,
+    "u0+": ParallaxBranch.U0_PLUS,
+    "u0-": ParallaxBranch.U0_MINUS,
     "u0++": ParallaxBranch.U0_PP,
     "u0--": ParallaxBranch.U0_MM,
     "u0+-": ParallaxBranch.U0_PM,
@@ -203,9 +204,9 @@ PARALLAX_BRANCH_TAGS: Dict[str, ParallaxBranch] = {
 }
 
 LENS_MOTION_TAGS: Dict[str, LensOrbMotion] = {
-    "none":  LensOrbMotion.NONE,
+    "none": LensOrbMotion.NONE,
     "2Dorb": LensOrbMotion.ORB_2D,
-    "kep":   LensOrbMotion.KEPLER,
+    "kep": LensOrbMotion.KEPLER,
 }
 
 
@@ -348,12 +349,16 @@ def model_key_to_label(key: FitKey) -> str:
 
     if base is None:
         if key.binary_model_type is not None:
-            base = '2L1S'  # + key.binary_model_type
+            base = "2L1S"  # + key.binary_model_type
 
     assert base is not None, f"No base label mapping for FitKey {key!r}"
 
     # Optional binary_model_type token placed immediately after the base.
-    bmt_part = f" {key.binary_model_type}" if key.binary_model_type is not None else ""
+    bmt_part = (
+        f" {key.binary_model_type}"
+        if key.binary_model_type is not None
+        else ""
+    )
 
     # ------------------------------------------------------------------
     # Static case: neither parallax nor orbital motion.

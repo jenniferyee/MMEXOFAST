@@ -49,28 +49,29 @@ import tarfile
 
 from .config import SAMPLE_DATA_PATH
 
+DC18_DIRNAME = "2018DataChallenge"
 
-DC18_DIRNAME = '2018DataChallenge'
+_BASE_URL = (
+    "https://raw.githubusercontent.com/microlensing-data-challenge/"
+    "data-challenge-1/master/"
+)
 
-_BASE_URL = ('https://raw.githubusercontent.com/microlensing-data-challenge/'
-             'data-challenge-1/master/')
-
-EPHEMERIDES_FILE = 'wfirst_ephemeris_W149.txt'
+EPHEMERIDES_FILE = "wfirst_ephemeris_W149.txt"
 EPHEMERIDES_URL = _BASE_URL + EPHEMERIDES_FILE
-LIGHT_CURVES_URL = _BASE_URL + 'lc.tar.gz'
-EVENT_INFO_URL = _BASE_URL + 'event_info.txt'
+LIGHT_CURVES_URL = _BASE_URL + "lc.tar.gz"
+EVENT_INFO_URL = _BASE_URL + "event_info.txt"
 
 # Nominal date stamped into every renamed light curve. The data challenge is a
 # single simulated release, so this is a constant rather than a per-event
 # observation date.
-_NOMINAL_DATE = 'n20180816'
+_NOMINAL_DATE = "n20180816"
 
 # Telescope tag for fetched files. DC18 is registered with phot_fmt='mag',
 # matching the magnitudes upstream publishes. See the module docstring.
-_TELESCOPE = 'DC18'
+_TELESCOPE = "DC18"
 
 # Upstream light curve names, e.g. ulwdc1_004_W149.txt.
-_UPSTREAM_RE = re.compile(r'^ulwdc1_(?P<num>\d+)_(?P<band>[^.]+)\.txt$')
+_UPSTREAM_RE = re.compile(r"^ulwdc1_(?P<num>\d+)_(?P<band>[^.]+)\.txt$")
 
 
 def _sample_data_dir():
@@ -102,7 +103,7 @@ def _cache_dir():
     """
     from astropy.config.paths import get_cache_dir
 
-    path = os.path.join(get_cache_dir(), 'mmexofast', DC18_DIRNAME)
+    path = os.path.join(get_cache_dir(), "mmexofast", DC18_DIRNAME)
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -156,9 +157,9 @@ def upstream_to_mmexofast_name(name):
     if match is None:
         return None
 
-    return '{0}.{1}.{2}.{3:03d}.txt'.format(
-        _NOMINAL_DATE, match.group('band'), _TELESCOPE,
-        int(match.group('num')))
+    return "{0}.{1}.{2}.{3:03d}.txt".format(
+        _NOMINAL_DATE, match.group("band"), _TELESCOPE, int(match.group("num"))
+    )
 
 
 def _extract_and_rename(tarball, destination):
@@ -177,7 +178,7 @@ def _extract_and_rename(tarball, destination):
     int
         Number of light curves written.
     """
-    staging = os.path.join(destination, '_staging')
+    staging = os.path.join(destination, "_staging")
     if os.path.isdir(staging):
         shutil.rmtree(staging)
     os.makedirs(staging)
@@ -187,7 +188,7 @@ def _extract_and_rename(tarball, destination):
             # filter='data' rejects absolute paths, parent traversal, and
             # special files. Required in 3.14, where it is the default, and
             # explicit here so 3.12 behaves identically.
-            tar.extractall(staging, filter='data')
+            tar.extractall(staging, filter="data")
 
         written = 0
         # The archive unpacks to lc/, but locate the light curves by name
@@ -198,8 +199,10 @@ def _extract_and_rename(tarball, destination):
                 if new_name is None:
                     continue
 
-                shutil.move(os.path.join(root, name),
-                            os.path.join(destination, new_name))
+                shutil.move(
+                    os.path.join(root, name),
+                    os.path.join(destination, new_name),
+                )
                 written += 1
     finally:
         shutil.rmtree(staging, ignore_errors=True)
@@ -245,7 +248,7 @@ def fetch_light_curves(force=False):
     from astropy.utils.data import download_file
 
     destination = _cache_dir()
-    marker = os.path.join(destination, '.complete')
+    marker = os.path.join(destination, ".complete")
     if os.path.isfile(marker) and not force:
         return destination
 
@@ -257,11 +260,12 @@ def fetch_light_curves(force=False):
         raise RuntimeError(
             "No light curves found in {0!r}. The upstream archive layout may "
             "have changed; expected members named "
-            "ulwdc1_<num>_<band>.txt.".format(LIGHT_CURVES_URL))
+            "ulwdc1_<num>_<band>.txt.".format(LIGHT_CURVES_URL)
+        )
 
-    shutil.copyfile(event_info, os.path.join(destination, 'event_info.txt'))
+    shutil.copyfile(event_info, os.path.join(destination, "event_info.txt"))
 
-    with open(marker, 'w') as file_:
-        file_.write('{0:d}\n'.format(written))
+    with open(marker, "w") as file_:
+        file_.write("{0:d}\n".format(written))
 
     return destination

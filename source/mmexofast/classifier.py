@@ -27,14 +27,14 @@ class AnomalyClassifier(object):
         str
             One of 'close', 'wide', 'high_mag'
         """
-        if np.abs(params['u_0']) < 0.01:
-            return 'high_mag'
+        if np.abs(params["u_0"]) < 0.01:
+            return "high_mag"
 
-        if params['dmag'] < 0:
-            if np.abs(params['u_0']) > 0.05:
-                return 'wide'
+        if params["dmag"] < 0:
+            if np.abs(params["u_0"]) > 0.05:
+                return "wide"
             else:
-                return 'high_mag'
+                return "high_mag"
 
-        if params['dmag'] > 0:
-            return 'close'
+        if params["dmag"] > 0:
+            return "close"

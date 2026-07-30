@@ -21,15 +21,15 @@ See TestPlaceholders for behaviors not yet tested.
 
 import json
 import os
+
 import numpy as np
 import pytest
-
 from MulensModel import MulensData
 
 import mmexofast as mmexo
-from mmexofast.gridsearches import ParallaxGridSearch, BaseRectGridSearch
 from mmexofast.config import DATA_PATH
-from mmexofast.mulens_object_config import ModelConfig, EventConfig
+from mmexofast.gridsearches import BaseRectGridSearch, ParallaxGridSearch
+from mmexofast.mulens_object_config import EventConfig, ModelConfig
 
 # ---------------------------------------------------------------------------
 # Block 1 — Data File, Coordinates, and Dataset
@@ -37,22 +37,22 @@ from mmexofast.mulens_object_config import ModelConfig, EventConfig
 
 DATA_FILE = os.path.join(
     DATA_PATH,
-    'OB140939',
-    'n20100310.I.OGLE.OB140939.txt',
+    "OB140939",
+    "n20100310.I.OGLE.OB140939.txt",
 )
 
 COORDS_FILE = os.path.join(
     DATA_PATH,
-    'OB140939',
-    'coords.txt',
+    "OB140939",
+    "coords.txt",
 )
 with open(COORDS_FILE) as _f:
     COORDS = _f.read().strip()
 
 # fitter_kwargs passed to every ParallaxGridSearch instantiation.
 FITTER_KWARGS = {
-    'model_config': ModelConfig(coords=COORDS),
-    'event_config': EventConfig(coords=COORDS),
+    "model_config": ModelConfig(coords=COORDS),
+    "event_config": EventConfig(coords=COORDS),
 }
 
 # Loaded once at module import time; shared by all tests in this suite.
@@ -68,9 +68,9 @@ DATASETS = [_DATASET]
 # No-parallax solution values for OB140939.
 # Used for grids centered on or near the origin (pi_E_E≈0, pi_E_N≈0).
 STATIC_PARAMS = {
-    't_0': 2456836.1933785137,
-    't_E': 22.471177939504067,
-    'u_0': 0.9461578773096889,
+    "t_0": 2456836.1933785137,
+    "t_E": 22.471177939504067,
+    "u_0": 0.9461578773096889,
 }
 
 # Parallax (u0+) solution values for OB140939.
@@ -79,9 +79,9 @@ STATIC_PARAMS = {
 # distance: the parallax solution has u_0≈3.12 and t_E≈9.26, a 230% and
 # 59% displacement from STATIC_PARAMS through a flat likelihood landscape.
 STATIC_PARAMS_PAR = {
-    't_0': 2456836.241149,
-    't_E': 9.263272,
-    'u_0': 3.123346,
+    "t_0": 2456836.241149,
+    "t_E": 9.263272,
+    "u_0": 3.123346,
 }
 
 
@@ -91,8 +91,8 @@ STATIC_PARAMS_PAR = {
 
 # Precomputed ground-truth values for OB140939.
 # Used only in assertions where we have strong prior knowledge.
-KNOWN_PI_E_N       = 3.8925249891046954
-KNOWN_PI_E_E       = -2.720754113010126
+KNOWN_PI_E_N = 3.8925249891046954
+KNOWN_PI_E_E = -2.720754113010126
 KNOWN_CHI2_MINIMUM = 1246.865
 
 # The OB140939 parallax chi2 landscape is very shallow: total chi2
@@ -122,8 +122,8 @@ KNOWN_CHI2_ORIGIN_SKIPOPT = 1269.502449
 # With refine=True: corner minimum triggers one expansion in each direction.
 # Use STATIC_PARAMS_PAR: grid is in the parallax-minimum region.
 COARSE_GRID_PARAMS = {
-    'pi_E_N': [3.0, 3.6, 0.2],
-    'pi_E_E': [-2.6, -2.0, 0.2],
+    "pi_E_N": [3.0, 3.6, 0.2],
+    "pi_E_E": [-2.6, -2.0, 0.2],
 }
 
 # 3x3 grid, step=0.2, centered on the true minimum.
@@ -135,8 +135,8 @@ COARSE_GRID_PARAMS = {
 # smaller than the actual 1σ; increase step size here.
 # Use STATIC_PARAMS_PAR.
 REFINEMENT_GRID_PARAMS = {
-    'pi_E_N': [3.7, 4.1, 0.2],
-    'pi_E_E': [-2.9, -2.5, 0.2],
+    "pi_E_N": [3.7, 4.1, 0.2],
+    "pi_E_E": [-2.9, -2.5, 0.2],
 }
 
 # 3x3 tight grid centered on the true minimum. Same geometry as
@@ -145,8 +145,8 @@ REFINEMENT_GRID_PARAMS = {
 # Used to test best property fallback when refine=False.
 # Use STATIC_PARAMS_PAR.
 BEST_FALLBACK_GRID_PARAMS = {
-    'pi_E_N': [3.7, 4.1, 0.2],
-    'pi_E_E': [-2.9, -2.5, 0.2],
+    "pi_E_N": [3.7, 4.1, 0.2],
+    "pi_E_E": [-2.9, -2.5, 0.2],
 }
 
 # 3x3 grid for skip_optimization tests. Grid is near the origin where
@@ -156,14 +156,15 @@ BEST_FALLBACK_GRID_PARAMS = {
 #   pi_E_N: [-1.0, -0.5, 0.0] → index 2 is pi_E_N=0.0
 # Therefore the origin (pi_E_E=0, pi_E_N=0) lives at chi2_grid[0, 2].
 SKIP_OPT_GRID_PARAMS = {
-    'pi_E_E': [0.0, 1.0, 0.5],
-    'pi_E_N': [-1.0, 0.0, 0.5],
+    "pi_E_E": [0.0, 1.0, 0.5],
+    "pi_E_N": [-1.0, 0.0, 0.5],
 }
 
 
 # ---------------------------------------------------------------------------
 # Module-scoped shared fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture(scope="module")
 def refinement_result(tmp_path_factory):
@@ -204,7 +205,7 @@ def refinement_result(tmp_path_factory):
 
     searcher.run(
         refine=True,
-        point_density_in_minimum=3,   # n; convergence needs n//2=1 point per side
+        point_density_in_minimum=3,  # n; convergence needs n//2=1 point per side
         max_refinements=2,
         max_expansions=4,
     )
@@ -217,6 +218,7 @@ def refinement_result(tmp_path_factory):
 # ---------------------------------------------------------------------------
 # Module-level tests
 # ---------------------------------------------------------------------------
+
 
 def test_imports():
     """Smoke test: verify the full import chain is healthy before any test runs."""
@@ -308,12 +310,12 @@ class TestCoarseGrid:
         """
         assert coarse_searcher.results_history is not None
 
-        chi2_grid = coarse_searcher.results_history[0]['chi2_grid']
+        chi2_grid = coarse_searcher.results_history[0]["chi2_grid"]
         assert chi2_grid.shape == (4, 4), (
             f"Expected chi2_grid shape (4, 4); got {chi2_grid.shape}"
         )
 
-        result_grid = coarse_searcher.results_history[0]['result_grid']
+        result_grid = coarse_searcher.results_history[0]["result_grid"]
         assert all(cell is not None for cell in result_grid.ravel()), (
             "Every grid cell must be evaluated; found None entries"
         )
@@ -334,10 +336,10 @@ class TestCoarseGrid:
         assert len(minima) >= 1, "Expected at least one minimum"
 
         _, best_params, _ = minima[0]
-        pi_e_e = best_params['pi_E_E']
-        pi_e_n = best_params['pi_E_N']
+        pi_e_e = best_params["pi_E_E"]
+        pi_e_n = best_params["pi_E_N"]
 
-        assert (pi_e_e in (-2.6, -2.0) or pi_e_n in (3.0, 3.6)), (
+        assert pi_e_e in (-2.6, -2.0) or pi_e_n in (3.0, 3.6), (
             f"Expected best grid point on boundary; "
             f"got pi_E_N={pi_e_n}, pi_E_E={pi_e_e}"
         )
@@ -404,7 +406,9 @@ class TestExpansion:
         3.6; pi_E_E: -2.6, -2.4, -2.2, -2.0), giving shape (4, 4).  At least
         one expansion must be reflected in results_history[0].
         """
-        grid_shape = expansion_searcher.results_history[0]['metadata']['grid_shape']
+        grid_shape = expansion_searcher.results_history[0]["metadata"][
+            "grid_shape"
+        ]
         assert grid_shape != (4, 4), (
             f"Expected expanded grid shape larger than (4, 4), got {grid_shape}"
         )
@@ -424,13 +428,15 @@ class TestExpansion:
         pi_E_E < -2.6 — i.e. that the minimum moved beyond the original edges.
         """
         minima = expansion_searcher.find_local_minima()
-        assert len(minima) >= 1, "Expected at least one local minimum to be found"
+        assert len(minima) >= 1, (
+            "Expected at least one local minimum to be found"
+        )
         _, best_params, _ = minima[0]
-        assert best_params['pi_E_N'] > 3.6, (
+        assert best_params["pi_E_N"] > 3.6, (
             f"pi_E_N = {best_params['pi_E_N']:.4f} should be > 3.6 "
             f"(true value ≈3.89)"
         )
-        assert best_params['pi_E_E'] < -2.6, (
+        assert best_params["pi_E_E"] < -2.6, (
             f"pi_E_E = {best_params['pi_E_E']:.4f} should be < -2.6 "
             f"(true value ≈-2.72)"
         )
@@ -492,7 +498,7 @@ class TestSkipOptimization:
             skip_optimization=True,
         )
         searcher.run(refine=False)
-        chi2_grid = searcher.results_history[0]['chi2_grid']
+        chi2_grid = searcher.results_history[0]["chi2_grid"]
         assert abs(chi2_grid[0, 2] - KNOWN_CHI2_ORIGIN_SKIPOPT) < 0.01, (
             f"chi² at origin = {chi2_grid[0, 2]:.6f}, "
             f"expected {KNOWN_CHI2_ORIGIN_SKIPOPT:.6f} (tolerance 0.01)"
@@ -526,8 +532,8 @@ class TestSkipOptimization:
         )
         searcher_opt.run(refine=False)
 
-        chi2_skip = searcher_skip.results_history[0]['chi2_grid']
-        chi2_opt = searcher_opt.results_history[0]['chi2_grid']
+        chi2_skip = searcher_skip.results_history[0]["chi2_grid"]
+        chi2_opt = searcher_opt.results_history[0]["chi2_grid"]
 
         finite_mask = np.isfinite(chi2_skip) & np.isfinite(chi2_opt)
         assert np.all(chi2_skip[finite_mask] >= chi2_opt[finite_mask]), (
@@ -679,12 +685,12 @@ class TestRefinement:
             "grid_params mismatch after load"
         )
         assert (
-            loaded.results_history[0]['metadata']['grid_shape']
-            == original.results_history[0]['metadata']['grid_shape']
+            loaded.results_history[0]["metadata"]["grid_shape"]
+            == original.results_history[0]["metadata"]["grid_shape"]
         ), "grid_shape mismatch after load"
         assert np.allclose(
-            loaded.results_history[0]['chi2_grid'],
-            original.results_history[0]['chi2_grid'],
+            loaded.results_history[0]["chi2_grid"],
+            original.results_history[0]["chi2_grid"],
             equal_nan=True,
         ), "chi2_grid values differ after load"
         assert loaded.static_params == original.static_params, (
@@ -707,7 +713,7 @@ class TestRefinement:
             f"original {len(original.minima)}"
         )
         assert np.isclose(
-            loaded.minima[0]['chi2'], original.minima[0]['chi2']
+            loaded.minima[0]["chi2"], original.minima[0]["chi2"]
         ), (
             f"best-minimum chi² mismatch after load: "
             f"loaded {loaded.minima[0]['chi2']}, "
@@ -803,9 +809,11 @@ class TestBest:
         gives margin for optimizer drift in the shallow landscape.
         """
         best = best_fallback_searcher.best
-        assert best is not None, "best should not be None after run(refine=False)"
+        assert best is not None, (
+            "best should not be None after run(refine=False)"
+        )
         threshold = KNOWN_CHI2_ORIGIN_SKIPOPT - CHI2_IMPROVEMENT_MIN
-        assert best['chi2'] < threshold, (
+        assert best["chi2"] < threshold, (
             f"chi² = {best['chi2']:.6f} should be < {threshold:.6f} "
             f"(= {KNOWN_CHI2_ORIGIN_SKIPOPT:.6f} - {CHI2_IMPROVEMENT_MIN:.1f})"
         )
@@ -851,12 +859,15 @@ class TestBest:
         """
         searcher = refinement_result["instance"]
         best = searcher.best
-        assert best is not None, "best should not be None after run(refine=True)"
+        assert best is not None, (
+            "best should not be None after run(refine=True)"
+        )
         threshold = KNOWN_CHI2_MINIMUM + 2.0
-        assert best['chi2'] < threshold, (
+        assert best["chi2"] < threshold, (
             f"chi² = {best['chi2']:.6f} should be < {threshold:.6f} "
             f"(= KNOWN_CHI2_MINIMUM {KNOWN_CHI2_MINIMUM:.6f} + 2.0)"
         )
+
 
 class TestSaveLoad:
     """
@@ -923,9 +934,11 @@ class TestSaveLoad:
         with open(filepath) as f:
             state = json.load(f)
 
-        assert state['extra']['dropped_fitter_kwargs'] == [
-            'event_config', 'model_config']
-        assert state['extra']['fitter_kwargs'] == {}
+        assert state["extra"]["dropped_fitter_kwargs"] == [
+            "event_config",
+            "model_config",
+        ]
+        assert state["extra"]["fitter_kwargs"] == {}
 
     def test_load_warns_about_dropped_fitter_kwargs(self, tmp_path):
         """
@@ -938,7 +951,7 @@ class TestSaveLoad:
         with pytest.warns(UserWarning, match="fitter_kwargs entries"):
             loaded = ParallaxGridSearch.load_results(filepath)
 
-        assert 'event_config' not in loaded.fitter_kwargs
+        assert "event_config" not in loaded.fitter_kwargs
 
     def test_load_accepts_replacement_fitter_kwargs(self, tmp_path):
         """
@@ -950,24 +963,26 @@ class TestSaveLoad:
 
         with pytest.warns(UserWarning, match="fitter_kwargs entries"):
             loaded = ParallaxGridSearch.load_results(
-                filepath, datasets=DATASETS, fitter_kwargs=FITTER_KWARGS)
+                filepath, datasets=DATASETS, fitter_kwargs=FITTER_KWARGS
+            )
 
-        assert loaded.fitter_kwargs['event_config'].coords == COORDS
+        assert loaded.fitter_kwargs["event_config"].coords == COORDS
         assert loaded.datasets is DATASETS
 
         with pytest.warns(UserWarning, match="fitter_kwargs entries"):
             with pytest.raises(ValueError):
                 ParallaxGridSearch.load_results(
-                    filepath, fitter_kwargs={'model_config': ModelConfig()})
+                    filepath, fitter_kwargs={"model_config": ModelConfig()}
+                )
 
     @pytest.mark.skip(
         reason=(
-                "TODO: verifying that load_results() emits a UserWarning on class name "
-                "mismatch requires a concrete subclass of BaseRectGridSearch to satisfy "
-                "the ABC. BaseRectGridSearch itself cannot be instantiated directly "
-                "(_fit_grid_point is abstract). This path is unreachable through the "
-                "public API without a dedicated concrete subclass. Implement when a "
-                "suitable concrete subclass is available for use in tests."
+            "TODO: verifying that load_results() emits a UserWarning on class name "
+            "mismatch requires a concrete subclass of BaseRectGridSearch to satisfy "
+            "the ABC. BaseRectGridSearch itself cannot be instantiated directly "
+            "(_fit_grid_point is abstract). This path is unreachable through the "
+            "public API without a dedicated concrete subclass. Implement when a "
+            "suitable concrete subclass is available for use in tests."
         )
     )
     def test_class_name_mismatch_warning(self):
@@ -1073,10 +1088,10 @@ class TestFitterKwargs:
         assert searcher.fitter_kwargs is not None, (
             "fitter_kwargs should not be None after construction"
         )
-        assert 'event_config' in searcher.fitter_kwargs, (
+        assert "event_config" in searcher.fitter_kwargs, (
             "fitter_kwargs should contain the 'event_config' key"
         )
-        assert searcher.fitter_kwargs['event_config'].coords is not None, (
+        assert searcher.fitter_kwargs["event_config"].coords is not None, (
             "fitter_kwargs['event_config'].coords should not be None"
         )
 
@@ -1109,7 +1124,9 @@ class TestFitterKwargs:
                 static_params=STATIC_PARAMS_PAR,
                 datasets=DATASETS,
                 grid_params=COARSE_GRID_PARAMS,
-                fitter_kwargs={'model_config': ModelConfig()},  # 'event_config' key intentionally absent
+                fitter_kwargs={
+                    "model_config": ModelConfig()
+                },  # 'event_config' key intentionally absent
             )
 
     def test_raises_if_coords_is_none(self):
@@ -1125,5 +1142,5 @@ class TestFitterKwargs:
                 static_params=STATIC_PARAMS_PAR,
                 datasets=DATASETS,
                 grid_params=COARSE_GRID_PARAMS,
-                fitter_kwargs={'event_config': EventConfig(coords=None)},
+                fitter_kwargs={"event_config": EventConfig(coords=None)},
             )

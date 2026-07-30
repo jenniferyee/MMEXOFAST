@@ -3,11 +3,12 @@
 High-level class and convenience wrapper for fitting microlensing events
 with MM-EXOFASTv2.
 """
+
 from __future__ import annotations
 
 import inspect
-import logging
 import json
+import logging
 import os.path
 import pickle
 from dataclasses import dataclass, field
@@ -21,19 +22,40 @@ import numpy as np
 import pandas as pd
 from scipy.special import erfcinv
 
-from .results import AllFitResults, FitRecord, IntermediateResults, MMEXOFASTFitResults
-from .workflow_step import WorkflowStep, StepStatus
-from .estimate_params import (get_PSPL_params, AnomalyPropertyEstimator, WidePlanetGridSearchEstimator,
-                              ClosePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
-                              CloseLowerBinaryGridSearchEstimator, BinaryLensParams)
-from .fitters import SFitFitter, AnomalyFitter, EmceeFitResults
-from .fit_types import label_to_model_key, model_key_to_label, FitKey, LensType, SourceType, \
-    ParallaxBranch, LensOrbMotion
-from .gridsearches import EventFinderGridSearch, AnomalyFinderGridSearch, ParallaxGridSearch
 from .classifier import AnomalyClassifier
+from .estimate_params import (
+    AnomalyPropertyEstimator,
+    BinaryLensParams,
+    CloseLowerBinaryGridSearchEstimator,
+    ClosePlanetGridSearchEstimator,
+    CloseUpperBinaryGridSearchEstimator,
+    WidePlanetGridSearchEstimator,
+    get_PSPL_params,
+)
+from .fit_types import (
+    FitKey,
+    LensOrbMotion,
+    LensType,
+    ParallaxBranch,
+    SourceType,
+    label_to_model_key,
+    model_key_to_label,
+)
+from .fitters import AnomalyFitter, EmceeFitResults, SFitFitter
+from .gridsearches import (
+    AnomalyFinderGridSearch,
+    EventFinderGridSearch,
+    ParallaxGridSearch,
+)
+from .mulens_object_config import EventConfig, ModelConfig
 from .observatories import get_kwargs, get_telescope_band_from_filename
-from .mulens_object_config import ModelConfig, EventConfig
-
+from .results import (
+    AllFitResults,
+    FitRecord,
+    IntermediateResults,
+    MMEXOFASTFitResults,
+)
+from .workflow_step import StepStatus, WorkflowStep
 
 logger = logging.getLogger(__name__)
 
@@ -43,42 +65,42 @@ logger = logging.getLogger(__name__)
 # ===========================================================================
 
 _PARAMETER_DECIMAL_PLACES = {
-    'chi2':                              2,
-    'N_data':                            0,
-    't_0':                               6,
-    'u_0':                               6,
-    't_E':                               2,
-    'rho':                               6,
-    'log_rho':                           3,
-    't_star':                            6,
-    'pi_E_N':                            4,
-    'pi_E_E':                            4,
-    't_0_par':                           6,
-    's':                                 6,
-    'log_s':                             3,
-    'q':                                 6,
-    'log_q':                             3,
-    'alpha':                             2,
-    'convergence_K':                     6,
-    'shear_G':                           6,
-    'ds_dt':                             3,
-    'dalpha_dt':                         3,
-    's_z':                               6,
-    'ds_z_dt':                           3,
-    't_0_kep':                           6,
-    'x_caustic_in':                      6,
-    'x_caustic_out':                     6,
-    't_caustic_in':                      6,
-    't_caustic_out':                     6,
-    'xi_period':                         3,
-    'xi_semimajor_axis':                 6,
-    'xi_inclination':                    2,
-    'xi_Omega_node':                     2,
-    'xi_argument_of_latitude_reference': 2,
-    'xi_eccentricity':                   4,
-    'xi_omega_periapsis':                2,
-    'q_source':                          6,
-    't_0_xi':                            6,
+    "chi2": 2,
+    "N_data": 0,
+    "t_0": 6,
+    "u_0": 6,
+    "t_E": 2,
+    "rho": 6,
+    "log_rho": 3,
+    "t_star": 6,
+    "pi_E_N": 4,
+    "pi_E_E": 4,
+    "t_0_par": 6,
+    "s": 6,
+    "log_s": 3,
+    "q": 6,
+    "log_q": 3,
+    "alpha": 2,
+    "convergence_K": 6,
+    "shear_G": 6,
+    "ds_dt": 3,
+    "dalpha_dt": 3,
+    "s_z": 6,
+    "ds_z_dt": 3,
+    "t_0_kep": 6,
+    "x_caustic_in": 6,
+    "x_caustic_out": 6,
+    "t_caustic_in": 6,
+    "t_caustic_out": 6,
+    "xi_period": 3,
+    "xi_semimajor_axis": 6,
+    "xi_inclination": 2,
+    "xi_Omega_node": 2,
+    "xi_argument_of_latitude_reference": 2,
+    "xi_eccentricity": 4,
+    "xi_omega_periapsis": 2,
+    "q_source": 6,
+    "t_0_xi": 6,
 }
 
 _FLUX_PARAM_DECIMAL_PLACES = 3
@@ -110,15 +132,15 @@ def _get_decimal_places(param_name: str) -> Optional[int]:
         return _PARAMETER_DECIMAL_PLACES[param_name]
 
     # Binary source parameters: e.g. 't_0_1' -> 't_0'
-    parts = param_name.rsplit('_', 1)
+    parts = param_name.rsplit("_", 1)
     if len(parts) == 2 and parts[1].isdigit():
         base = parts[0]
         if base in _PARAMETER_DECIMAL_PLACES:
             return _PARAMETER_DECIMAL_PLACES[base]
 
     # Flux parameters: e.g. 'I_S_OGLE'
-    parts = param_name.split('_')
-    if len(parts) >= 3 and parts[1] in ('S', 'B'):
+    parts = param_name.split("_")
+    if len(parts) >= 3 and parts[1] in ("S", "B"):
         return _FLUX_PARAM_DECIMAL_PLACES
 
     return None
@@ -156,35 +178,35 @@ def _format_results_column(df: pd.DataFrame, pm_symbol: str) -> pd.DataFrame:
     """
     df = df.copy()
 
-    def fmt(param_name, value, prefix=''):
+    def fmt(param_name, value, prefix=""):
         if pd.isna(value):
-            return ''
+            return ""
         if isinstance(value, str):
-            return f'{prefix}{value}' if prefix else value
+            return f"{prefix}{value}" if prefix else value
         decimal_places = _get_decimal_places(param_name)
         if decimal_places is None:
-            return f'{prefix}{value}' if prefix else str(value)
-        formatted = f'{value:.{decimal_places}f}'
-        return f'{prefix}{formatted}' if prefix else formatted
+            return f"{prefix}{value}" if prefix else str(value)
+        formatted = f"{value:.{decimal_places}f}"
+        return f"{prefix}{formatted}" if prefix else formatted
 
-    df['values'] = [
+    df["values"] = [
         fmt(param, val)
-        for param, val in zip(df['parameter_names'], df['values'])
+        for param, val in zip(df["parameter_names"], df["values"])
     ]
-    if 'sigmas' in df.columns:
-        df['sigmas'] = [
-            fmt(param, val, prefix=f'{pm_symbol} ')
-            for param, val in zip(df['parameter_names'], df['sigmas'])
+    if "sigmas" in df.columns:
+        df["sigmas"] = [
+            fmt(param, val, prefix=f"{pm_symbol} ")
+            for param, val in zip(df["parameter_names"], df["sigmas"])
         ]
-    if 'sigma_minus' in df.columns:
-        df['sigma_minus'] = [
-            fmt(param, val, prefix='- ')
-            for param, val in zip(df['parameter_names'], df['sigma_minus'])
+    if "sigma_minus" in df.columns:
+        df["sigma_minus"] = [
+            fmt(param, val, prefix="- ")
+            for param, val in zip(df["parameter_names"], df["sigma_minus"])
         ]
-    if 'sigma_plus' in df.columns:
-        df['sigma_plus'] = [
-            fmt(param, val, prefix='+ ')
-            for param, val in zip(df['parameter_names'], df['sigma_plus'])
+    if "sigma_plus" in df.columns:
+        df["sigma_plus"] = [
+            fmt(param, val, prefix="+ ")
+            for param, val in zip(df["parameter_names"], df["sigma_plus"])
         ]
 
     return df
@@ -193,6 +215,7 @@ def _format_results_column(df: pd.DataFrame, pm_symbol: str) -> pd.DataFrame:
 # ===========================================================================
 # OutputConfig
 # ===========================================================================
+
 
 @dataclass
 class OutputConfig:
@@ -219,12 +242,13 @@ class OutputConfig:
         Whether to save the EXOZIPPy initialization dict to a JSON file.
 
     """
+
     output_dir: Path = field(default_factory=Path)
-    file_prefix: str = ''
+    file_prefix: str = ""
     save_plots: bool = True
     save_grid_results: bool = False
     save_table: bool = False
-    table_formats: list = field(default_factory=lambda: ['latex'])
+    table_formats: list = field(default_factory=lambda: ["latex"])
     save_exozippy_init: bool = False
 
     def __post_init__(self) -> None:
@@ -233,7 +257,7 @@ class OutputConfig:
         if isinstance(self.table_formats, str):
             self.table_formats = [self.table_formats]
 
-    def plot_path(self, name: str, ext: str = 'pdf') -> Path:
+    def plot_path(self, name: str, ext: str = "pdf") -> Path:
         """
         Return the full path for a named plot file.
 
@@ -248,8 +272,8 @@ class OutputConfig:
         -------
         Path
         """
-        prefix = f'{self.file_prefix}_' if self.file_prefix else ''
-        return self.output_dir / f'{prefix}{name}.{ext}'
+        prefix = f"{self.file_prefix}_" if self.file_prefix else ""
+        return self.output_dir / f"{prefix}{name}.{ext}"
 
     def grid_path(self, name: str) -> Path:
         """
@@ -264,8 +288,8 @@ class OutputConfig:
         -------
         Path
         """
-        prefix = f'{self.file_prefix}_' if self.file_prefix else ''
-        return self.output_dir / f'{prefix}{name}.txt'
+        prefix = f"{self.file_prefix}_" if self.file_prefix else ""
+        return self.output_dir / f"{prefix}{name}.txt"
 
     def table_path(self, fmt: str) -> Path:
         """
@@ -280,9 +304,9 @@ class OutputConfig:
         -------
         Path
         """
-        ext = 'tex' if fmt == 'latex' else 'txt'
-        prefix = f'{self.file_prefix}_' if self.file_prefix else ''
-        return self.output_dir / f'{prefix}results.{ext}'
+        ext = "tex" if fmt == "latex" else "txt"
+        prefix = f"{self.file_prefix}_" if self.file_prefix else ""
+        return self.output_dir / f"{prefix}results.{ext}"
 
     def exozippy_init_path(self) -> Path:
         """
@@ -292,15 +316,21 @@ class OutputConfig:
         -------
         Path
         """
-        prefix = f'{self.file_prefix}_' if self.file_prefix else ''
-        return self.output_dir / f'{prefix}exozippy_init.json'
+        prefix = f"{self.file_prefix}_" if self.file_prefix else ""
+        return self.output_dir / f"{prefix}exozippy_init.json"
+
 
 # ===========================================================================
 # Module-level convenience wrapper
 # ===========================================================================
 
 
-def fit(datasets=None, files=None, fit_type: str = 'point_lens', **kwargs,) -> 'MMEXOFASTFitter':
+def fit(
+    datasets=None,
+    files=None,
+    fit_type: str = "point_lens",
+    **kwargs,
+) -> "MMEXOFASTFitter":
     """
     Convenience wrapper: construct an ``MMEXOFASTFitter`` and run it.
 
@@ -332,6 +362,7 @@ def fit(datasets=None, files=None, fit_type: str = 'point_lens', **kwargs,) -> '
 # ===========================================================================
 # MMEXOFASTFitter
 # ===========================================================================
+
 
 class MMEXOFASTFitter:
     """
@@ -468,31 +499,31 @@ class MMEXOFASTFitter:
     """
 
     CONFIG_KEYS = [
-        'fit_type',
-        'coords',
-        'finite_source',
-        'mag_methods',
-        'vbbl_accuracy',
-        'limb_darkening_coeffs_u',
-        'limb_darkening_coeffs_gamma',
-        'fix_blend_flux',
-        'fix_source_flux',
-        'renormalize_errors',
-        'no_parallax',
-        'parallax_grid',
-        'primary_location',
-        'primary_dataset',
-        'emcee_settings',
+        "fit_type",
+        "coords",
+        "finite_source",
+        "mag_methods",
+        "vbbl_accuracy",
+        "limb_darkening_coeffs_u",
+        "limb_darkening_coeffs_gamma",
+        "fix_blend_flux",
+        "fix_source_flux",
+        "renormalize_errors",
+        "no_parallax",
+        "parallax_grid",
+        "primary_location",
+        "primary_dataset",
+        "emcee_settings",
     ]
 
     PARALLAX_GRID_PARAMS_COARSE = {
-        'pi_E_E': [-1.0, 1.0, 0.15],
-        'pi_E_N': [-1.5, 1.5, 0.30],
+        "pi_E_E": [-1.0, 1.0, 0.15],
+        "pi_E_N": [-1.5, 1.5, 0.30],
     }
 
     PARALLAX_GRID_PARAMS_FINE = {
-        'pi_E_E': [-0.7, 0.7, 0.025],
-        'pi_E_N': [-1.0, 1.0, 0.050],
+        "pi_E_E": [-0.7, 0.7, 0.025],
+        "pi_E_N": [-1.0, 1.0, 0.050],
     }
 
     RENORM_THRESHOLD = 0.02
@@ -506,7 +537,7 @@ class MMEXOFASTFitter:
         datasets=None,
         files=None,
         coords=None,
-        fit_type: str = 'point_lens',
+        fit_type: str = "point_lens",
         finite_source: bool = False,
         mag_methods=None,  # TODO: Check whether mag_methods does anything
         vbbl_accuracy: float = BinaryLensParams._DEFAULT_VBBL_ACCURACY,
@@ -532,9 +563,7 @@ class MMEXOFASTFitter:
     ) -> None:
         # Mutually exclusive input validation
         if files is not None and datasets is not None:
-            raise ValueError(
-                "Specify 'files' or 'datasets', not both."
-            )
+            raise ValueError("Specify 'files' or 'datasets', not both.")
         if initial_results is not None and restart_from is not None:
             raise ValueError(
                 "Specify 'initial_results' or 'restart_from', not both."
@@ -561,7 +590,9 @@ class MMEXOFASTFitter:
 
         # Config from restart file merged with current call
         saved_config, saved_state = self._load_restart_data(restart_file)
-        self._restart_path = Path(restart_file) if restart_file is not None else None
+        self._restart_path = (
+            Path(restart_file) if restart_file is not None else None
+        )
         config = self._merge_config(saved_config, locals())
         self._set_config_attributes(config)
 
@@ -584,8 +615,11 @@ class MMEXOFASTFitter:
         # Truncate completed_steps if restart_from is specified
         if restart_from is not None:
             idx = next(
-                (i for i, s in enumerate(self.completed_steps)
-                 if self._step_matches_stop_value(restart_from, s)),
+                (
+                    i
+                    for i, s in enumerate(self.completed_steps)
+                    if self._step_matches_stop_value(restart_from, s)
+                ),
                 None,
             )
             if idx is not None:
@@ -594,13 +628,13 @@ class MMEXOFASTFitter:
         # Dataset construction
         if files is not None:
             self.datasets = self._create_mulensdata_objects(
-                files, saved_datasets=saved_state.get('datasets')
+                files, saved_datasets=saved_state.get("datasets")
             )
         elif datasets is not None:
             self.datasets = datasets
             self._validate_dataset_labels()
-        elif saved_state.get('datasets'):
-            self.datasets = saved_state['datasets']
+        elif saved_state.get("datasets"):
+            self.datasets = saved_state["datasets"]
         else:
             raise ValueError(
                 "Provide at least one of: 'files', 'datasets', or "
@@ -661,19 +695,19 @@ class MMEXOFASTFitter:
             return {}, {}
         if not Path(restart_file).exists():
             logger.info(
-                'No restart file found at %s; starting fresh.', restart_file
+                "No restart file found at %s; starting fresh.", restart_file
             )
             return {}, {}
 
-        logger.info('Loading restart data from: %s', restart_file)
-        with open(restart_file, 'rb') as f:
+        logger.info("Loading restart data from: %s", restart_file)
+        with open(restart_file, "rb") as f:
             data = pickle.load(f)
 
-        config = data.get('config', {})
-        state = data.get('state', {})
+        config = data.get("config", {})
+        state = data.get("state", {})
         logger.info(
-            '  Loaded %d fit result(s).',
-            len(state.get('all_fit_results', AllFitResults())),
+            "  Loaded %d fit result(s).",
+            len(state.get("all_fit_results", AllFitResults())),
         )
         return config, state
 
@@ -734,26 +768,27 @@ class MMEXOFASTFitter:
         with a no-op func sufficient for tracking purposes.
         """
         self.all_fit_results = saved_state.get(
-            'all_fit_results', AllFitResults()
+            "all_fit_results", AllFitResults()
         )
 
-        raw_completed = saved_state.get('completed_steps', [])
+        raw_completed = saved_state.get("completed_steps", [])
         self.completed_steps = [
-            step if isinstance(step, WorkflowStep)
+            step
+            if isinstance(step, WorkflowStep)
             else WorkflowStep(
                 name=step[0],
                 func=lambda: None,
                 stage=step[1],
-                description='(restored from restart file)',
+                description="(restored from restart file)",
             )
             for step in raw_completed
         ]
 
         self.intermediate_results = saved_state.get(
-            'intermediate_results', IntermediateResults()
+            "intermediate_results", IntermediateResults()
         )
-        self.renorm_factors: dict = saved_state.get('renorm_factors', {})
-        self.residuals: dict = saved_state.get('residuals', None)
+        self.renorm_factors: dict = saved_state.get("renorm_factors", {})
+        self.residuals: dict = saved_state.get("residuals", None)
 
     def _get_state(self) -> dict:
         """
@@ -767,14 +802,14 @@ class MMEXOFASTFitter:
             ``intermediate_results``, ``renorm_factors``, and ``datasets``.
         """
         return {
-            'all_fit_results': self.all_fit_results,
-            'completed_steps': [
+            "all_fit_results": self.all_fit_results,
+            "completed_steps": [
                 (s.name, s.stage) for s in self.completed_steps
             ],
-            'intermediate_results': self.intermediate_results,
-            'renorm_factors': self.renorm_factors,
-            'datasets': self.datasets,
-            'residuals': self.residuals
+            "intermediate_results": self.intermediate_results,
+            "renorm_factors": self.renorm_factors,
+            "datasets": self.datasets,
+            "residuals": self.residuals,
         }
 
     def _load_initial_results(self, initial_results) -> None:
@@ -792,11 +827,11 @@ class MMEXOFASTFitter:
             key = label_to_model_key(label)
             record = FitRecord(
                 model_key=key,
-                params=payload['params'],
-                sigmas=payload.get('sigmas'),
-                renorm_factors=payload.get('renorm_factors'),
+                params=payload["params"],
+                sigmas=payload.get("sigmas"),
+                renorm_factors=payload.get("renorm_factors"),
                 full_result=None,
-                fixed=payload.get('fixed', False),
+                fixed=payload.get("fixed", False),
                 is_complete=False,
             )
             self.all_fit_results.set(record)
@@ -845,39 +880,51 @@ class MMEXOFASTFitter:
 
         self.planned_steps = self._build_remaining_steps()
         if len(self.completed_steps) > 0:
-            logger.info('\nCompleted steps \n%s\n', '\n'.join(
-                ['{0}: {1}'.format(step.stage, step.name) for step in self.completed_steps]))
+            logger.info(
+                "\nCompleted steps \n%s\n",
+                "\n".join(
+                    [
+                        "{0}: {1}".format(step.stage, step.name)
+                        for step in self.completed_steps
+                    ]
+                ),
+            )
 
         if len(self.planned_steps) == 0:
-            logger.info('\nNo workflow steps to execute.\n')
+            logger.info("\nNo workflow steps to execute.\n")
         else:
             logger.info(
-                '\nPlanned workflow: \n%s\n', '\n'.join(
-                    ['{0}:{1}'.format(step.stage, step.name) for step in self.planned_steps]))
+                "\nPlanned workflow: \n%s\n",
+                "\n".join(
+                    [
+                        "{0}:{1}".format(step.stage, step.name)
+                        for step in self.planned_steps
+                    ]
+                ),
+            )
 
         i = 0
         while i < len(self.planned_steps):
             step = self.planned_steps[i]
 
             # debugging:
-            logger.info(f'\nRunning step: {step.stage}:{step.name}')
+            logger.info(f"\nRunning step: {step.stage}:{step.name}")
             # logger.info(f'DEBUG remaining steps: %s', [f'{s.stage}:{s.name}' for s in self.planned_steps])
 
-            if (self.stop_before is not None
-                    and self._matches_stop_point(
-                        self.stop_before, step, mode='before'
-                    )):
+            if self.stop_before is not None and self._matches_stop_point(
+                self.stop_before, step, mode="before"
+            ):
                 logger.info("Stopping before step '%s'.", step.name)
                 break
 
             if self.dry_run:
-                logger.info('[dry_run] Would execute: %s', step.name)
+                logger.info("[dry_run] Would execute: %s", step.name)
             else:
                 step.run()
                 if step.status == StepStatus.FAILED:
                     break
 
-                logger.info(f'Step completed: {step.stage}:{step.name}')
+                logger.info(f"Step completed: {step.stage}:{step.name}")
                 self.completed_steps.append(step)
 
                 # Insert any dynamically generated follow-up steps
@@ -890,12 +937,10 @@ class MMEXOFASTFitter:
                 self._save_restart_state()
 
             # Lookahead uses the queue *after* any dynamic insertions
-            remaining = self.planned_steps[i + 1:]
-            if (self.stop_after is not None
-                    and self._matches_stop_point(
-                        self.stop_after, step, mode='after',
-                        remaining_steps=remaining
-                    )):
+            remaining = self.planned_steps[i + 1 :]
+            if self.stop_after is not None and self._matches_stop_point(
+                self.stop_after, step, mode="after", remaining_steps=remaining
+            ):
                 logger.info("\nStopping after step '%s'.", step.name)
                 break
 
@@ -907,13 +952,13 @@ class MMEXOFASTFitter:
                     table_str = self.make_ulens_table(table_type=fmt)
                     path = self._output_config.table_path(fmt)
                     path.write_text(table_str)
-                    logger.info('\nSaved %s results table to %s.', fmt, path)
+                    logger.info("\nSaved %s results table to %s.", fmt, path)
 
             if self._output_config.save_exozippy_init:
                 path = self._output_config.exozippy_init_path()
-                with open(path, 'w') as f:
+                with open(path, "w") as f:
                     json.dump(self.initialize_exozippy(), f, indent=4)
-                logger.info('\nSaved EXOZIPPy init data to %s.', path)
+                logger.info("\nSaved EXOZIPPy init data to %s.", path)
 
             if self._output_config.save_plots:
                 self._plot_best_fit_event()
@@ -941,13 +986,13 @@ class MMEXOFASTFitter:
         completed_ids = {
             (step.name, step.stage) for step in self.completed_steps
         }
-        for (name, stage) in completed_ids:
-            if f'{stage}:{name}' in (self.stop_before, self.stop_after):
+        for name, stage in completed_ids:
+            if f"{stage}:{name}" in (self.stop_before, self.stop_after):
                 return []
 
-        if self.fit_type == 'point_lens':
+        if self.fit_type == "point_lens":
             all_steps = self._build_point_lens_steps()
-        elif self.fit_type == 'binary_lens':
+        elif self.fit_type == "binary_lens":
             all_steps = self._build_binary_lens_steps()
         else:
             raise ValueError(
@@ -958,16 +1003,16 @@ class MMEXOFASTFitter:
         # TODO: ADD something to the workflow that checks for negative fluxes and refits with fb=0 if True.
         if self._initial_entry_point is not None:
             entry_idx = next(
-                (i for i, s in enumerate(all_steps)
-                 if s.name == self._initial_entry_point),
+                (
+                    i
+                    for i, s in enumerate(all_steps)
+                    if s.name == self._initial_entry_point
+                ),
                 0,
             )
             all_steps = all_steps[entry_idx:]
 
-        return [
-            s for s in all_steps
-            if (s.name, s.stage) not in completed_ids
-        ]
+        return [s for s in all_steps if (s.name, s.stage) not in completed_ids]
 
     def _build_common_point_lens_steps(self) -> list[WorkflowStep]:
         """
@@ -1014,7 +1059,7 @@ class MMEXOFASTFitter:
         list of WorkflowStep
         """
 
-        if self._initial_entry_point != 'search_for_anomaly':
+        if self._initial_entry_point != "search_for_anomaly":
             steps = self._build_common_point_lens_steps()
         else:
             steps: list[WorkflowStep] = []
@@ -1032,10 +1077,10 @@ class MMEXOFASTFitter:
     def _build_event_search_steps(self) -> list[WorkflowStep]:
         return [
             WorkflowStep(
-                name='run_event_search',
+                name="run_event_search",
                 func=self.run_event_search,
-                stage='event_search',
-                description='Run EventFinder grid search',
+                stage="event_search",
+                description="Run EventFinder grid search",
             ),
         ]
 
@@ -1053,7 +1098,7 @@ class MMEXOFASTFitter:
         -------
         list of WorkflowStep
         """
-        if self._initial_entry_point == 'fit_static_point_source_point_lens':
+        if self._initial_entry_point == "fit_static_point_source_point_lens":
             static_pspl_key = FitKey(
                 lens_type=LensType.POINT,
                 source_type=SourceType.POINT,
@@ -1066,30 +1111,32 @@ class MMEXOFASTFitter:
         else:
             steps = [
                 WorkflowStep(
-                    name='estimate_point_lens_parameters',
+                    name="estimate_point_lens_parameters",
                     func=self.estimate_point_lens_parameters,
-                    stage='fit_static_point_lens',
-                    description='Estimate point-lens parameters from EF grid result',
-                )]
+                    stage="fit_static_point_lens",
+                    description="Estimate point-lens parameters from EF grid result",
+                )
+            ]
             pspl_seed = None
 
         steps.append(
             WorkflowStep(
-                name='fit_static_point_source_point_lens',
-                func=lambda p=pspl_seed: self.fit_static_point_source_point_lens(
-                    initial_params=p),
-                stage='fit_static_point_lens',
-                description='Fit static PSPL model',
+                name="fit_static_point_source_point_lens",
+                func=lambda p=pspl_seed: (
+                    self.fit_static_point_source_point_lens(initial_params=p)
+                ),
+                stage="fit_static_point_lens",
+                description="Fit static PSPL model",
             ),
         )
 
         if self.finite_source:
             steps.append(
                 WorkflowStep(
-                    name='fit_static_finite_source_point_lens',
+                    name="fit_static_finite_source_point_lens",
                     func=self.fit_static_finite_source_point_lens,
-                    stage='fit_static_point_lens',
-                    description='Fit static FSPL model',
+                    stage="fit_static_point_lens",
+                    description="Fit static FSPL model",
                 )
             )
         return steps
@@ -1108,20 +1155,20 @@ class MMEXOFASTFitter:
         steps = []
         for key in self._iter_parallax_point_lens_keys():
             branch = key.parallax_branch
-            name = f'fit_parallax_{branch.value.lower()}'
+            name = f"fit_parallax_{branch.value.lower()}"
             steps.append(
                 WorkflowStep(
                     name=name,
                     func=lambda b=branch: self.fit_parallax(branch=b),
-                    stage='fit_point_lens_parallax',
-                    description=f'Fit parallax model for branch {branch.value}',
+                    stage="fit_point_lens_parallax",
+                    description=f"Fit parallax model for branch {branch.value}",
                 )
             )
         return steps
 
     def _build_renormalize_steps(
-            self,
-            stage: str = 'renormalize',
+        self,
+        stage: str = "renormalize",
     ) -> list[WorkflowStep]:
         """
         Build steps covering error renormalization.
@@ -1139,19 +1186,19 @@ class MMEXOFASTFitter:
         """
         return [
             WorkflowStep(
-                name='renormalize_datasets',
+                name="renormalize_datasets",
                 func=self.renormalize_datasets,
                 stage=stage,
                 description=(
-                    'Remove outliers and compute per-dataset error '
-                    'rescaling factors'
+                    "Remove outliers and compute per-dataset error "
+                    "rescaling factors"
                 ),
             ),
             WorkflowStep(
-                name='refit_all',
+                name="refit_all",
                 func=self.refit_all,
                 stage=stage,
-                description='Refit all stored fits with updated error normalization',
+                description="Refit all stored fits with updated error normalization",
             ),
         ]
 
@@ -1171,45 +1218,45 @@ class MMEXOFASTFitter:
             #    description='Select the best point-lens model for anomaly search',
             # ),
             WorkflowStep(
-                name='compute_point_lens_residuals',
+                name="compute_point_lens_residuals",
                 func=self.compute_point_lens_residuals,
-                stage='search_for_anomaly',
-                description='Compute residuals from best point-lens model',
+                stage="search_for_anomaly",
+                description="Compute residuals from best point-lens model",
             ),
             WorkflowStep(
-                name='run_anomaly_search',
+                name="run_anomaly_search",
                 func=self.run_anomaly_search,
-                stage='search_for_anomaly',
-                description='Run AnomalyFinder grid search',
+                stage="search_for_anomaly",
+                description="Run AnomalyFinder grid search",
             ),
             WorkflowStep(
-                name='get_anomaly_light_curve_parameters',
+                name="get_anomaly_light_curve_parameters",
                 func=self.get_anomaly_light_curve_parameters,
-                stage='search_for_anomaly',
-                description='Measure observable anomaly properties',
+                stage="search_for_anomaly",
+                description="Measure observable anomaly properties",
             ),
             WorkflowStep(
-                name='classify_anomaly',
+                name="classify_anomaly",
                 func=self.classify_anomaly,
-                stage='search_for_anomaly',
-                description='Classify the anomaly type',
+                stage="search_for_anomaly",
+                description="Classify the anomaly type",
             ),
         ]
 
     def _build_binary_fit_steps(self) -> list[WorkflowStep]:
         return [
             WorkflowStep(
-                name='estimate_binary_lens_parameters',
+                name="estimate_binary_lens_parameters",
                 func=self.estimate_binary_lens_parameters,
-                stage='fit_binary_lens',
-                description='Estimate binary-lens parameters from AF grid result',
+                stage="fit_binary_lens",
+                description="Estimate binary-lens parameters from AF grid result",
             ),
             WorkflowStep(
-                name='fit_binary_lens_models',
+                name="fit_binary_lens_models",
                 func=self.fit_binary_lens_models,
-                stage='fit_binary_lens',
+                stage="fit_binary_lens",
                 description=(
-                    'Fit binary-lens models; may return dynamic follow-up steps'
+                    "Fit binary-lens models; may return dynamic follow-up steps"
                 ),
             ),
         ]
@@ -1217,10 +1264,10 @@ class MMEXOFASTFitter:
     def _build_check_binary_renorm_steps(self) -> list[WorkflowStep]:
         return [
             WorkflowStep(
-                name='check_needs_renorm',
+                name="check_needs_renorm",
                 func=self.check_needs_renorm,
-                stage='check_binary_renorm',
-                description='Check whether binary fits require renormalization',
+                stage="check_binary_renorm",
+                description="Check whether binary fits require renormalization",
             ),
         ]
 
@@ -1237,18 +1284,18 @@ class MMEXOFASTFitter:
         """
         steps = [
             WorkflowStep(
-                name='run_parallax_grids',
+                name="run_parallax_grids",
                 func=self.run_parallax_grids,
-                stage='parallax_grids',
-                description='Run both parallax grid searches',
+                stage="parallax_grids",
+                description="Run both parallax grid searches",
             )
         ]
         return steps
 
     def _step_matches_stop_value(
-            self,
-            stop_value: str,
-            step: WorkflowStep,
+        self,
+        stop_value: str,
+        step: WorkflowStep,
     ) -> bool:
         """
         Return True if *step* matches a stop value string.
@@ -1267,29 +1314,27 @@ class MMEXOFASTFitter:
         -------
         bool
         """
-        if ':' in stop_value:
-            stage_name, step_name = stop_value.split(':', 1)
+        if ":" in stop_value:
+            stage_name, step_name = stop_value.split(":", 1)
             return step.stage == stage_name and step.name == step_name
         return step.stage == stop_value
 
     def _matches_stop_point(
-            self,
-            stop_value: str,
-            step: WorkflowStep,
-            mode: str,
-            remaining_steps: Optional[list[WorkflowStep]] = None,
+        self,
+        stop_value: str,
+        step: WorkflowStep,
+        mode: str,
+        remaining_steps: Optional[list[WorkflowStep]] = None,
     ) -> bool:
         if not self._step_matches_stop_value(stop_value, step):
             return False
 
-        if ':' in stop_value:
+        if ":" in stop_value:
             return True  # stage:step — exact match, no lookahead needed
 
         # Stage-only: mode-specific logic
-        if mode == 'before':
-            return not any(
-                s.stage == step.stage for s in self.completed_steps
-            )
+        if mode == "before":
+            return not any(s.stage == step.stage for s in self.completed_steps)
         # mode == 'after'
         if remaining_steps is None:
             return True
@@ -1309,17 +1354,16 @@ class MMEXOFASTFitter:
         ef_grid = EventFinderGridSearch(datasets=self.datasets)
         ef_grid.run()
 
-        if (self._output_config is not None
-                and self._output_config.save_plots):
+        if self._output_config is not None and self._output_config.save_plots:
             fig = ef_grid.plot()
-            fig.savefig(self._output_config.plot_path('ef_grid'))
+            fig.savefig(self._output_config.plot_path("ef_grid"))
             plt.close(fig)
             logger.info(
-                'Saved EF grid plot to %s.',
-                self._output_config.plot_path('ef_grid'),
+                "Saved EF grid plot to %s.",
+                self._output_config.plot_path("ef_grid"),
             )
 
-        logger.info('Best EF grid point: %s', ef_grid.best)
+        logger.info("Best EF grid point: %s", ef_grid.best)
         self.intermediate_results.best_ef_grid_point = ef_grid.best
 
     def estimate_point_lens_parameters(self) -> None:
@@ -1332,7 +1376,7 @@ class MMEXOFASTFitter:
             self.intermediate_results.best_ef_grid_point,
             self.datasets,
         )
-        logger.info('Estimated point-lens params: %s', est)
+        logger.info("Estimated point-lens params: %s", est)
         self.intermediate_results.estimate_point_lens_parameters = est
 
     def fit_static_point_source_point_lens(self, initial_params=None) -> None:
@@ -1350,18 +1394,18 @@ class MMEXOFASTFitter:
         Stores the resulting ``FitRecord`` in ``self.all_fit_results``.
         """
         if initial_params is None:
-            initial_params = self.intermediate_results.estimate_point_lens_parameters
+            initial_params = (
+                self.intermediate_results.estimate_point_lens_parameters
+            )
 
         fitter = SFitFitter(
             initial_model_params=initial_params,
             datasets=self.datasets,
-            **self._get_fitter_kwargs(
-                source_type=SourceType.POINT
-            ),
+            **self._get_fitter_kwargs(source_type=SourceType.POINT),
         )
         fitter.run()
-        logger.info('Static PSPL: %s', fitter.best)
-        logger.info('    sigmas:  %s', list(fitter.results.sigmas))
+        logger.info("Static PSPL: %s", fitter.best)
+        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
         key = FitKey(
             lens_type=LensType.POINT,
@@ -1409,10 +1453,10 @@ class MMEXOFASTFitter:
             pspl_record = self.all_fit_results.get(pspl_key)
             if pspl_record is None:
                 raise RuntimeError(
-                    'A static PSPL fit must exist before fitting FSPL.'
+                    "A static PSPL fit must exist before fitting FSPL."
                 )
             initial_params = dict(pspl_record.params)
-            initial_params['rho'] = 1.5 * initial_params['u_0']
+            initial_params["rho"] = 1.5 * initial_params["u_0"]
 
         fitter = SFitFitter(
             initial_model_params=initial_params,
@@ -1420,8 +1464,8 @@ class MMEXOFASTFitter:
             **self._get_fitter_kwargs(),
         )
         fitter.run()
-        logger.info('Static FSPL: %s', fitter.best)
-        logger.info('    sigmas:  %s', list(fitter.results.sigmas))
+        logger.info("Static FSPL: %s", fitter.best)
+        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
         key = FitKey(
             lens_type=LensType.POINT,
@@ -1455,9 +1499,7 @@ class MMEXOFASTFitter:
         """
         if branch is not None:
             source_type = (
-                SourceType.FINITE
-                if self.finite_source
-                else SourceType.POINT
+                SourceType.FINITE if self.finite_source else SourceType.POINT
             )
             keys = [
                 FitKey(
@@ -1472,9 +1514,7 @@ class MMEXOFASTFitter:
 
         for key in keys:
             seed = self._get_parallax_seed_params(key)
-            result = self._do_parallax_fit(
-                seed, source_type=key.source_type
-            )
+            result = self._do_parallax_fit(seed, source_type=key.source_type)
             if result is not None:
                 self.all_fit_results.set(
                     FitRecord.from_full_result(
@@ -1485,7 +1525,7 @@ class MMEXOFASTFitter:
                     )
                 )
                 logger.info(
-                    'Parallax %s: chi2=%.2f',
+                    "Parallax %s: chi2=%.2f",
                     key.parallax_branch.value,
                     result.chi2,
                 )
@@ -1511,7 +1551,7 @@ class MMEXOFASTFitter:
         new_datasets = []
 
         for i, dataset in enumerate(self.datasets):
-            label = dataset.plot_properties['label']
+            label = dataset.plot_properties["label"]
             if label in self.renorm_factors:
                 new_datasets.append(dataset)
                 continue
@@ -1520,8 +1560,12 @@ class MMEXOFASTFitter:
             self.renorm_factors[label] = errfac
 
         self.datasets = new_datasets
-        self.fix_blend_flux_map = self._map_label_dict_to_datasets(self.fix_blend_flux)
-        self.fix_source_flux_map = self._map_label_dict_to_datasets(self.fix_source_flux)
+        self.fix_blend_flux_map = self._map_label_dict_to_datasets(
+            self.fix_blend_flux
+        )
+        self.fix_source_flux_map = self._map_label_dict_to_datasets(
+            self.fix_source_flux
+        )
         self.event_config = self._build_event_config()
 
     def _build_renorm_event(self):
@@ -1538,7 +1582,9 @@ class MMEXOFASTFitter:
         """
         fit = self.select_best_model()
         model = fit.full_result.fitter.get_model()
-        logger.info('Renormalizing using: %s', model_key_to_label(fit.model_key))
+        logger.info(
+            "Renormalizing using: %s", model_key_to_label(fit.model_key)
+        )
         event = self.event_config.build(model=model, datasets=self.datasets)
         event.fit_fluxes()
         return event
@@ -1566,22 +1612,25 @@ class MMEXOFASTFitter:
         """
         params = self.intermediate_results.anomaly_lc_params
         if params is not None:
-            t_pl, dt = params.get('t_0'), params.get('dt')
+            t_pl, dt = params.get("t_0"), params.get("dt")
             if t_pl is not None and dt is not None:
                 t0, t1 = t_pl - dt, t_pl + dt
-                logger.info('Anomaly window protection active: [%.6f, %.6f]', t0, t1)
+                logger.info(
+                    "Anomaly window protection active: [%.6f, %.6f]", t0, t1
+                )
                 mask = (dataset.time >= t0) & (dataset.time <= t1)
                 n = int(np.sum(mask & dataset.good))
                 if n > 0:
                     logger.info(
-                        '  %s: %d point(s) inside anomaly window are protected.',
-                        dataset.plot_properties['label'], n,
+                        "  %s: %d point(s) inside anomaly window are protected.",
+                        dataset.plot_properties["label"],
+                        n,
                     )
                 return mask
         return np.zeros(len(dataset.time), dtype=bool)
 
     def _process_single_dataset(
-            self, i: int, event
+        self, i: int, event
     ) -> tuple[MulensModel.MulensData, float]:
         """
         Remove outliers from dataset *i*, compute its error rescaling factor,
@@ -1618,7 +1667,8 @@ class MMEXOFASTFitter:
             dof = int(np.sum(clean)) - n_params
             return (
                 float(np.sqrt(np.sum((res[clean] / err[clean]) ** 2) / dof))
-                if dof > 0 else 1.0
+                if dof > 0
+                else 1.0
             )
 
         def remove_outliers() -> None:
@@ -1630,7 +1680,9 @@ class MMEXOFASTFitter:
                 if dof <= 0:
                     break
                 max_sig = max(np.sqrt(2.0) * erfcinv(1.0 / dof), 3.0)
-                res, err = event.fits[i].get_residuals(phot_fmt='flux', bad=True)
+                res, err = event.fits[i].get_residuals(
+                    phot_fmt="flux", bad=True
+                )
                 sigma = np.abs(res / (err * compute_errfac(res, err)))
                 candidate_mask = dataset.good & ~protected_mask
                 if np.any(sigma[candidate_mask] > max_sig):
@@ -1645,13 +1697,15 @@ class MMEXOFASTFitter:
 
         remove_outliers()
         event.fit_fluxes()
-        res, err = event.fits[i].get_residuals(phot_fmt='flux', bad=True)
+        res, err = event.fits[i].get_residuals(phot_fmt="flux", bad=True)
         errfac = compute_errfac(res, err)
-        logger.info('  %s: errfac=%.3f', dataset.plot_properties['label'], errfac)
+        logger.info(
+            "  %s: errfac=%.3f", dataset.plot_properties["label"], errfac
+        )
         return self._recreate_dataset(dataset, errfac), errfac
 
     def _recreate_dataset(
-            self, dataset: MulensModel.MulensData, errfac: float
+        self, dataset: MulensModel.MulensData, errfac: float
     ) -> MulensModel.MulensData:
         """
         Return a new ``MulensData`` instance identical to *dataset* but with
@@ -1675,12 +1729,12 @@ class MMEXOFASTFitter:
         kwargs = {
             k: getattr(dataset, k)
             for k in sig.parameters
-            if k not in ('self', 'data_list', 'good', 'phot_fmt', 'file_name')
+            if k not in ("self", "data_list", "good", "phot_fmt", "file_name")
             and hasattr(dataset, k)
         }
         return MulensModel.MulensData(
             data_list=[dataset.time, dataset.flux, errfac * dataset.err_flux],
-            phot_fmt='flux',
+            phot_fmt="flux",
             **kwargs,
         )
 
@@ -1688,7 +1742,7 @@ class MMEXOFASTFitter:
         """
         Refit all stored fits using updated error normalization.
         """
-        logger.info('Refitting all stored models...')
+        logger.info("Refitting all stored models...")
         for key, fit_record in self.all_fit_results.items():
             fitter = fit_record.full_result.fitter
             fitter.datasets = self.datasets
@@ -1703,11 +1757,11 @@ class MMEXOFASTFitter:
                 )
             )
             logger.info(
-                '%s: %s',
+                "%s: %s",
                 model_key_to_label(key),
                 fitter.best,
             )
-            logger.info('    sigmas:  %s', list(fitter.results.sigmas))
+            logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
             # TODO: Output plots if save_plots = True
 
@@ -1738,16 +1792,15 @@ class MMEXOFASTFitter:
         label = lens_type.name.lower()
 
         lens_fits = [
-            rec for key, rec in self.all_fit_results.items()
+            rec
+            for key, rec in self.all_fit_results.items()
             if key.lens_type == lens_type
         ]
 
         if not lens_fits:
-            raise RuntimeError(
-                f'No {label} fits found in all_fit_results.'
-            )
+            raise RuntimeError(f"No {label} fits found in all_fit_results.")
 
-        if self._initial_entry_point == 'search_for_anomaly':
+        if self._initial_entry_point == "search_for_anomaly":
             return lens_fits[0]
 
         complete_fits = [rec for rec in lens_fits if rec.chi2() is not None]
@@ -1757,26 +1810,34 @@ class MMEXOFASTFitter:
         if not complete_fits:
             if len(lens_fits) > 1:
                 raise RuntimeError(
-                    f'No complete {label} fits found and more than one '
-                    'incomplete record exists — cannot select best model.'
+                    f"No complete {label} fits found and more than one "
+                    "incomplete record exists — cannot select best model."
                 )
             return lens_fits[0]
 
         static_fits = [
-            rec for key, rec in self.all_fit_results.items()
-            if key.lens_type == lens_type and key.parallax_branch == ParallaxBranch.NONE
-            and rec.chi2() is not None]
+            rec
+            for key, rec in self.all_fit_results.items()
+            if key.lens_type == lens_type
+            and key.parallax_branch == ParallaxBranch.NONE
+            and rec.chi2() is not None
+        ]
 
         parallax_fits = [
-            rec for key, rec in self.all_fit_results.items()
-            if key.lens_type == lens_type and key.parallax_branch != ParallaxBranch.NONE
-            and rec.chi2() is not None]
+            rec
+            for key, rec in self.all_fit_results.items()
+            if key.lens_type == lens_type
+            and key.parallax_branch != ParallaxBranch.NONE
+            and rec.chi2() is not None
+        ]
 
         best_static = (
             min(static_fits, key=lambda r: r.chi2()) if static_fits else None
         )
         best_par = (
-            min(parallax_fits, key=lambda r: r.chi2()) if parallax_fits else None
+            min(parallax_fits, key=lambda r: r.chi2())
+            if parallax_fits
+            else None
         )
 
         if best_par is None:
@@ -1885,8 +1946,10 @@ class MMEXOFASTFitter:
         """
         reference_fit = self.select_best_point_lens_model()
         reference_model = reference_fit.full_result.fitter.get_model()
-        logger.info('Calculating residuals relative to %s',
-                    model_key_to_label(reference_fit.model_key))
+        logger.info(
+            "Calculating residuals relative to %s",
+            model_key_to_label(reference_fit.model_key),
+        )
 
         event = self.event_config.build(
             model=reference_model,
@@ -1897,11 +1960,11 @@ class MMEXOFASTFitter:
 
         self.residuals: list = []
         for i, dataset in enumerate(self.datasets):
-            res, err = event.fits[i].get_residuals(phot_fmt='flux')
+            res, err = event.fits[i].get_residuals(phot_fmt="flux")
             self.residuals.append(
                 MulensModel.MulensData(
                     [dataset.time, res, err],
-                    phot_fmt='flux',
+                    phot_fmt="flux",
                     bandpass=dataset.bandpass,
                     ephemerides_file=dataset.ephemerides_file,
                 )
@@ -1914,22 +1977,19 @@ class MMEXOFASTFitter:
         Stores the best grid point in
         ``self.intermediate_results.best_af_grid_point``.
         """
-        af_grid = AnomalyFinderGridSearch(
-            residuals=self.residuals
-        )
+        af_grid = AnomalyFinderGridSearch(residuals=self.residuals)
         af_grid.run()
-        if (self._output_config is not None
-                and self._output_config.save_plots):
+        if self._output_config is not None and self._output_config.save_plots:
             fig = af_grid.plot()
 
-            fig.savefig(self._output_config.plot_path('af_grid'))
+            fig.savefig(self._output_config.plot_path("af_grid"))
             plt.close(fig)
             logger.info(
-                'Saved AF grid plot to %s.',
-                self._output_config.plot_path('ef_grid'),
+                "Saved AF grid plot to %s.",
+                self._output_config.plot_path("ef_grid"),
             )
 
-        logger.info('Best AF grid point: %s', af_grid.best)
+        logger.info("Best AF grid point: %s", af_grid.best)
         self.intermediate_results.best_af_grid_point = af_grid.best
 
     def get_anomaly_light_curve_parameters(self):
@@ -1949,7 +2009,7 @@ class MMEXOFASTFitter:
             event_config=self.event_config,
         )
         params = estimator.get_anomaly_lc_parameters()
-        logger.info('Estimated anomaly params: %s', params)
+        logger.info("Estimated anomaly params: %s", params)
         self.intermediate_results.anomaly_lc_params = params
 
     def classify_anomaly(self) -> None:
@@ -1961,8 +2021,13 @@ class MMEXOFASTFitter:
         ``self.intermediate_results.anomaly_type``.
         """
         classifier = AnomalyClassifier()
-        self.intermediate_results.anomaly_type = classifier.classify(self.intermediate_results.anomaly_lc_params)
-        logger.info('Anomaly classified as anomaly_type = %s', self.intermediate_results.anomaly_type)
+        self.intermediate_results.anomaly_type = classifier.classify(
+            self.intermediate_results.anomaly_lc_params
+        )
+        logger.info(
+            "Anomaly classified as anomaly_type = %s",
+            self.intermediate_results.anomaly_type,
+        )
 
     def estimate_binary_lens_parameters(self) -> None:
         """
@@ -1975,14 +2040,20 @@ class MMEXOFASTFitter:
         est_params = {}
         estimator_classes = None
         # TODO: Consider running all Estimators in all cases
-        if self.intermediate_results.anomaly_type == 'wide':
-            estimator_classes = [WidePlanetGridSearchEstimator, CloseUpperBinaryGridSearchEstimator,
-                                 CloseLowerBinaryGridSearchEstimator]
+        if self.intermediate_results.anomaly_type == "wide":
+            estimator_classes = [
+                WidePlanetGridSearchEstimator,
+                CloseUpperBinaryGridSearchEstimator,
+                CloseLowerBinaryGridSearchEstimator,
+            ]
             # TODO: Implement checking for large vs. small rho solutions. Maybe add a second estimator?
-        elif self.intermediate_results.anomaly_type == 'close':
+        elif self.intermediate_results.anomaly_type == "close":
             estimator_classes = [ClosePlanetGridSearchEstimator]
         else:
-            logger.info('Binary params estimate not implemented for %s', self.intermediate_results.anomaly_type)
+            logger.info(
+                "Binary params estimate not implemented for %s",
+                self.intermediate_results.anomaly_type,
+            )
 
         if estimator_classes is not None:
             for estimator_class in estimator_classes:
@@ -1990,7 +2061,7 @@ class MMEXOFASTFitter:
                     datasets=self.datasets,
                     params=self.intermediate_results.anomaly_lc_params,
                     model_config=self.model_config,
-                    event_config=self.event_config
+                    event_config=self.event_config,
                 )
                 # Overrides the class-level default on ParameterEstimator so
                 # every BinaryLensParams it builds carries this tolerance.
@@ -2002,25 +2073,34 @@ class MMEXOFASTFitter:
                 class_name = class_name.removesuffix("GridSearchEstimator")
 
                 params = estimator.binary_params
-                logger.info('Estimated binary params (%s): %s', class_name, params.ulens)
-                logger.info('mag_methods: %s', params.mag_methods)
+                logger.info(
+                    "Estimated binary params (%s): %s",
+                    class_name,
+                    params.ulens,
+                )
+                logger.info("mag_methods: %s", params.mag_methods)
                 est_params[class_name] = params
 
-                if self.intermediate_results.anomaly_type in ['close', 'wide']:
-                    if self.intermediate_results.anomaly_lc_params['u_0'] < 0.05:
+                if self.intermediate_results.anomaly_type in ["close", "wide"]:
+                    if (
+                        self.intermediate_results.anomaly_lc_params["u_0"]
+                        < 0.05
+                    ):
                         s_alt = estimator.get_binary_lens_params()
-                        s_alt.ulens['s'] = 1. / s_alt.ulens['s']
+                        s_alt.ulens["s"] = 1.0 / s_alt.ulens["s"]
                     else:
                         s_alt = estimator.alternate_params
 
-                    logger.info('Alternate solution: %s', s_alt.ulens)
-                    est_params[class_name + '_alt'] = s_alt
+                    logger.info("Alternate solution: %s", s_alt.ulens)
+                    est_params[class_name + "_alt"] = s_alt
 
                 self.mag_methods = params.mag_methods
                 self.mag_methods_parameters = params.mag_methods_parameters
 
         self.intermediate_results.estimate_binary_lens_parameters = est_params
-        if (self._output_config is not None) and self._output_config.save_plots:
+        if (
+            self._output_config is not None
+        ) and self._output_config.save_plots:
             self._plot_initial_2L1S_guess()
 
     def fit_binary_lens_models(self) -> Optional[list[WorkflowStep]]:
@@ -2036,27 +2116,34 @@ class MMEXOFASTFitter:
         best_pspl = self.select_best_point_lens_model()
         pspl_chi2 = best_pspl.chi2()
         n_data = sum(np.sum(dataset.good) for dataset in self.datasets)
-        logger.info(f'PL chi2: {pspl_chi2:.1f}, N_good: {n_data}')
+        logger.info(f"PL chi2: {pspl_chi2:.1f}, N_good: {n_data}")
 
         # TODO: Implement grid search for high-mag models. See gridsearches.BinaryGridSearch()
         # TODO: Separate models (key/param items) into separate steps.
         # TODO: Check for and implement point source binary lens models.
 
-        for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
+        for (
+            key,
+            params,
+        ) in self.intermediate_results.estimate_binary_lens_parameters.items():
             model = self.model_config.build(
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,
                 magnification_methods_parameters=params.mag_methods_parameters,
-                default_magnification_method='point_source_point_lens',
+                default_magnification_method="point_source_point_lens",
             )
             event = self.event_config.build(
                 model=model,
                 datasets=self.datasets,
             )
             binary_chi2 = event.get_chi2()
-            logger.info(f'{key} initial chi2: {binary_chi2:.1f}')
-            if (pspl_chi2 - binary_chi2) * n_data / np.min((binary_chi2, pspl_chi2)) < 3.:
-                logger.info('Binary model does not improve chi2 enough, skipping.')
+            logger.info(f"{key} initial chi2: {binary_chi2:.1f}")
+            if (pspl_chi2 - binary_chi2) * n_data / np.min(
+                (binary_chi2, pspl_chi2)
+            ) < 3.0:
+                logger.info(
+                    "Binary model does not improve chi2 enough, skipping."
+                )
                 # TODO: if model is "alt" try seeding from the fitted regular solution.
                 continue
 
@@ -2068,25 +2155,29 @@ class MMEXOFASTFitter:
                 mag_methods=params.mag_methods,
                 mag_methods_parameters=params.mag_methods_parameters,
                 model_config=self.model_config,
-                event_config=self.event_config
+                event_config=self.event_config,
             )
-            logger.debug(f'initial sigmas: {anomaly_fitter.sigmas}')
+            logger.debug(f"initial sigmas: {anomaly_fitter.sigmas}")
             msg = anomaly_fitter.run()
             if msg is not None:
                 logger.warning(msg)
                 continue
 
             results = MMEXOFASTFitResults(anomaly_fitter)
-            logger.info(f'Fitted params ({key}): {results.best}')
-            logger.info(f'       sigmas ({key}): {results.get_sigmas_from_results()}')
+            logger.info(f"Fitted params ({key}): {results.best}")
+            logger.info(
+                f"       sigmas ({key}): {results.get_sigmas_from_results()}"
+            )
 
             # Save the results to all results
             fit_key = FitKey(
-               lens_type=LensType.BINARY,
-               source_type=SourceType.FINITE,  # TODO: In the future, want to allow for rho=0 fits.
-               parallax_branch=ParallaxBranch.NONE,
-               lens_orb_motion=LensOrbMotion.NONE,
-               binary_model_type=key.replace('Planet', '').replace('Binary', ''),
+                lens_type=LensType.BINARY,
+                source_type=SourceType.FINITE,  # TODO: In the future, want to allow for rho=0 fits.
+                parallax_branch=ParallaxBranch.NONE,
+                lens_orb_motion=LensOrbMotion.NONE,
+                binary_model_type=key.replace("Planet", "").replace(
+                    "Binary", ""
+                ),
             )
             self.all_fit_results.set(
                 FitRecord.from_full_result(
@@ -2096,11 +2187,14 @@ class MMEXOFASTFitter:
                     fixed=False,
                 )
             )
-            if (self._output_config is not None) and self._output_config.save_plots:
+            if (
+                self._output_config is not None
+            ) and self._output_config.save_plots:
                 self._plot_event(
                     anomaly_fitter.get_event(),
-                    suptitle=f'{key}: {anomaly_fitter.best["chi2"]:.1f}\n{anomaly_fitter.get_event().model.parameters}')
-                path = self._output_config.plot_path(f'_{key}')
+                    suptitle=f"{key}: {anomaly_fitter.best['chi2']:.1f}\n{anomaly_fitter.get_event().model.parameters}",
+                )
+                path = self._output_config.plot_path(f"_{key}")
                 plt.savefig(path)
 
         return None
@@ -2118,9 +2212,9 @@ class MMEXOFASTFitter:
         """
         if self._needs_renormalization():
             logger.info(
-                'Renormalization required after binary fit; inserting steps.'
+                "Renormalization required after binary fit; inserting steps."
             )
-            return self._build_renormalize_steps(stage='check_binary_renorm')
+            return self._build_renormalize_steps(stage="check_binary_renorm")
 
         return None
 
@@ -2142,39 +2236,35 @@ class MMEXOFASTFitter:
 
         reference_fit = self.select_best_point_lens_model()
         static_params = (
-            reference_fit.full_result.fitter.get_model()
-            .parameters.parameters
+            reference_fit.full_result.fitter.get_model().parameters.parameters
         )
         source_type = reference_fit.model_key.source_type
 
         grids: dict = {}
         for par_branch in branches:
-            logger.info(
-                'Running parallax grid for %s.', par_branch.value
-            )
+            logger.info("Running parallax grid for %s.", par_branch.value)
             grid = ParallaxGridSearch(
                 static_params,
                 datasets=self.datasets,
                 grid_params=self.PARALLAX_GRID_PARAMS_COARSE,
-                fitter_kwargs=self._get_fitter_kwargs(
-                    source_type=source_type
-                ),
+                fitter_kwargs=self._get_fitter_kwargs(source_type=source_type),
                 skip_optimization=False,
                 verbose=False,
             )
             grid.run(refine=True)
             grids[par_branch] = grid
 
-            if (self._output_config is not None
-                    and self._output_config.save_grid_results):
+            if (
+                self._output_config is not None
+                and self._output_config.save_grid_results
+            ):
                 path = self._output_config.grid_path(
-                    f'piE_grid_{par_branch.value.lower()}'
+                    f"piE_grid_{par_branch.value.lower()}"
                 )
                 grid.save_grid_points(path)
-                logger.info('Saved grid results to %s.', path)
+                logger.info("Saved grid results to %s.", path)
 
-        if (self._output_config is not None
-                and self._output_config.save_plots):
+        if self._output_config is not None and self._output_config.save_plots:
             self._plot_piE_grid_search(grids)
 
     # ------------------------------------------------------------------
@@ -2207,7 +2297,7 @@ class MMEXOFASTFitter:
         if source_type is None:
             source_type = (
                 SourceType.FINITE
-                if ('rho' in params or 't_star' in params)
+                if ("rho" in params or "t_star" in params)
                 else SourceType.POINT
             )
 
@@ -2219,11 +2309,13 @@ class MMEXOFASTFitter:
         try:
             fitter.run()
         except Exception as e:
-            logger.info('Parallax fit failed:\n{0}: {1}'.format(type(e).__name__, e))
+            logger.info(
+                "Parallax fit failed:\n{0}: {1}".format(type(e).__name__, e)
+            )
             return None
 
-        logger.info('Parallax fit: %s', fitter.best)
-        logger.info('      sigmas: %s', list(fitter.results.sigmas))
+        logger.info("Parallax fit: %s", fitter.best)
+        logger.info("      sigmas: %s", list(fitter.results.sigmas))
         return MMEXOFASTFitResults(fitter)
 
     def _get_parallax_seed_params(self, key: FitKey) -> dict:
@@ -2253,12 +2345,12 @@ class MMEXOFASTFitter:
             If no static point-lens result is available as a fallback.
         """
         BRANCH_SIGNS = {
-            ParallaxBranch.U0_PLUS:  (+1, +1),
+            ParallaxBranch.U0_PLUS: (+1, +1),
             ParallaxBranch.U0_MINUS: (-1, -1),
-            ParallaxBranch.U0_PP:    (+1, +1),
-            ParallaxBranch.U0_MM:    (-1, -1),
-            ParallaxBranch.U0_PM:    (+1, -1),
-            ParallaxBranch.U0_MP:    (-1, +1),
+            ParallaxBranch.U0_PP: (+1, +1),
+            ParallaxBranch.U0_MM: (-1, -1),
+            ParallaxBranch.U0_PM: (+1, -1),
+            ParallaxBranch.U0_MP: (-1, +1),
         }
 
         # 1. Exact match
@@ -2270,21 +2362,31 @@ class MMEXOFASTFitter:
         # "s" = sign, "tgt" = target
         su0_tgt, spi_tgt = BRANCH_SIGNS[key.parallax_branch]
         for other_key, other_rec in self.all_fit_results.items():
-            if (other_key.lens_type == key.lens_type
-                    and other_key.source_type == key.source_type
-                    and other_key.parallax_branch in BRANCH_SIGNS
-                    and other_key.parallax_branch != key.parallax_branch
-                    and ((other_rec.sigmas is None) or
-                         (np.abs(other_rec.sigmas['pi_E_E'] / other_rec.params['pi_E_E']) < 0.5))):
+            if (
+                other_key.lens_type == key.lens_type
+                and other_key.source_type == key.source_type
+                and other_key.parallax_branch in BRANCH_SIGNS
+                and other_key.parallax_branch != key.parallax_branch
+                and (
+                    (other_rec.sigmas is None)
+                    or (
+                        np.abs(
+                            other_rec.sigmas["pi_E_E"]
+                            / other_rec.params["pi_E_E"]
+                        )
+                        < 0.5
+                    )
+                )
+            ):
                 # don't bother if the parallax isn't well constrained.
                 su0_src, spi_src = BRANCH_SIGNS[other_key.parallax_branch]
                 base = dict(other_rec.params)
-                if 'u_0' in base:
-                    base['u_0'] *= su0_tgt / su0_src
-                if 'pi_E_N' in base:
-                    base['pi_E_N'] *= spi_tgt / spi_src
+                if "u_0" in base:
+                    base["u_0"] *= su0_tgt / su0_src
+                if "pi_E_N" in base:
+                    base["pi_E_N"] *= spi_tgt / spi_src
                 logger.debug(
-                    'Seeding %s from %s (sign-transformed).',
+                    "Seeding %s from %s (sign-transformed).",
                     key.parallax_branch.value,
                     other_key.parallax_branch.value,
                 )
@@ -2300,14 +2402,14 @@ class MMEXOFASTFitter:
         static_rec = self.all_fit_results.get(static_key)
         if static_rec is None:
             raise RuntimeError(
-                'A static point-lens fit must exist before fitting '
-                'parallax branches.'
+                "A static point-lens fit must exist before fitting "
+                "parallax branches."
             )
         base = dict(static_rec.params)
-        base['pi_E_N'] = 0.0
-        base['pi_E_E'] = 0.0
+        base["pi_E_N"] = 0.0
+        base["pi_E_E"] = 0.0
         logger.debug(
-            'Seeding %s from static model with pi_E = 0.',
+            "Seeding %s from static model with pi_E = 0.",
             key.parallax_branch.value,
         )
         return base
@@ -2347,7 +2449,9 @@ class MMEXOFASTFitter:
                 # TODO: This should return True, but that doesn't actually cause any datasets to be re-renormalized.
                 # Need to implement correct behavior for re-renormalization.
                 # return True
-                logger.warning('A dataset needs re-renormalization, but this feature is disabled.')
+                logger.warning(
+                    "A dataset needs re-renormalization, but this feature is disabled."
+                )
                 return False
 
         return False
@@ -2380,10 +2484,10 @@ class MMEXOFASTFitter:
         if not has_pspl:
             return None
 
-        if self.fit_type == 'point_lens':
-            return 'fit_static_point_source_point_lens'
-        if self.fit_type == 'binary_lens':
-            return 'search_for_anomaly'
+        if self.fit_type == "point_lens":
+            return "fit_static_point_source_point_lens"
+        if self.fit_type == "binary_lens":
+            return "search_for_anomaly"
 
         return None
 
@@ -2397,22 +2501,22 @@ class MMEXOFASTFitter:
         happens automatically when ``restart_file`` is passed to
         ``__init__``.
         """
-        if not getattr(self, '_restart_path', None):
+        if not getattr(self, "_restart_path", None):
             return
 
         restart_data = {
-            'config': self._get_config(),
-            'state':  self._get_state(),
+            "config": self._get_config(),
+            "state": self._get_state(),
         }
 
         # debugging:
         # step = self.completed_steps[-1]
         # logger.info(f'DEBUG save_restart_state called after: {step.stage}:{step.name}')
 
-        with open(self._restart_path, 'wb') as f:
+        with open(self._restart_path, "wb") as f:
             pickle.dump(restart_data, f)
 
-        logger.debug('Restart state saved to %s.', self._restart_path)
+        logger.debug("Restart state saved to %s.", self._restart_path)
 
     def _get_config(self) -> dict:
         """
@@ -2422,9 +2526,7 @@ class MMEXOFASTFitter:
         -------
         dict
         """
-        return {
-            key: getattr(self, key, None) for key in self.CONFIG_KEYS
-        }
+        return {key: getattr(self, key, None) for key in self.CONFIG_KEYS}
 
     def _iter_parallax_point_lens_keys(self) -> Iterable[FitKey]:
         """
@@ -2440,8 +2542,7 @@ class MMEXOFASTFitter:
             Parallax model keys.
         """
         n_loc = len(
-            {getattr(ds, 'ephemerides_file', None)
-             for ds in self.datasets}
+            {getattr(ds, "ephemerides_file", None) for ds in self.datasets}
         )
         if n_loc <= 1:
             branches = [
@@ -2457,9 +2558,7 @@ class MMEXOFASTFitter:
             ]
 
         source_type = (
-            SourceType.FINITE
-            if self.finite_source
-            else SourceType.POINT
+            SourceType.FINITE if self.finite_source else SourceType.POINT
         )
         for branch in branches:
             yield FitKey(
@@ -2481,7 +2580,7 @@ class MMEXOFASTFitter:
         """
         # logger.info('Plotting piE grids: %s.', grids.keys())
         all_chi2 = [
-            r['chi2_grid']
+            r["chi2_grid"]
             for grid in grids.values()
             for r in grid.results_history
         ]
@@ -2489,7 +2588,8 @@ class MMEXOFASTFitter:
 
         fig = plt.figure(figsize=(8, 6))
         gs = gridspec.GridSpec(
-            1, 3,
+            1,
+            3,
             figure=fig,
             width_ratios=[1, 1, 0.05],
             wspace=0.3,
@@ -2508,42 +2608,41 @@ class MMEXOFASTFitter:
             scatter = grids[par_branch].plot_grid_points(
                 ax=ax, min_chi2=min_chi2
             )
-            ax.set_xlabel(r'$\pi_{\rm E,E}$')
-            ax.set_ylabel(r'$\pi_{\rm E,N}$')
+            ax.set_xlabel(r"$\pi_{\rm E,E}$")
+            ax.set_ylabel(r"$\pi_{\rm E,N}$")
             ax.set_title(par_branch.value)
             ax.invert_xaxis()
-            ax.set_aspect('equal')
+            ax.set_aspect("equal")
             ax.minorticks_on()
             if i == 1:
-                ax.set_ylabel('')
+                ax.set_ylabel("")
                 ax.tick_params(labelleft=False)
 
         if scatter is not None:
             fig.colorbar(
                 scatter,
                 cax=cax,
-                label=(
-                    r'$\sigma$ (min $\chi^2$ = '
-                    + f'{min_chi2:.2f})'
-                ),
+                label=(r"$\sigma$ (min $\chi^2$ = " + f"{min_chi2:.2f})"),
             )
 
-        path = self._output_config.plot_path('piE_grid')
+        path = self._output_config.plot_path("piE_grid")
         fig.savefig(path)
         plt.close(fig)
-        logger.info('Saved piE grid plot to %s.', path)
+        logger.info("Saved piE grid plot to %s.", path)
 
     def _get_event_t_range(self, event, n_tE=5):
         params = event.model.parameters.parameters
-        start = params['t_0'] - n_tE * params['t_E']
-        stop = params['t_0'] + n_tE * params['t_E']
+        start = params["t_0"] - n_tE * params["t_E"]
+        stop = params["t_0"] + n_tE * params["t_E"]
         return [start, stop]
 
     def _get_planet_t_range(self, event, n_tE=5):
         model = event.model
         if model.methods is not None and (model.n_lenses > 1):
             if model.methods is dict:
-                raise NotImplementedError('Plotting for Binary Source models not implemented, yet.')
+                raise NotImplementedError(
+                    "Plotting for Binary Source models not implemented, yet."
+                )
                 # probably want to loop over the sources and find min/max values of hexadecapole
             else:
                 # mag_methods is now a single VBBL window spanning the whole
@@ -2563,21 +2662,34 @@ class MMEXOFASTFitter:
     def _get_af_grid_point_t_range(self, n_teff=3):
         """Time range around the anomaly found by the anomaly finder grid."""
         point = self.intermediate_results.best_af_grid_point
-        return [point['t_0'] - n_teff * point['t_eff'],
-                point['t_0'] + n_teff * point['t_eff']]
+        return [
+            point["t_0"] - n_teff * point["t_eff"],
+            point["t_0"] + n_teff * point["t_eff"],
+        ]
 
     def _plot_planet_window(self):
         # TODO: Consider updating to use anomaly_lc_params? how different is best_af_grid_point from anomaly_lc_params?
         if self.intermediate_results.best_af_grid_point is not None:
-            plt.axvline(self.intermediate_results.best_af_grid_point['t_0'] - 2450000., color='black', linestyle=':')
             plt.axvline(
-                self.intermediate_results.best_af_grid_point['t_0'] -
-                self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
-                color='black', linestyle='--')
+                self.intermediate_results.best_af_grid_point["t_0"]
+                - 2450000.0,
+                color="black",
+                linestyle=":",
+            )
             plt.axvline(
-                self.intermediate_results.best_af_grid_point['t_0'] +
-                self.intermediate_results.best_af_grid_point['t_eff'] - 2450000.,
-                color='black', linestyle='--')
+                self.intermediate_results.best_af_grid_point["t_0"]
+                - self.intermediate_results.best_af_grid_point["t_eff"]
+                - 2450000.0,
+                color="black",
+                linestyle="--",
+            )
+            plt.axvline(
+                self.intermediate_results.best_af_grid_point["t_0"]
+                + self.intermediate_results.best_af_grid_point["t_eff"]
+                - 2450000.0,
+                color="black",
+                linestyle="--",
+            )
 
     def _get_anomaly_source_plane_region(self, event, planet_t_range):
         traj = event.model.get_trajectory(planet_t_range)
@@ -2596,25 +2708,27 @@ class MMEXOFASTFitter:
         # TODO: ADD automatic ylim
         # TODO: ADD residuals panels
         if suptitle is None:
-            suptitle = '{0}'.format(event.model.parameters)
+            suptitle = "{0}".format(event.model.parameters)
 
         if event.model.n_lenses == 1:
             panels = 2
         else:
             panels = 3
 
-        plt.figure(figsize=(5*panels, 6))
+        plt.figure(figsize=(5 * panels, 6))
         plt.suptitle(suptitle)
         plt.subplot(1, panels, 1)
         event.plot_data(show_bad=True, subtract_2450000=True)
         t_range = self._get_event_t_range(event, n_tE=n_tE)
         event.plot_model(
-            t_range=t_range,
-            subtract_2450000=True, color='black', zorder=10)
-        if event.model.n_lenses > 1:  # TODO: Change to anomaly_lc_params exists
+            t_range=t_range, subtract_2450000=True, color="black", zorder=10
+        )
+        if (
+            event.model.n_lenses > 1
+        ):  # TODO: Change to anomaly_lc_params exists
             self._plot_planet_window()
 
-        plt.xlim(np.array(t_range) - 2450000.)
+        plt.xlim(np.array(t_range) - 2450000.0)
         plt.minorticks_on()
 
         plt.subplot(1, panels, 2)
@@ -2625,17 +2739,26 @@ class MMEXOFASTFitter:
             # TODO: use anomaly_lc_params if exists
             planet_t_range = self._get_event_t_range(event, n_tE=0.5)
 
-        event.plot_model(t_range=planet_t_range, color='black', subtract_2450000=True, zorder=10)
+        event.plot_model(
+            t_range=planet_t_range,
+            color="black",
+            subtract_2450000=True,
+            zorder=10,
+        )
         self._plot_planet_window()
-        plt.xlim(np.array(planet_t_range) - 2450000.)
+        plt.xlim(np.array(planet_t_range) - 2450000.0)
         plt.minorticks_on()
 
         if panels > 2:
             plt.subplot(1, panels, 3)
-            event.plot_trajectory(t_range=planet_t_range, caustics=True, zorder=10)
+            event.plot_trajectory(
+                t_range=planet_t_range, caustics=True, zorder=10
+            )
             # TODO: add scaled source to plot to indicate size.
-            plt.gca().set_aspect('equal')
-            xlim, ylim = self._get_anomaly_source_plane_region(event, planet_t_range)
+            plt.gca().set_aspect("equal")
+            xlim, ylim = self._get_anomaly_source_plane_region(
+                event, planet_t_range
+            )
             plt.xlim(xlim)
             plt.ylim(ylim)
             plt.minorticks_on()
@@ -2644,7 +2767,10 @@ class MMEXOFASTFitter:
 
     def _plot_initial_2L1S_guess(self):
         # print(self.intermediate_results.estimate_binary_lens_parameters)
-        for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
+        for (
+            key,
+            params,
+        ) in self.intermediate_results.estimate_binary_lens_parameters.items():
             print(key)
             print(params.ulens)
             print(params.mag_methods)
@@ -2652,7 +2778,7 @@ class MMEXOFASTFitter:
                 parameters=params.ulens,
                 magnification_methods=params.mag_methods,
                 magnification_methods_parameters=params.mag_methods_parameters,
-                default_magnification_method='point_source_point_lens',
+                default_magnification_method="point_source_point_lens",
             )
             event = self.event_config.build(
                 model=model,
@@ -2660,18 +2786,22 @@ class MMEXOFASTFitter:
             )
             self._plot_event(
                 event,
-                suptitle=f'{key}: {event.get_chi2():.1f}\n{model.parameters}')
-            path = self._output_config.plot_path(f'af_{key}')
+                suptitle=f"{key}: {event.get_chi2():.1f}\n{model.parameters}",
+            )
+            path = self._output_config.plot_path(f"af_{key}")
             plt.savefig(path)
 
     def _plot_best_fit_event(self):
         # Get the best fit
         complete_fits = [
-            rec for key, rec in self.all_fit_results.items()
+            rec
+            for key, rec in self.all_fit_results.items()
             if rec.full_result is not None
         ]
         best_fit = (
-            min(complete_fits, key=lambda r: r.chi2()) if complete_fits else None
+            min(complete_fits, key=lambda r: r.chi2())
+            if complete_fits
+            else None
         )
         if best_fit.model_key.lens_type == LensType.POINT:
             best_fit = self.select_best_point_lens_model()
@@ -2681,9 +2811,9 @@ class MMEXOFASTFitter:
         # plot the light curve
         # event.plot(trajectory=False)
         self._plot_event(event)
-        path = self._output_config.plot_path('lc')
+        path = self._output_config.plot_path("lc")
         plt.savefig(path)
-        logger.info('Saved light curve plot to %s.', path)
+        logger.info("Saved light curve plot to %s.", path)
 
     # ------------------------------------------------------------------
     # Dataset helpers
@@ -2721,7 +2851,7 @@ class MMEXOFASTFitter:
         saved_by_label: dict = {}
         if saved_datasets:
             for ds in saved_datasets:
-                label = ds.plot_properties.get('label')
+                label = ds.plot_properties.get("label")
                 if label:
                     saved_by_label[label] = ds
 
@@ -2733,13 +2863,11 @@ class MMEXOFASTFitter:
             else:
                 if not os.path.exists(filename):
                     raise FileNotFoundError(
-                        f'Data file does not exist: {filename}'
+                        f"Data file does not exist: {filename}"
                     )
                 kwargs = get_kwargs(filename)
                 datasets.append(
-                    MulensModel.MulensData(
-                        file_name=filename, **kwargs
-                    )
+                    MulensModel.MulensData(file_name=filename, **kwargs)
                 )
 
         return datasets
@@ -2757,19 +2885,19 @@ class MMEXOFASTFitter:
             If any dataset has neither ``file_name`` nor a label.
         """
         for i, dataset in enumerate(self.datasets):
-            label = dataset.plot_properties.get('label')
+            label = dataset.plot_properties.get("label")
             if not label:
-                if getattr(dataset, 'file_name', None):
-                    dataset.plot_properties['label'] = (
-                        os.path.basename(dataset.file_name)
+                if getattr(dataset, "file_name", None):
+                    dataset.plot_properties["label"] = os.path.basename(
+                        dataset.file_name
                     )
                 else:
                     raise ValueError(
-                        f'Dataset at index {i} has no label in '
+                        f"Dataset at index {i} has no label in "
                         "plot_properties['label'] and was not loaded "
-                        'from a file.  Set '
+                        "from a file.  Set "
                         "plot_properties['label'] to a unique string "
-                        'before passing to MMEXOFASTFitter.'
+                        "before passing to MMEXOFASTFitter."
                     )
 
     def _map_label_dict_to_datasets(self, label_dict) -> dict:
@@ -2793,10 +2921,8 @@ class MMEXOFASTFitter:
 
         result = {}
         for ds in self.datasets:
-            label = ds.plot_properties.get('label')
-            result[ds] = (
-                label_dict.get(label, False) if label else False
-            )
+            label = ds.plot_properties.get("label")
+            result[ds] = label_dict.get(label, False) if label else False
         return result
 
     def _get_fitter_kwargs(self, source_type=None) -> dict:
@@ -2815,14 +2941,14 @@ class MMEXOFASTFitter:
             Keyword arguments ready to unpack into a fitter constructor.
         """
         return {
-            'model_config': self.model_config,
-            'event_config': self.event_config,
-            'mag_methods': (
-                None if source_type == SourceType.POINT
-                else self.mag_methods
+            "model_config": self.model_config,
+            "event_config": self.event_config,
+            "mag_methods": (
+                None if source_type == SourceType.POINT else self.mag_methods
             ),
-            'mag_methods_parameters': (
-                None if source_type == SourceType.POINT
+            "mag_methods_parameters": (
+                None
+                if source_type == SourceType.POINT
                 else self.mag_methods_parameters
             ),
         }
@@ -2841,26 +2967,22 @@ class MMEXOFASTFitter:
             If duplicate dataset labels are found, or if any label is
             None.
         """
-        labels = [
-            ds.plot_properties.get('label') for ds in self.datasets
-        ]
+        labels = [ds.plot_properties.get("label") for ds in self.datasets]
 
         if None in labels:
             raise ValueError(
-                'Some datasets do not have labels set in '
+                "Some datasets do not have labels set in "
                 "plot_properties['label'].  All datasets must have "
-                'unique labels.'
+                "unique labels."
             )
 
         duplicates = [
-            label
-            for label in set(labels)
-            if labels.count(label) > 1
+            label for label in set(labels) if labels.count(label) > 1
         ]
         if duplicates:
             raise ValueError(
-                f'Duplicate dataset labels found: {duplicates}.  '
-                'All datasets must have unique labels in '
+                f"Duplicate dataset labels found: {duplicates}.  "
+                "All datasets must have unique labels in "
                 "plot_properties['label']."
             )
 
@@ -2870,7 +2992,7 @@ class MMEXOFASTFitter:
 
     def make_ulens_table(
         self,
-        table_type: Optional[str] = 'ascii',
+        table_type: Optional[str] = "ascii",
         models=None,
     ) -> str:
         """
@@ -2897,6 +3019,7 @@ class MMEXOFASTFitter:
         NotImplementedError
             If *table_type* is not ``'ascii'`` or ``'latex'``.
         """
+
         def _order_df(df: pd.DataFrame) -> pd.DataFrame:
             """
             Order parameters in a human-friendly way (ulens params
@@ -2912,6 +3035,7 @@ class MMEXOFASTFitter:
             pd.DataFrame
                 Ordered DataFrame.
             """
+
             def _get_ordered_ulens_keys(n_sources: int = 1) -> list[str]:
                 """
                 Return the default ordering of microlensing parameters.
@@ -2926,35 +3050,55 @@ class MMEXOFASTFitter:
                 list of str
                 """
                 basic_keys = [
-                    't_0', 'u_0', 't_E', 'rho', 'log_rho', 't_star',
+                    "t_0",
+                    "u_0",
+                    "t_E",
+                    "rho",
+                    "log_rho",
+                    "t_star",
                 ]
                 additional_keys = [
-                    'pi_E_N', 'pi_E_E', 't_0_par',
-                    's', 'log_s', 'q', 'log_q', 'alpha',
-                    'convergence_K', 'shear_G',
-                    'ds_dt', 'dalpha_dt', 's_z', 'ds_z_dt', 't_0_kep',
-                    'x_caustic_in', 'x_caustic_out',
-                    't_caustic_in', 't_caustic_out',
-                    'xi_period', 'xi_semimajor_axis',
-                    'xi_inclination', 'xi_Omega_node',
-                    'xi_argument_of_latitude_reference',
-                    'xi_eccentricity', 'xi_omega_periapsis',
-                    'q_source', 't_0_xi',
+                    "pi_E_N",
+                    "pi_E_E",
+                    "t_0_par",
+                    "s",
+                    "log_s",
+                    "q",
+                    "log_q",
+                    "alpha",
+                    "convergence_K",
+                    "shear_G",
+                    "ds_dt",
+                    "dalpha_dt",
+                    "s_z",
+                    "ds_z_dt",
+                    "t_0_kep",
+                    "x_caustic_in",
+                    "x_caustic_out",
+                    "t_caustic_in",
+                    "t_caustic_out",
+                    "xi_period",
+                    "xi_semimajor_axis",
+                    "xi_inclination",
+                    "xi_Omega_node",
+                    "xi_argument_of_latitude_reference",
+                    "xi_eccentricity",
+                    "xi_omega_periapsis",
+                    "q_source",
+                    "t_0_xi",
                 ]
                 if n_sources > 1:
                     ordered: list[str] = []
                     for param_head in basic_keys:
-                        if param_head == 't_E':
+                        if param_head == "t_E":
                             ordered.append(param_head)
                         else:
                             for idx in range(n_sources):
-                                ordered.append(
-                                    f'{param_head}_{idx + 1}'
-                                )
+                                ordered.append(f"{param_head}_{idx + 1}")
                 else:
                     ordered = list(basic_keys)
                 ordered.extend(additional_keys)
-                return ['chi2', 'N_data'] + ordered
+                return ["chi2", "N_data"] + ordered
 
             def _get_ordered_flux_keys() -> list[str]:
                 """
@@ -2966,38 +3110,34 @@ class MMEXOFASTFitter:
                 """
                 flux_keys: list[str] = []
                 for i, dataset in enumerate(self.datasets):
-                    if 'label' in dataset.plot_properties:
-                        obs, band = (
-                            get_telescope_band_from_filename(
-                                dataset.plot_properties['label']
-                            )
+                    if "label" in dataset.plot_properties:
+                        obs, band = get_telescope_band_from_filename(
+                            dataset.plot_properties["label"]
                         )
                     else:
                         obs, band = i, None
-                    flux_keys.append(f'{band}_S_{obs}')
-                    flux_keys.append(f'{band}_B_{obs}')
+                    flux_keys.append(f"{band}_S_{obs}")
+                    flux_keys.append(f"{band}_B_{obs}")
                 return flux_keys
 
             desired_order = (
                 _get_ordered_ulens_keys() + _get_ordered_flux_keys()
             )
-            order_map = {
-                name: idx for idx, name in enumerate(desired_order)
-            }
-            df['sort_key'] = df['parameter_names'].map(order_map)
-            df['orig_pos'] = range(len(df))
-            df['sort_key'] = df['sort_key'].fillna(len(desired_order))
+            order_map = {name: idx for idx, name in enumerate(desired_order)}
+            df["sort_key"] = df["parameter_names"].map(order_map)
+            df["orig_pos"] = range(len(df))
+            df["sort_key"] = df["sort_key"].fillna(len(desired_order))
             df = (
-                df.sort_values(['sort_key', 'orig_pos'])
+                df.sort_values(["sort_key", "orig_pos"])
                 .reset_index()
-                .drop(columns=['index', 'sort_key', 'orig_pos'])
+                .drop(columns=["index", "sort_key", "orig_pos"])
             )
             return df
 
         if table_type is None:
-            table_type = 'ascii'
+            table_type = "ascii"
 
-        pm_symbol = r'$\pm$' if table_type == 'latex' else '+/-'
+        pm_symbol = r"$\pm$" if table_type == "latex" else "+/-"
 
         # Resolve models to (label, FitRecord) pairs
         pairs: list[tuple[str, FitRecord]] = []
@@ -3007,18 +3147,11 @@ class MMEXOFASTFitter:
                 pairs.append((label, record))
         else:
             for m in models:
-                key = (
-                    m if isinstance(m, FitKey)
-                    else label_to_model_key(m)
-                )
+                key = m if isinstance(m, FitKey) else label_to_model_key(m)
                 record = self.all_fit_results.get(key)
                 if record is None:
-                    raise ValueError(
-                        f'No FitRecord found for model {m!r}.'
-                    )
-                pairs.append(
-                    (model_key_to_label(key), record)
-                )
+                    raise ValueError(f"No FitRecord found for model {m!r}.")
+                pairs.append((model_key_to_label(key), record))
 
         results_table: Optional[pd.DataFrame] = None
         for label, record in pairs:
@@ -3026,46 +3159,50 @@ class MMEXOFASTFitter:
             new_col = _format_results_column(new_col, pm_symbol)
             new_col = new_col.rename(
                 columns={
-                    'values':      label,
-                    'sigmas':      f'sig [{label}]',
-                    'sigma_minus': f'sig- [{label}]',
-                    'sigma_plus':  f'sig+ [{label}]',
+                    "values": label,
+                    "sigmas": f"sig [{label}]",
+                    "sigma_minus": f"sig- [{label}]",
+                    "sigma_plus": f"sig+ [{label}]",
                 }
             )
             results_table = (
                 new_col
                 if results_table is None
                 else results_table.merge(
-                    new_col, on='parameter_names', how='outer'
+                    new_col, on="parameter_names", how="outer"
                 )
             )
 
         if results_table is None:
-            return ''
+            return ""
 
         results_table = _order_df(results_table)
 
-        if table_type == 'latex':
-            def _fmt_latex(name: str) -> str:
-                if name == 'chi2':
-                    return r'$\chi^2$'
-                parts = name.split('_')
-                if len(parts) == 1:
-                    return f'${name}$'
-                first = parts[0]
-                rest = ', '.join(parts[1:])
-                return f'${first}' + '_{' + rest + '}$'
+        if table_type == "latex":
 
-            results_table['parameter_names'] = (
-                results_table['parameter_names'].apply(_fmt_latex)
-            )
+            def _fmt_latex(name: str) -> str:
+                if name == "chi2":
+                    return r"$\chi^2$"
+                parts = name.split("_")
+                if len(parts) == 1:
+                    return f"${name}$"
+                first = parts[0]
+                rest = ", ".join(parts[1:])
+                return f"${first}" + "_{" + rest + "}$"
+
+            results_table["parameter_names"] = results_table[
+                "parameter_names"
+            ].apply(_fmt_latex)
             return results_table.to_latex(index=False, escape=False)
 
-        if table_type == 'ascii':
+        if table_type == "ascii":
             with pd.option_context(
-                'display.max_rows',    None,
-                'display.max_columns', None,
-                'display.width',       None,
+                "display.max_rows",
+                None,
+                "display.max_columns",
+                None,
+                "display.width",
+                None,
             ):
                 return results_table.to_string(index=False)
 
@@ -3096,28 +3233,29 @@ class MMEXOFASTFitter:
         NotImplementedError
             If ``fit_type`` is not ``'point_lens'``.
         """
-        if self.fit_type == 'point_lens':
+        if self.fit_type == "point_lens":
             fits = []
             for key in self._iter_parallax_point_lens_keys():
                 record = self.all_fit_results.get(key)
                 if record is not None:
                     fits.append(
                         {
-                            'parameters': record.params,
-                            'sigmas':     record.sigmas,
+                            "parameters": record.params,
+                            "sigmas": record.sigmas,
                         }
                     )
 
             return {
-                'fits':        fits,
-                'errfacs':     self.renorm_factors,
-                'mag_methods': self.mag_methods,
+                "fits": fits,
+                "errfacs": self.renorm_factors,
+                "mag_methods": self.mag_methods,
             }
-        if self.fit_type == 'binary_lens':
+        if self.fit_type == "binary_lens":
             fits = []
 
             binary_lens_fits = [
-                rec for key, rec in self.all_fit_results.items()
+                rec
+                for key, rec in self.all_fit_results.items()
                 if key.lens_type == LensType.BINARY
             ]
             if len(binary_lens_fits) > 0:
@@ -3125,26 +3263,31 @@ class MMEXOFASTFitter:
                 for binary_fit in binary_lens_fits:
                     fits.append(
                         {
-                            'parameters': binary_fit.params,
-                            'sigmas': binary_fit.sigmas,
-
+                            "parameters": binary_fit.params,
+                            "sigmas": binary_fit.sigmas,
                         }
                     )
-            elif self.intermediate_results.estimate_binary_lens_parameters is not None:
+            elif (
+                self.intermediate_results.estimate_binary_lens_parameters
+                is not None
+            ):
                 # otherwise, return the initial estimates
-                for key, params in self.intermediate_results.estimate_binary_lens_parameters.items():
-                    fits.append({'parameters': params.ulens})
+                for (
+                    key,
+                    params,
+                ) in self.intermediate_results.estimate_binary_lens_parameters.items():
+                    fits.append({"parameters": params.ulens})
 
         else:
             raise NotImplementedError(
-                'initialize_exozippy not implemented for '
-                f'{self.fit_type}.'
+                f"initialize_exozippy not implemented for {self.fit_type}."
             )
 
         return {
-            'fits': fits,
-            'errfacs': self.renorm_factors,
-            'mag_methods': self.mag_methods}
+            "fits": fits,
+            "errfacs": self.renorm_factors,
+            "mag_methods": self.mag_methods,
+        }
 
     # ------------------------------------------------------------------
     # Dunder helpers
@@ -3152,11 +3295,11 @@ class MMEXOFASTFitter:
 
     def __repr__(self) -> str:
         return (
-            f'MMEXOFASTFitter('
-            f'fit_type={self.fit_type!r}, '
-            f'completed_steps={len(self.completed_steps)}, '
-            f'planned_steps={len(self.planned_steps)}, '
-            f'n_fits={len(self.all_fit_results)})'
+            f"MMEXOFASTFitter("
+            f"fit_type={self.fit_type!r}, "
+            f"completed_steps={len(self.completed_steps)}, "
+            f"planned_steps={len(self.planned_steps)}, "
+            f"n_fits={len(self.all_fit_results)})"
         )
 
     def __enter__(self):

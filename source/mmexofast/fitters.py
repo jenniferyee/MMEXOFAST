@@ -1,12 +1,13 @@
+import os
+from multiprocessing import Pool, cpu_count
+
+import emcee
 import MulensModel
 import numpy as np
 import sfit_minimizer as sfit
-import emcee
-from multiprocessing import Pool, cpu_count
-import os
 
 from .estimate_params import WidePlanetEnsembleInitializer
-from .mulens_object_config import ModelConfig, EventConfig
+from .mulens_object_config import EventConfig, ModelConfig
 
 
 class EmceeFitResults:
@@ -66,8 +67,8 @@ class EmceeFitResults:
         and cached.
         """
         if self._percentiles is None:
-            n_burn = self.emcee_settings['n_burn']
-            n_dim = self.emcee_settings['n_dim']
+            n_burn = self.emcee_settings["n_burn"]
+            n_dim = self.emcee_settings["n_dim"]
             samples = self.sampler.chain[:, n_burn:, :].reshape((-1, n_dim))
             self._percentiles = np.percentile(samples, [16, 50, 84], axis=0)
         return self._percentiles
@@ -118,7 +119,7 @@ class EmceeFitResults:
         )
 
 
-class MulensFitter():
+class MulensFitter:
     """
     Parent class for microlensing model fitters.
 
@@ -156,10 +157,18 @@ class MulensFitter():
     """
 
     def __init__(
-            self, datasets=None, initial_model_params=None, parameters_to_fit=None, sigmas=None,
-            mag_methods=None, mag_methods_parameters=None,
-            model_config=None, event_config=None,
-            verbose=False, pool=None):
+        self,
+        datasets=None,
+        initial_model_params=None,
+        parameters_to_fit=None,
+        sigmas=None,
+        mag_methods=None,
+        mag_methods_parameters=None,
+        model_config=None,
+        event_config=None,
+        verbose=False,
+        pool=None,
+    ):
         self._initial_model = None
         self._best = None
         self._results = None
@@ -215,7 +224,7 @@ class MulensFitter():
         """
         if self.best is not None:
             params = dict(self.best)
-            params.pop('chi2', None)
+            params.pop("chi2", None)
         else:
             params = self.initial_model_params
 
@@ -266,16 +275,20 @@ class MulensFitter():
         """
         event = self.get_event()
         event.fit_fluxes()
-        msg = f'\n---- Event Info ----\nModel:\n{event.model}\n\nDatasets:'
-        msg += '\n{0:20} {1:>4} {2:>12} {3} {4}'.format('Label', 'N_good', 'chi2', 'f_source', 'f_blend')
+        msg = f"\n---- Event Info ----\nModel:\n{event.model}\n\nDatasets:"
+        msg += "\n{0:20} {1:>4} {2:>12} {3} {4}".format(
+            "Label", "N_good", "chi2", "f_source", "f_blend"
+        )
         for i, dataset in enumerate(event.datasets):
-            msg += ('\n{0:20} {1:4} {2:12.2f} {3} {4}'.format(
-                dataset.plot_properties['label'], np.sum(dataset.good),
+            msg += "\n{0:20} {1:4} {2:12.2f} {3} {4}".format(
+                dataset.plot_properties["label"],
+                np.sum(dataset.good),
                 event.get_chi2_for_dataset(i),
                 event.fits[i].source_fluxes,
-                event.fits[i].blend_flux))
+                event.fits[i].blend_flux,
+            )
 
-        msg += '\n--------------------\n'
+        msg += "\n--------------------\n"
         return msg
 
     @property
@@ -343,7 +356,9 @@ class MulensFitter():
     @initial_model_params.setter
     def initial_model_params(self, params_dict):
         if (params_dict is not None) and (not isinstance(params_dict, dict)):
-            raise ValueError('initial_model must be set with either *None* or *dict*.')
+            raise ValueError(
+                "initial_model must be set with either *None* or *dict*."
+            )
 
         self._initial_model_params = params_dict
 
@@ -378,8 +393,12 @@ class MulensFitter():
 
     @parameters_to_fit.setter
     def parameters_to_fit(self, params_dict):
-        if (params_dict is not None) and (not isinstance(params_dict, (list, tuple))):
-            raise ValueError('parameters_to_fit must be set with either *None* or *list* or *tuple*.')
+        if (params_dict is not None) and (
+            not isinstance(params_dict, (list, tuple))
+        ):
+            raise ValueError(
+                "parameters_to_fit must be set with either *None* or *list* or *tuple*."
+            )
 
         self._parameters_to_fit = params_dict
 
@@ -398,6 +417,7 @@ class SFitFitter(MulensFitter):
     --------
     MulensFitter : Parent class defining all constructor parameters.
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -424,30 +444,42 @@ class SFitFitter(MulensFitter):
         event.fit_fluxes()
 
         my_func = sfit.mm_funcs.PointLensSFitFunction(
-            event, self.parameters_to_fit)
+            event, self.parameters_to_fit
+        )
 
-        initial_guess = [self.initial_model_params[key] for key in self.parameters_to_fit]
+        initial_guess = [
+            self.initial_model_params[key] for key in self.parameters_to_fit
+        ]
         for i in range(len(self.datasets)):
             initial_guess.append(event.fits[i].source_flux)
             initial_guess.append(event.fits[i].blend_flux)
 
         result = sfit.minimize(
-            my_func, x0=initial_guess, tol=1e-5,
-            options={'step': 'adaptive'}, verbose=self.verbose)
+            my_func,
+            x0=initial_guess,
+            tol=1e-5,
+            options={"step": "adaptive"},
+            verbose=self.verbose,
+        )
 
         if self.verbose:
             print(result)
 
         if not result.success:
             result = sfit.minimize(
-                my_func, x0=initial_guess, tol=1e-5, max_iter=10000,
-                options={'step': 0.001}, verbose=self.verbose)
+                my_func,
+                x0=initial_guess,
+                tol=1e-5,
+                max_iter=10000,
+                options={"step": 0.001},
+                verbose=self.verbose,
+            )
             if self.verbose:
                 print(result)
 
         self.results = result
         best = my_func.event.model.parameters.parameters
-        best['chi2'] = my_func.event.get_chi2()
+        best["chi2"] = my_func.event.get_chi2()
         self.best = best
 
 
@@ -497,8 +529,10 @@ class EmceeLCFitter(MulensFitter):
     """
 
     default_emcee_settings = {
-        'n_walkers': 40, 'n_burn': 500, 'n_steps': 1000,
-        'acceptance_fraction': 0.1,
+        "n_walkers": 40,
+        "n_burn": 500,
+        "n_steps": 1000,
+        "acceptance_fraction": 0.1,
     }
 
     # TODO: Implement all the fancy diagnostic plots from Radek's Example 16.
@@ -522,7 +556,9 @@ class EmceeLCFitter(MulensFitter):
         # Subclasses that finalise parameters_to_fit *after* super().__init__()
         # must update 'n_dim' themselves.
         if self._parameters_to_fit is not None:
-            self.emcee_settings.setdefault('n_dim', len(self._parameters_to_fit))
+            self.emcee_settings.setdefault(
+                "n_dim", len(self._parameters_to_fit)
+            )
 
     # ------------------------------------------------------------------ #
     # Pickling support                                                     #
@@ -542,7 +578,7 @@ class EmceeLCFitter(MulensFitter):
             ``__dict__`` with ``_event`` replaced by ``None``.
         """
         state = self.__dict__.copy()
-        state['_event'] = None
+        state["_event"] = None
         return state
 
     def __setstate__(self, state):
@@ -574,7 +610,7 @@ class EmceeLCFitter(MulensFitter):
         str
             Name with ``log_`` prefix removed, e.g. ``'rho'`` or ``'t_E'``.
         """
-        if parameter.startswith('log_'):
+        if parameter.startswith("log_"):
             return parameter[4:]
         return parameter
 
@@ -626,12 +662,13 @@ class EmceeLCFitter(MulensFitter):
         """
         if self.initial_guess is None:
             raise AttributeError(
-                'initial_guess must be set before calling initialize_event().')
+                "initial_guess must be set before calling initialize_event()."
+            )
 
         params = {}
         for key, value in self.initial_guess.items():
             actual_key = self.get_parameter_name(key)
-            params[actual_key] = 10. ** value if actual_key != key else value
+            params[actual_key] = 10.0**value if actual_key != key else value
 
         model = self.model_config.build(
             parameters=params,
@@ -682,7 +719,7 @@ class EmceeLCFitter(MulensFitter):
         list of list
             ``n_walkers`` parameter vectors of length ``n_dim``.
         """
-        n_walkers = self.emcee_settings['n_walkers']
+        n_walkers = self.emcee_settings["n_walkers"]
         starting_vector = []
         for _ in range(n_walkers):
             walker = []
@@ -696,7 +733,7 @@ class EmceeLCFitter(MulensFitter):
                 sigma = (self.sigmas or {}).get(emcee_param)
 
                 if sigma is not None:
-                    value = value + np.random.normal(0., sigma)
+                    value = value + np.random.normal(0.0, sigma)
 
                 walker.append(value)
             starting_vector.append(walker)
@@ -741,11 +778,12 @@ class EmceeLCFitter(MulensFitter):
         """
         if self._event is None:
             raise AttributeError(
-                'Event has not been created. Call initialize_event() first.')
+                "Event has not been created. Call initialize_event() first."
+            )
         for parameter, value in zip(self.parameters_to_fit, theta):
             key = self.get_parameter_name(parameter)
             if key != parameter:  # log_ prefix
-                value = 10. ** value
+                value = 10.0**value
             self._event.model.parameters.__setattr__(key, value)
 
     # ------------------------------------------------------------------ #
@@ -776,8 +814,8 @@ class EmceeLCFitter(MulensFitter):
         self.event = theta
         try:
             chi2 = self.event.get_chi2()
-            if 'temperature' in self.emcee_settings:
-                chi2 /= self.emcee_settings['temperature'] ** 2
+            if "temperature" in self.emcee_settings:
+                chi2 /= self.emcee_settings["temperature"] ** 2
         except:
             return -np.inf
         return -0.5 * chi2
@@ -804,7 +842,7 @@ class EmceeLCFitter(MulensFitter):
         this is handled correctly by :meth:`ln_prob`.
         """
         for key, value in zip(self.parameters_to_fit, theta):
-            if key in ('t_E', 'rho', 'q', 's') and value <= 0.:
+            if key in ("t_E", "rho", "q", "s") and value <= 0.0:
                 return np.inf
         return 0.0
 
@@ -879,34 +917,39 @@ class EmceeLCFitter(MulensFitter):
             os.environ["OMP_NUM_THREADS"] = "1"
             pool = Pool()
             self.sampler = emcee.EnsembleSampler(
-                self.emcee_settings['n_walkers'],
-                self.emcee_settings['n_dim'],
+                self.emcee_settings["n_walkers"],
+                self.emcee_settings["n_dim"],
                 self.ln_prob,
-                pool=pool)
+                pool=pool,
+            )
         else:
             self.sampler = emcee.EnsembleSampler(
-                self.emcee_settings['n_walkers'],
-                self.emcee_settings['n_dim'],
-                self.ln_prob)
+                self.emcee_settings["n_walkers"],
+                self.emcee_settings["n_dim"],
+                self.ln_prob,
+            )
 
         try:
             mean_af = 1.0
             for _ in self.sampler.sample(
-                    starting_vector, iterations=self.emcee_settings['n_steps']):
+                starting_vector, iterations=self.emcee_settings["n_steps"]
+            ):
                 # TODO: ADD option to periodically output results.
                 if (self.sampler.iteration % 100) != 0:
                     continue
-                if self.emcee_settings.get('acceptance_fraction') is None:
+                if self.emcee_settings.get("acceptance_fraction") is None:
                     continue
 
                 mean_af = np.mean(self.sampler.acceptance_fraction)
 
                 if verbose:
-                    print(self.sampler.iteration,
-                          '{0:.3f}'.format(mean_af),
-                          self.sampler.acceptance_fraction)
+                    print(
+                        self.sampler.iteration,
+                        "{0:.3f}".format(mean_af),
+                        self.sampler.acceptance_fraction,
+                    )
 
-                if mean_af < self.emcee_settings['acceptance_fraction']:
+                if mean_af < self.emcee_settings["acceptance_fraction"]:
                     break
 
         finally:
@@ -914,15 +957,17 @@ class EmceeLCFitter(MulensFitter):
                 pool.close()
                 pool.join()
 
-        n_burn = self.emcee_settings['n_burn']
-        n_dim = self.emcee_settings['n_dim']
+        n_burn = self.emcee_settings["n_burn"]
+        n_dim = self.emcee_settings["n_dim"]
         samples = self.sampler.chain[:, n_burn:, :].reshape((-1, n_dim))
 
         if len(samples) == 0:
-            msg = "No samples remain after burn-in. " + \
-                  f"Sampler ran {self.sampler.iteration} iterations but " + \
-                  f"n_burn={n_burn}."
-            if mean_af < self.emcee_settings['acceptance_fraction']:
+            msg = (
+                "No samples remain after burn-in. "
+                + f"Sampler ran {self.sampler.iteration} iterations but "
+                + f"n_burn={n_burn}."
+            )
+            if mean_af < self.emcee_settings["acceptance_fraction"]:
                 msg += f"Acceptance fraction {mean_af:.3f} too low! Minimum set to:"
                 msg += f" {self.emcee_settings['acceptance_fraction']}"
 
@@ -933,8 +978,11 @@ class EmceeLCFitter(MulensFitter):
             print("Fitted parameters:")
             for i in range(n_dim):
                 med = percentiles[1, i]
-                print("${:.5f}^{{+{:.5f}}}_{{-{:.5f}}}$ &".format(
-                    med, percentiles[2, i] - med, med - percentiles[0, i]))
+                print(
+                    "${:.5f}^{{+{:.5f}}}_{{-{:.5f}}}$ &".format(
+                        med, percentiles[2, i] - med, med - percentiles[0, i]
+                    )
+                )
 
         prob = self.sampler.lnprobability[:, n_burn:].reshape((-1))
         best_index = np.argmax(prob)
@@ -942,7 +990,7 @@ class EmceeLCFitter(MulensFitter):
         self.event = self.best_theta
 
         self.best = self._event.model.parameters.parameters
-        self.best['chi2'] = self._event.get_chi2()
+        self.best["chi2"] = self._event.get_chi2()
 
         self.results = EmceeFitResults(
             sampler=self.sampler,
@@ -1035,30 +1083,41 @@ class AnomalyFitter(EmceeLCFitter):
     """
 
     default_parameters_to_fit = [
-        't_0', 'u_0', 't_E', 'log_rho', 'log_s', 'log_q', 'alpha']
+        "t_0",
+        "u_0",
+        "t_E",
+        "log_rho",
+        "log_s",
+        "log_q",
+        "alpha",
+    ]
 
     def __init__(
-            self, initial_guess, anomaly_lc_params=None,
-            emcee_settings=None, **kwargs):
+        self,
+        initial_guess,
+        anomaly_lc_params=None,
+        emcee_settings=None,
+        **kwargs,
+    ):
         super().__init__(
             initial_guess=initial_guess,
             emcee_settings=emcee_settings,
-            **kwargs)
+            **kwargs,
+        )
         if self.mag_methods is None:
-            raise ValueError(
-                'mag_methods must be provided for AnomalyFitter.')
+            raise ValueError("mag_methods must be provided for AnomalyFitter.")
 
         self.anomaly_lc_params = anomaly_lc_params
 
         # Use default_parameters_to_fit when not explicitly provided.
         # This overrides EmceeLCFitter's default of list(initial_guess.keys()),
         # so initial_guess must contain values for all default parameters.
-        if 'parameters_to_fit' not in kwargs:
+        if "parameters_to_fit" not in kwargs:
             self.parameters_to_fit = list(self.default_parameters_to_fit)
             # n_dim must reflect the updated parameters_to_fit.  Direct
             # assignment rather than setdefault ensures a stale value from
             # EmceeLCFitter (set from initial_guess.keys()) is overwritten.
-            self.emcee_settings['n_dim'] = len(self.parameters_to_fit)
+            self.emcee_settings["n_dim"] = len(self.parameters_to_fit)
 
         # Compute sigmas only when not explicitly provided and initial_guess
         # is available.  The guard on initial_guess allows subclasses that
@@ -1082,11 +1141,11 @@ class AnomalyFitter(EmceeLCFitter):
         sigmas = self._default_sigmas()
 
         if self.anomaly_lc_params is not None:
-            dt = self.anomaly_lc_params['dt']
-            if 't_0' in self.parameters_to_fit:
-                sigmas['t_0'] = min(sigmas['t_0'], 0.01 * dt)
-            if 't_E' in self.parameters_to_fit:
-                sigmas['t_E'] = min(sigmas['t_E'], 0.01 * dt)
+            dt = self.anomaly_lc_params["dt"]
+            if "t_0" in self.parameters_to_fit:
+                sigmas["t_0"] = min(sigmas["t_0"], 0.01 * dt)
+            if "t_E" in self.parameters_to_fit:
+                sigmas["t_E"] = min(sigmas["t_E"], 0.01 * dt)
 
         return sigmas
 
@@ -1112,18 +1171,19 @@ class AnomalyFitter(EmceeLCFitter):
         """
         sigmas = {}
         for param in self.parameters_to_fit:
-            if param == 't_0':
+            if param == "t_0":
                 sigmas[param] = 0.00001
-            elif param == 'u_0':
-                sigmas[param] = 0.001 * abs(self.initial_guess['u_0'])
-            elif param == 't_E':
-                sigmas[param] = 0.001 * abs(self.initial_guess['t_E'])
-            elif param == 'alpha':
+            elif param == "u_0":
+                sigmas[param] = 0.001 * abs(self.initial_guess["u_0"])
+            elif param == "t_E":
+                sigmas[param] = 0.001 * abs(self.initial_guess["t_E"])
+            elif param == "alpha":
                 sigmas[param] = 0.0001
-            elif param.startswith('log_'):
+            elif param.startswith("log_"):
                 sigmas[param] = 0.0001
 
         return sigmas
+
 
 # TODO: ADD child class of AnomalyFitter that uses dxsi parameter.
 
@@ -1183,7 +1243,8 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
             initial_guess=None,
             anomaly_lc_params=anomaly_lc_params,
             emcee_settings=emcee_settings,
-            **kwargs)
+            **kwargs,
+        )
 
         # Sigmas are forwarded to WidePlanetEnsembleInitializer for PSPL
         # perturbation.  Default to {} (no perturbation) when not provided;
@@ -1260,8 +1321,8 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
             datasets=self.datasets,
             anomaly_params=self.anomaly_lc_params,
             sigmas=self.sigmas,
-            n_estimators=self.emcee_settings['n_walkers'],
-            pspl_chi2=getattr(self, 'pspl_chi2', None),
+            n_estimators=self.emcee_settings["n_walkers"],
+            pspl_chi2=getattr(self, "pspl_chi2", None),
         )
 
         # Store via setters so that the lazy properties resolve on subsequent
@@ -1272,15 +1333,18 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
         if self._event is None:
             self.initialize_event()
 
-        df = self._initializer.results.sort_values('chi2')
-        top_rows = df.head(self.emcee_settings['n_walkers'])
+        df = self._initializer.results.sort_values("chi2")
+        top_rows = df.head(self.emcee_settings["n_walkers"])
 
         starting_vector = []
         for _, row in top_rows.iterrows():
-            params = {k: row[k] for k in
-                      ['t_0', 'u_0', 't_E', 's', 'q', 'rho', 'alpha']}
+            params = {
+                k: row[k]
+                for k in ["t_0", "u_0", "t_E", "s", "q", "rho", "alpha"]
+            }
             vector = self.make_emcee_vector_from_ModelParameters(
-                MulensModel.ModelParameters(params))
+                MulensModel.ModelParameters(params)
+            )
             starting_vector.append(vector)
 
         self._starting_vector = starting_vector
@@ -1308,15 +1372,17 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
         """
         if self._initial_model is None:
             raise AttributeError(
-                'initial_model is not set. Call make_starting_vector() first.')
+                "initial_model is not set. Call make_starting_vector() first."
+            )
         if self._mag_methods is None:
             raise AttributeError(
-                'mag_methods is not set. Call make_starting_vector() first.')
+                "mag_methods is not set. Call make_starting_vector() first."
+            )
 
         model = self.model_config.build(
             parameters=self._initial_model,
             magnification_methods=self._mag_methods,
-            default_magnification_method='point_source_point_lens',
+            default_magnification_method="point_source_point_lens",
         )
         self._event = self.event_config.build(
             model=model,

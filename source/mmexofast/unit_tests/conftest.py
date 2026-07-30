@@ -1,11 +1,12 @@
 import pytest
 
+
 def pytest_addoption(parser):
     parser.addoption(
         "--plot-grids",
         action="store_true",
         default=False,
-        help="Display plots of test grids with minima marked"
+        help="Display plots of test grids with minima marked",
     )
     parser.addoption(
         "--fast",
@@ -13,6 +14,7 @@ def pytest_addoption(parser):
         default=False,
         help="Skip slow tests that call searcher.run() on real data.",
     )
+
 
 def pytest_configure(config):
     config.addinivalue_line(

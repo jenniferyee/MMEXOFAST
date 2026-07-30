@@ -111,8 +111,7 @@ class WorkflowStep:
                 self.error = exc
                 if attempt < self.max_retries:
                     logger.warning(
-                        "Step '%s' failed on attempt %d/%d: %s.  "
-                        "Retrying.",
+                        "Step '%s' failed on attempt %d/%d: %s.  Retrying.",
                         self.name,
                         attempt + 1,
                         1 + self.max_retries,

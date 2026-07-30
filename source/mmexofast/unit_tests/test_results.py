@@ -1,19 +1,19 @@
 """Unit tests for results module."""
 
-import unittest
-import pandas as pd
-from unittest.mock import Mock
-import pickle
 import os.path
+import pickle
+import unittest
+from unittest.mock import Mock
+
+import pandas as pd
 
 import mmexofast as mmexo
-from mmexofast import results, fit_types
+from mmexofast import fit_types, results
+from mmexofast.config import DATA_PATH
 from mmexofast.unit_tests.test_utils import (
     create_mock_fitter,
     create_mock_params_and_sigmas,
 )
-from mmexofast.config import DATA_PATH
-
 
 
 class TestMMEXOFASTFitResults(unittest.TestCase):
@@ -49,11 +49,11 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
             self.assertIn(param, best)
 
         # Should include fixed parameters
-        self.assertIn('pi_E_N', best)
-        self.assertIn('pi_E_E', best)
+        self.assertIn("pi_E_N", best)
+        self.assertIn("pi_E_E", best)
 
         # Should NOT include flux parameters
-        self.assertNotIn('f1_S', best)
+        self.assertNotIn("f1_S", best)
 
     def test_results_property(self):
         """Test results property returns fitter's results."""
@@ -63,7 +63,9 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
     def test_parameters_to_fit_property(self):
         """Test parameters_to_fit property."""
         result = results.MMEXOFASTFitResults(self.mock_fitter)
-        self.assertEqual(result.parameters_to_fit, self.mock_fitter.parameters_to_fit)
+        self.assertEqual(
+            result.parameters_to_fit, self.mock_fitter.parameters_to_fit
+        )
 
     def test_all_model_parameters_property(self):
         """Test all_model_parameters property."""
@@ -76,7 +78,7 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
     def test_chi2_property(self):
         """Test chi2 property extracts from best dict."""
         result = results.MMEXOFASTFitResults(self.mock_fitter)
-        self.assertEqual(result.chi2, self.mock_fitter.best['chi2'])
+        self.assertEqual(result.chi2, self.mock_fitter.best["chi2"])
 
     def test_get_params_from_results(self):
         """Test get_params_from_results extracts parameters correctly."""
@@ -84,19 +86,21 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
         params = result.get_params_from_results()
 
         self.assertIsInstance(params, dict)
-        self.assertNotIn('chi2', params)
+        self.assertNotIn("chi2", params)
 
         expected_len = len(self.mock_fitter.best) - 1  # Exclude chi2
         self.assertEqual(len(params), expected_len)
 
-        self.assertIn('t_0', params)
-        self.assertEqual(params['t_0'], self.mock_fitter.best['t_0'])
+        self.assertIn("t_0", params)
+        self.assertEqual(params["t_0"], self.mock_fitter.best["t_0"])
 
         for param in self.mock_fitter.best:
-            if param != 'chi2':
+            if param != "chi2":
                 with self.subTest(param=param):
                     self.assertIn(param, params)
-                    self.assertEqual(params[param], self.mock_fitter.best[param])
+                    self.assertEqual(
+                        params[param], self.mock_fitter.best[param]
+                    )
 
     def test_get_sigmas_from_results(self):
         """Test get_sigmas_from_results extracts uncertainties correctly."""
@@ -106,20 +110,22 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
         self.assertIsInstance(sigmas, dict)
         self.assertEqual(len(sigmas), len(self.mock_fitter.parameters_to_fit))
 
-        self.assertIn('t_0', sigmas)
-        self.assertAlmostEqual(sigmas['t_0'], 0.1)
+        self.assertIn("t_0", sigmas)
+        self.assertAlmostEqual(sigmas["t_0"], 0.1)
 
         for i, param in enumerate(self.mock_fitter.parameters_to_fit):
             with self.subTest(param=param):
                 self.assertIn(param, sigmas)
-                self.assertEqual(sigmas[param], self.mock_fitter.results.sigmas[i])
+                self.assertEqual(
+                    sigmas[param], self.mock_fitter.results.sigmas[i]
+                )
 
     def _assert_dataframe_format(self, df, expected_param_count):
         """Helper method to validate DataFrame structure and content."""
         self.assertIsInstance(df, pd.DataFrame)
-        self.assertIn('parameter_names', df.columns)
-        self.assertIn('values', df.columns)
-        self.assertIn('sigmas', df.columns)
+        self.assertIn("parameter_names", df.columns)
+        self.assertIn("values", df.columns)
+        self.assertIn("sigmas", df.columns)
         self.assertEqual(len(df), expected_param_count)
 
     def test_format_results_as_df(self):
@@ -128,24 +134,27 @@ class TestMMEXOFASTFitResults(unittest.TestCase):
         df = result.format_results_as_df()
 
         expected_length = (
-            len(self.mock_fitter.best) - 1          # model params (no chi2)
-            + 2 * len(self.mock_fitter.datasets)     # flux params
-            + 2                                       # chi2 + N_data
+            len(self.mock_fitter.best)
+            - 1  # model params (no chi2)
+            + 2 * len(self.mock_fitter.datasets)  # flux params
+            + 2  # chi2 + N_data
         )
         self._assert_dataframe_format(df, expected_length)
 
-        param_names = df['parameter_names'].tolist()
+        param_names = df["parameter_names"].tolist()
         for param in self.mock_fitter.best:
-            if param != 'chi2':
+            if param != "chi2":
                 with self.subTest(param=param):
                     self.assertIn(param, param_names)
 
-        self.assertIn('chi2', param_names)
+        self.assertIn("chi2", param_names)
 
-        t_0_row = df[df['parameter_names'] == 't_0']
+        t_0_row = df[df["parameter_names"] == "t_0"]
         self.assertEqual(len(t_0_row), 1)
-        self.assertAlmostEqual(t_0_row['values'].iloc[0], self.mock_fitter.best['t_0'])
-        self.assertAlmostEqual(t_0_row['sigmas'].iloc[0], 0.1)
+        self.assertAlmostEqual(
+            t_0_row["values"].iloc[0], self.mock_fitter.best["t_0"]
+        )
+        self.assertAlmostEqual(t_0_row["sigmas"].iloc[0], 0.1)
 
 
 class TestFitRecord(TestMMEXOFASTFitResults):
@@ -164,7 +173,7 @@ class TestFitRecord(TestMMEXOFASTFitResults):
             lens_orb_motion=fit_types.LensOrbMotion.NONE,
         )
 
-        self.test_renorm_factors = {'factor1': 1.5, 'factor2': 0.9}
+        self.test_renorm_factors = {"factor1": 1.5, "factor2": 0.9}
 
     def test_from_full_result_populates_all_fields(self):
         """Test that from_full_result() populates all fields correctly."""
@@ -176,8 +185,12 @@ class TestFitRecord(TestMMEXOFASTFitResults):
         )
 
         self.assertEqual(record.model_key, self.model_key)
-        self.assertEqual(record.params, self.full_result.get_params_from_results())
-        self.assertEqual(record.sigmas, self.full_result.get_sigmas_from_results())
+        self.assertEqual(
+            record.params, self.full_result.get_params_from_results()
+        )
+        self.assertEqual(
+            record.sigmas, self.full_result.get_sigmas_from_results()
+        )
         self.assertEqual(record.renorm_factors, self.test_renorm_factors)
         self.assertEqual(record.full_result, self.full_result)
         self.assertFalse(record.fixed)
@@ -269,15 +282,17 @@ class TestFitRecord(TestMMEXOFASTFitResults):
 
         df = record.to_dataframe()
         self._assert_dataframe_format(df, len(self.params))
-        self.assertEqual(list(df['parameter_names']), list(self.params.keys()))
-        self.assertEqual(list(df['values']), list(self.params.values()))
-        self.assertEqual(list(df['sigmas']), list(self.sigmas.values()))
+        self.assertEqual(list(df["parameter_names"]), list(self.params.keys()))
+        self.assertEqual(list(df["values"]), list(self.params.values()))
+        self.assertEqual(list(df["sigmas"]), list(self.sigmas.values()))
 
     def test_from_full_result_sigmas_exception(self):
         """Test that sigmas is None when get_sigmas_from_results() raises exception."""
         mock_full_result = Mock(spec=results.MMEXOFASTFitResults)
         mock_full_result.get_params_from_results.return_value = self.params
-        mock_full_result.get_sigmas_from_results.side_effect = Exception("Sigmas not available")
+        mock_full_result.get_sigmas_from_results.side_effect = Exception(
+            "Sigmas not available"
+        )
         mock_full_result.chi2 = 100.0
 
         record = results.FitRecord.from_full_result(
@@ -302,9 +317,9 @@ class TestFitRecord(TestMMEXOFASTFitResults):
 
         df = record.to_dataframe()
         self._assert_dataframe_format(df, len(self.params))
-        self.assertEqual(list(df['parameter_names']), list(self.params.keys()))
-        self.assertEqual(list(df['values']), list(self.params.values()))
-        self.assertTrue(df['sigmas'].isna().all())
+        self.assertEqual(list(df["parameter_names"]), list(self.params.keys()))
+        self.assertEqual(list(df["values"]), list(self.params.values()))
+        self.assertTrue(df["sigmas"].isna().all())
 
     def test_chi2_returns_none_without_full_result(self):
         """Test that chi2() returns None when full_result is None."""
@@ -363,7 +378,9 @@ class TestAllFitResults(TestFitRecord):
             full_result=self.full_result,
             fixed=False,
         )
-        self.all_results[self.model_key_pspl_parallax] = self.record_pspl_parallax
+        self.all_results[self.model_key_pspl_parallax] = (
+            self.record_pspl_parallax
+        )
 
         self.record_binary = results.FitRecord.from_full_result(
             model_key=self.model_key_binary,
@@ -559,7 +576,9 @@ class TestAllFitResults(TestFitRecord):
         self.all_results.set(new_record)
 
         self.assertEqual(len(self.all_results), original_length)
-        self.assertEqual(self.all_results.get(self.model_key_pspl_static), new_record)
+        self.assertEqual(
+            self.all_results.get(self.model_key_pspl_static), new_record
+        )
         self.assertTrue(self.all_results.get(self.model_key_pspl_static).fixed)
 
     def test_has_by_fitkey(self):
@@ -624,8 +643,12 @@ class TestAllFitResults(TestFitRecord):
 
         self.assertEqual(len(keys), 3)
 
-        label_pspl_static = fit_types.model_key_to_label(self.model_key_pspl_static)
-        label_pspl_parallax = fit_types.model_key_to_label(self.model_key_pspl_parallax)
+        label_pspl_static = fit_types.model_key_to_label(
+            self.model_key_pspl_static
+        )
+        label_pspl_parallax = fit_types.model_key_to_label(
+            self.model_key_pspl_parallax
+        )
         label_binary = fit_types.model_key_to_label(self.model_key_binary)
 
         self.assertIn(label_pspl_static, keys)
@@ -642,8 +665,12 @@ class TestAllFitResults(TestFitRecord):
         self.assertEqual(len(items), 3)
 
         items_dict = dict(items)
-        self.assertEqual(items_dict[self.model_key_pspl_static], self.record_pspl_static)
-        self.assertEqual(items_dict[self.model_key_pspl_parallax], self.record_pspl_parallax)
+        self.assertEqual(
+            items_dict[self.model_key_pspl_static], self.record_pspl_static
+        )
+        self.assertEqual(
+            items_dict[self.model_key_pspl_parallax], self.record_pspl_parallax
+        )
         self.assertEqual(items_dict[self.model_key_binary], self.record_binary)
 
     def test_items_labels_true(self):
@@ -652,13 +679,21 @@ class TestAllFitResults(TestFitRecord):
 
         self.assertEqual(len(items), 3)
 
-        label_pspl_static = fit_types.model_key_to_label(self.model_key_pspl_static)
-        label_pspl_parallax = fit_types.model_key_to_label(self.model_key_pspl_parallax)
+        label_pspl_static = fit_types.model_key_to_label(
+            self.model_key_pspl_static
+        )
+        label_pspl_parallax = fit_types.model_key_to_label(
+            self.model_key_pspl_parallax
+        )
         label_binary = fit_types.model_key_to_label(self.model_key_binary)
 
         items_dict = dict(items)
-        self.assertEqual(items_dict[label_pspl_static], self.record_pspl_static)
-        self.assertEqual(items_dict[label_pspl_parallax], self.record_pspl_parallax)
+        self.assertEqual(
+            items_dict[label_pspl_static], self.record_pspl_static
+        )
+        self.assertEqual(
+            items_dict[label_pspl_parallax], self.record_pspl_parallax
+        )
         self.assertEqual(items_dict[label_binary], self.record_binary)
 
         for label in items_dict.keys():
@@ -666,12 +701,16 @@ class TestAllFitResults(TestFitRecord):
 
     def test_iter_point_lens_records_excludes_binary(self):
         """Test A: iter_point_lens_records() does not yield binary lens records."""
-        yielded_keys = [key for key, _ in self.all_results.iter_point_lens_records()]
+        yielded_keys = [
+            key for key, _ in self.all_results.iter_point_lens_records()
+        ]
         self.assertNotIn(self.model_key_binary, yielded_keys)
 
     def test_iter_point_lens_records_yields_all_point_lens(self):
         """Test B: iter_point_lens_records() yields all point lens records."""
-        yielded_keys = [key for key, _ in self.all_results.iter_point_lens_records()]
+        yielded_keys = [
+            key for key, _ in self.all_results.iter_point_lens_records()
+        ]
         self.assertIn(self.model_key_pspl_static, yielded_keys)
         self.assertIn(self.model_key_pspl_parallax, yielded_keys)
         self.assertEqual(len(yielded_keys), 2)
@@ -685,19 +724,17 @@ class TestAllFitResults(TestFitRecord):
             self.assertIsInstance(record, results.FitRecord)
 
 
-
 ANOMALY_LC_PARAMS = {
-    't_0':   2459846.8256940236,
-    't_E':   6.092881664273319,
-    'u_0':   0.8565730569521676,
-    'dmag': -0.14566435684576362,
-    'dt':    0.17894899984821677,
-    't_pl':  2459840.6340004997,
+    "t_0": 2459846.8256940236,
+    "t_E": 6.092881664273319,
+    "u_0": 0.8565730569521676,
+    "dmag": -0.14566435684576362,
+    "dt": 0.17894899984821677,
+    "t_pl": 2459840.6340004997,
 }
 
 
 class TestIntermediateResults(unittest.TestCase):
-
     def test_all_fields_default_to_none(self):
         """
         All fields of IntermediateResults default to None on construction.
@@ -716,10 +753,10 @@ class TestIntermediateResults(unittest.TestCase):
         """
         ir = results.IntermediateResults()
         value = {
-            't_0':   2456836.080383359,
-            't_eff': 23.67696884508345,
-            'j':     2,
-            'chi2':  -137842.8089725696,
+            "t_0": 2456836.080383359,
+            "t_eff": 23.67696884508345,
+            "j": 2,
+            "chi2": -137842.8089725696,
         }
         ir.best_ef_grid_point = value
         self.assertEqual(ir.best_ef_grid_point, value)
@@ -729,7 +766,7 @@ class TestIntermediateResults(unittest.TestCase):
         best_af_grid_point can be set and retrieved.
         """
         ir = results.IntermediateResults()
-        value = {'t_0': 2456836.0, 'chi2': -1000.0}
+        value = {"t_0": 2456836.0, "chi2": -1000.0}
         ir.best_af_grid_point = value
         self.assertEqual(ir.best_af_grid_point, value)
 
@@ -738,7 +775,7 @@ class TestIntermediateResults(unittest.TestCase):
         estimate_point_lens_parameters can be set and retrieved.
         """
         ir = results.IntermediateResults()
-        value = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
+        value = {"t_0": 2456836.0, "u_0": 1.012, "t_E": 21.48}
         ir.estimate_point_lens_parameters = value
         self.assertEqual(ir.estimate_point_lens_parameters, value)
 
@@ -747,15 +784,17 @@ class TestIntermediateResults(unittest.TestCase):
         estimate_binary_lens_parameters can be set and retrieved.
         """
         ir = results.IntermediateResults()
-        value ={'wide': {
-            't_0':   2453582.7281740606,
-            'u_0':   0.355227507989543,
-            't_E':   11.106795114521415,
-            'rho':   0.024632765186197645,
-            'q':     7.524529162733864e-05,
-            's':     1.6044784697939465,
-            'alpha': 157.9506556145345,
-        }}
+        value = {
+            "wide": {
+                "t_0": 2453582.7281740606,
+                "u_0": 0.355227507989543,
+                "t_E": 11.106795114521415,
+                "rho": 0.024632765186197645,
+                "q": 7.524529162733864e-05,
+                "s": 1.6044784697939465,
+                "alpha": 157.9506556145345,
+            }
+        }
         ir.estimate_binary_lens_parameters = value
         self.assertEqual(ir.estimate_binary_lens_parameters, value)
 
@@ -767,7 +806,8 @@ class TestIntermediateResults(unittest.TestCase):
         """
         self.assertEqual(
             results.IntermediateResults.VALID_ANOMALY_TYPES,
-            {'close', 'wide', 'high_mag'})
+            {"close", "wide", "high_mag"},
+        )
 
     def test_anomaly_type_accepts_valid_values(self):
         """
@@ -786,7 +826,7 @@ class TestIntermediateResults(unittest.TestCase):
         """
         ir = results.IntermediateResults()
         with self.assertRaises(ValueError):
-            ir.anomaly_type = 'planetary'
+            ir.anomaly_type = "planetary"
 
     def test_anomaly_lc_params_can_be_set(self):
         """
@@ -801,7 +841,7 @@ class TestIntermediateResults(unittest.TestCase):
         Setting one field does not affect others.
         """
         ir = results.IntermediateResults()
-        ir.best_ef_grid_point = {'t_0': 2456836.0}
+        ir.best_ef_grid_point = {"t_0": 2456836.0}
         self.assertIsNone(ir.best_af_grid_point)
         self.assertIsNone(ir.estimate_point_lens_parameters)
         self.assertIsNone(ir.estimate_binary_lens_parameters)
@@ -813,16 +853,26 @@ class TestIntermediateResults(unittest.TestCase):
         IntermediateResults survives a pickle roundtrip with all fields intact.
         """
         ir = results.IntermediateResults()
-        ir.best_ef_grid_point = {'t_0': 2456836.0, 't_eff': 23.67}
-        ir.estimate_point_lens_parameters = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
-        ir.anomaly_type = 'close'
+        ir.best_ef_grid_point = {"t_0": 2456836.0, "t_eff": 23.67}
+        ir.estimate_point_lens_parameters = {
+            "t_0": 2456836.0,
+            "u_0": 1.012,
+            "t_E": 21.48,
+        }
+        ir.anomaly_type = "close"
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
         restored = pickle.loads(pickle.dumps(ir))
         self.assertEqual(restored.best_ef_grid_point, ir.best_ef_grid_point)
         self.assertEqual(restored.best_af_grid_point, ir.best_af_grid_point)
-        self.assertEqual(restored.estimate_point_lens_parameters, ir.estimate_point_lens_parameters)
-        self.assertEqual(restored.estimate_binary_lens_parameters, ir.estimate_binary_lens_parameters)
+        self.assertEqual(
+            restored.estimate_point_lens_parameters,
+            ir.estimate_point_lens_parameters,
+        )
+        self.assertEqual(
+            restored.estimate_binary_lens_parameters,
+            ir.estimate_binary_lens_parameters,
+        )
         self.assertEqual(restored.anomaly_type, ir.anomaly_type)
         self.assertEqual(restored.anomaly_lc_params, ir.anomaly_lc_params)
 
@@ -832,18 +882,27 @@ class TestIntermediateResults(unittest.TestCase):
         IntermediateResults, initialized with all fields None.
         """
         fitter = mmexo.MMEXOFASTFitter(
-            files=[os.path.join(
-                DATA_PATH, 'OB140939',
-                'n20100310.I.OGLE.OB140939.txt')],
-            coords='17:47:12.25 -21:22:58.7',
-            fit_type='point lens',
-            renormalize_errors=False)
+            files=[
+                os.path.join(
+                    DATA_PATH, "OB140939", "n20100310.I.OGLE.OB140939.txt"
+                )
+            ],
+            coords="17:47:12.25 -21:22:58.7",
+            fit_type="point lens",
+            renormalize_errors=False,
+        )
 
-        self.assertIsInstance(fitter.intermediate_results, results.IntermediateResults)
+        self.assertIsInstance(
+            fitter.intermediate_results, results.IntermediateResults
+        )
         self.assertIsNone(fitter.intermediate_results.best_ef_grid_point)
         self.assertIsNone(fitter.intermediate_results.best_af_grid_point)
-        self.assertIsNone(fitter.intermediate_results.estimate_point_lens_parameters)
-        self.assertIsNone(fitter.intermediate_results.estimate_binary_lens_parameters)
+        self.assertIsNone(
+            fitter.intermediate_results.estimate_point_lens_parameters
+        )
+        self.assertIsNone(
+            fitter.intermediate_results.estimate_binary_lens_parameters
+        )
         self.assertIsNone(fitter.intermediate_results.anomaly_type)
         self.assertIsNone(fitter.intermediate_results.anomaly_lc_params)
 
@@ -852,34 +911,44 @@ class TestIntermediateResults(unittest.TestCase):
         intermediate_results is correctly restored by _restore_state().
         """
         fitter = mmexo.MMEXOFASTFitter(
-            files=[os.path.join(
-                DATA_PATH, 'OB140939',
-                'n20100310.I.OGLE.OB140939.txt')],
-            coords='17:47:12.25 -21:22:58.7',
-            fit_type='point lens',
-            renormalize_errors=False)
+            files=[
+                os.path.join(
+                    DATA_PATH, "OB140939", "n20100310.I.OGLE.OB140939.txt"
+                )
+            ],
+            coords="17:47:12.25 -21:22:58.7",
+            fit_type="point lens",
+            renormalize_errors=False,
+        )
 
         ir = results.IntermediateResults()
-        ir.best_ef_grid_point = {'t_0': 2456836.0}
-        ir.estimate_point_lens_parameters = {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48}
-        ir.anomaly_type = 'wide'
+        ir.best_ef_grid_point = {"t_0": 2456836.0}
+        ir.estimate_point_lens_parameters = {
+            "t_0": 2456836.0,
+            "u_0": 1.012,
+            "t_E": 21.48,
+        }
+        ir.anomaly_type = "wide"
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
-        fitter._restore_state({'intermediate_results': ir})
+        fitter._restore_state({"intermediate_results": ir})
 
         self.assertEqual(
-            fitter.intermediate_results.best_ef_grid_point,
-            {'t_0': 2456836.0})
+            fitter.intermediate_results.best_ef_grid_point, {"t_0": 2456836.0}
+        )
         self.assertEqual(
             fitter.intermediate_results.estimate_point_lens_parameters,
-            {'t_0': 2456836., 'u_0': 1.012, 't_E': 21.48})
+            {"t_0": 2456836.0, "u_0": 1.012, "t_E": 21.48},
+        )
+        self.assertEqual(fitter.intermediate_results.anomaly_type, "wide")
         self.assertEqual(
-            fitter.intermediate_results.anomaly_type, 'wide')
-        self.assertEqual(
-            fitter.intermediate_results.anomaly_lc_params, ANOMALY_LC_PARAMS)
+            fitter.intermediate_results.anomaly_lc_params, ANOMALY_LC_PARAMS
+        )
         self.assertIsNone(fitter.intermediate_results.best_af_grid_point)
-        self.assertIsNone(fitter.intermediate_results.estimate_binary_lens_parameters)
+        self.assertIsNone(
+            fitter.intermediate_results.estimate_binary_lens_parameters
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

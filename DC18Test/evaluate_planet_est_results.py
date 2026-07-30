@@ -1,12 +1,12 @@
-import glob
 import ast
+import glob
 import os.path
 import re
 from enum import Enum
 
-import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 
 from examples.DC18_classes import DC18Answers
 
@@ -30,10 +30,11 @@ class SelectionStrategy(Enum):
     solution is close to truth — requires grouping by idx rather than counting
     rows and is not yet implemented here.
     """
+
     PRIMARY_FIRST = "primary_first"
-    ALL_PRIMARY   = "all_primary"
-    ALL           = "all"
-    BEST_S        = 'best_s'
+    ALL_PRIMARY = "all_primary"
+    ALL = "all"
+    BEST_S = "best_s"
 
 
 def _get_last_run_lines(lines: list[str]) -> list[str] | None:
@@ -54,7 +55,7 @@ def _get_last_run_lines(lines: list[str]) -> list[str] | None:
 
 def _parse_log_dict(line_tail: str) -> dict:
     """Parse a dict literal from a log line, handling np.float64() formatting."""
-    dict_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', line_tail)
+    dict_str = re.sub(r"np\.float64\(([^)]+)\)", r"\1", line_tail)
     return ast.literal_eval(dict_str)
 
 
@@ -72,13 +73,13 @@ def get_results() -> pd.DataFrame:
         idx           : int   zero-based light-curve index
     """
     results = []
-    log_files = glob.glob('temp_output/no_par/W*/WFIRST.*.log')
+    log_files = glob.glob("temp_output/no_par/W*/WFIRST.*.log")
     failed = []
     hm = []
-    print('\nTotal Fits:', len(log_files), '\n')
+    print("\nTotal Fits:", len(log_files), "\n")
 
     for log_file in log_files:
-        lc_num = int(os.path.basename(log_file).split('.')[1])
+        lc_num = int(os.path.basename(log_file).split(".")[1])
 
         with open(log_file) as f:
             lines = f.readlines()
@@ -97,56 +98,67 @@ def get_results() -> pd.DataFrame:
 
         for line in run_lines:
             # Current format: "Estimated binary params (Type): {...}"
-            est_match = re.match(r'Estimated binary params \((\w+)\): (.+)', line)
+            est_match = re.match(
+                r"Estimated binary params \((\w+)\): (.+)", line
+            )
             if est_match:
                 current_solution_type = est_match.group(1)
                 params = _parse_log_dict(est_match.group(2))
-                params['idx']           = lc_num - 1
-                params['solution_type'] = current_solution_type
-                params['is_alternate']  = False
-                params['is_inverse']    = False
-                params['t_0']          -= 2458234.
+                params["idx"] = lc_num - 1
+                params["solution_type"] = current_solution_type
+                params["is_alternate"] = False
+                params["is_inverse"] = False
+                params["t_0"] -= 2458234.0
                 lc_params.append(params)
                 continue
 
             # Legacy format (no type label): "Estimated binary params: {...}"
             if line.startswith("Estimated binary params:"):
-                current_solution_type = 'Unknown'
+                current_solution_type = "Unknown"
                 params = _parse_log_dict(line.split(": ", 1)[1])
-                params['idx']           = lc_num - 1
-                params['solution_type'] = current_solution_type
-                params['is_alternate']  = False
-                params['is_inverse']    = False
-                params['t_0']          -= 2458234.
+                params["idx"] = lc_num - 1
+                params["solution_type"] = current_solution_type
+                params["is_alternate"] = False
+                params["is_inverse"] = False
+                params["t_0"] -= 2458234.0
                 lc_params.append(params)
                 continue
 
             # Alternate s_dagger solution (always follows an "Estimated binary params" line)
-            if line.startswith("Alternate s_dagger solution:") and current_solution_type is not None:
+            if (
+                line.startswith("Alternate s_dagger solution:")
+                and current_solution_type is not None
+            ):
                 params = _parse_log_dict(line.split(": ", 1)[1])
-                params['idx']           = lc_num - 1
-                params['solution_type'] = current_solution_type
-                params['is_alternate']  = True
-                params['is_inverse']    = False
-                params['t_0']          -= 2458234.
+                params["idx"] = lc_num - 1
+                params["solution_type"] = current_solution_type
+                params["is_alternate"] = True
+                params["is_inverse"] = False
+                params["t_0"] -= 2458234.0
                 lc_params.append(params)
 
-            if line.startswith("Alternate 1/s solution:") and current_solution_type is not None:
+            if (
+                line.startswith("Alternate 1/s solution:")
+                and current_solution_type is not None
+            ):
                 params = _parse_log_dict(line.split(": ", 1)[1])
-                params['idx']           = lc_num - 1
-                params['solution_type'] = current_solution_type
-                params['is_alternate']  = False
-                params['is_inverse']    = True
-                params['t_0']          -= 2458234.
+                params["idx"] = lc_num - 1
+                params["solution_type"] = current_solution_type
+                params["is_alternate"] = False
+                params["is_inverse"] = True
+                params["t_0"] -= 2458234.0
                 lc_params.append(params)
 
-            if line.startswith("Alternate 1/s solution 2:") and current_solution_type is not None:
+            if (
+                line.startswith("Alternate 1/s solution 2:")
+                and current_solution_type is not None
+            ):
                 params = _parse_log_dict(line.split(": ", 1)[1])
-                params['idx']           = lc_num - 1
-                params['solution_type'] = current_solution_type
-                params['is_alternate']  = True
-                params['is_inverse']    = True
-                params['t_0']          -= 2458234.
+                params["idx"] = lc_num - 1
+                params["solution_type"] = current_solution_type
+                params["is_alternate"] = True
+                params["is_inverse"] = True
+                params["t_0"] -= 2458234.0
                 lc_params.append(params)
 
         if lc_params:
@@ -154,9 +166,15 @@ def get_results() -> pd.DataFrame:
         else:
             failed.append(lc_num)
 
-    print('\nclassified as hm:', sorted(hm))
-    print('Total: ', len(hm), '\n')
-    print('\nestimate_binary_lens_parameters failed: ', sorted(failed), '\nTotal: ', len(failed), '\n')
+    print("\nclassified as hm:", sorted(hm))
+    print("Total: ", len(hm), "\n")
+    print(
+        "\nestimate_binary_lens_parameters failed: ",
+        sorted(failed),
+        "\nTotal: ",
+        len(failed),
+        "\n",
+    )
 
     return pd.DataFrame(results)
 
@@ -177,10 +195,10 @@ def get_ef_grid_results() -> pd.DataFrame:
     """
     results = []
     missing = []
-    log_files = glob.glob('temp_output/no_par/W*/WFIRST.*.log')
+    log_files = glob.glob("temp_output/no_par/W*/WFIRST.*.log")
 
     for log_file in log_files:
-        lc_num = int(os.path.basename(log_file).split('.')[1])
+        lc_num = int(os.path.basename(log_file).split(".")[1])
 
         with open(log_file) as f:
             lines = f.readlines()
@@ -193,42 +211,69 @@ def get_ef_grid_results() -> pd.DataFrame:
         for line in run_lines:
             if line.startswith("Best EF grid point:"):
                 params = _parse_log_dict(line.split(": ", 1)[1])
-                params['lc_num']  = lc_num
-                params['t_0']    -= 2458234.
+                params["lc_num"] = lc_num
+                params["t_0"] -= 2458234.0
                 results.append(params)
                 break
         else:
             missing.append(lc_num)
 
-    print(f'\nEF grid results found: {len(results)}')
-    print(f'EF grid results missing: {sorted(missing)}\n')
+    print(f"\nEF grid results found: {len(results)}")
+    print(f"EF grid results missing: {sorted(missing)}\n")
 
     return pd.DataFrame(results)
 
 
-class EvaluateResults():
-    eval_columns  = ['idx', 'u0_true', 'u_0', 'tE_true', 't_E', 's_true', 's', 'q_true', 'q']
-    print_columns = ['lc_num', 'solution_type', 'is_alternate',
-                     't_0', 't0_true', 'u_0', 'u0_true',
-                     't_E', 'tE_true', 'rho', 'rhos_true',
-                     's', 's_true', 'q', 'q_true', 'alpha', 'alpha_true']
+class EvaluateResults:
+    eval_columns = [
+        "idx",
+        "u0_true",
+        "u_0",
+        "tE_true",
+        "t_E",
+        "s_true",
+        "s",
+        "q_true",
+        "q",
+    ]
+    print_columns = [
+        "lc_num",
+        "solution_type",
+        "is_alternate",
+        "t_0",
+        "t0_true",
+        "u_0",
+        "u0_true",
+        "t_E",
+        "tE_true",
+        "rho",
+        "rhos_true",
+        "s",
+        "s_true",
+        "q",
+        "q_true",
+        "alpha",
+        "alpha_true",
+    ]
 
-    def __init__(self, strategy: SelectionStrategy = SelectionStrategy.ALL_PRIMARY):
-        raw   = get_results()
+    def __init__(
+        self, strategy: SelectionStrategy = SelectionStrategy.ALL_PRIMARY
+    ):
+        raw = get_results()
         truth = DC18Answers()
 
         # Merge truth once onto the full set; pandas fans it out to every row
         # sharing the same idx (many-to-one merge).
         self.all_results = raw.merge(
-            truth.data.add_suffix('_true'),
-            left_on='idx',
+            truth.data.add_suffix("_true"),
+            left_on="idx",
             right_index=True,
-            how='left',
+            how="left",
         )
-        self.all_results['lc_num'] = self.all_results['idx'] + 1
+        self.all_results["lc_num"] = self.all_results["idx"] + 1
 
         self.strategy = strategy
-        self.results  = self._apply_strategy(strategy)
+        self.results = self._apply_strategy(strategy)
         self._print_summary()
 
     # ------------------------------------------------------------------
@@ -241,72 +286,94 @@ class EvaluateResults():
             return self.all_results.copy()
 
         elif strategy == SelectionStrategy.ALL_PRIMARY:
-            return (self.all_results[~self.all_results['is_alternate']]
-                    .reset_index(drop=True))
+            return self.all_results[
+                ~self.all_results["is_alternate"]
+            ].reset_index(drop=True)
 
         elif strategy == SelectionStrategy.PRIMARY_FIRST:
             # drop_duplicates preserves insertion order, so the first primary
             # solution per LC (= the classified anomaly type) is kept.
-            primary = self.all_results[~self.all_results['is_alternate']]
-            return (primary
-                    .drop_duplicates(subset='idx', keep='first')
-                    .reset_index(drop=True))
+            primary = self.all_results[~self.all_results["is_alternate"]]
+            return primary.drop_duplicates(
+                subset="idx", keep="first"
+            ).reset_index(drop=True)
         elif strategy == SelectionStrategy.BEST_S:
-            self.all_results['delta_s'] = np.abs(self.all_results['s_true'] - self.all_results['s'])
-            #self.all_results['delta_s'].min(groupby='lc_num')
+            self.all_results["delta_s"] = np.abs(
+                self.all_results["s_true"] - self.all_results["s"]
+            )
+            # self.all_results['delta_s'].min(groupby='lc_num')
             idx = []
-            for lc_num in self.all_results['lc_num'].unique():
+            for lc_num in self.all_results["lc_num"].unique():
                 idx.append(
-                    self.all_results[self.all_results['lc_num'] == lc_num].sort_values(by='delta_s').index[0])
+                    self.all_results[self.all_results["lc_num"] == lc_num]
+                    .sort_values(by="delta_s")
+                    .index[0]
+                )
 
             self.all_results = self.all_results.iloc[idx]
-            return self.all_results.drop(columns='delta_s').reset_index()
+            return self.all_results.drop(columns="delta_s").reset_index()
         else:
             raise ValueError(f"Unknown strategy: {strategy}")
 
     def set_strategy(self, strategy: SelectionStrategy):
         """Switch to a different selection strategy and refresh self.results."""
         self.strategy = strategy
-        self.results  = self._apply_strategy(strategy)
+        self.results = self._apply_strategy(strategy)
         self._print_summary()
 
     def _print_summary(self):
-        with pd.option_context('display.width', None, 'display.max_rows', None):
-            print(self.results[self.print_columns]
-                  .sort_values(['lc_num', 'is_alternate', 'solution_type']))
-        print(f'\nStrategy  : {self.strategy.value}')
-        print(f'Rows      : {len(self.results)}')
-        print(f'Unique LCs: {self.results["idx"].nunique()}\n')
+        with pd.option_context(
+            "display.width", None, "display.max_rows", None
+        ):
+            print(
+                self.results[self.print_columns].sort_values(
+                    ["lc_num", "is_alternate", "solution_type"]
+                )
+            )
+        print(f"\nStrategy  : {self.strategy.value}")
+        print(f"Rows      : {len(self.results)}")
+        print(f"Unique LCs: {self.results['idx'].nunique()}\n")
 
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
 
     def _get_truth_key(self, key):
-        root = 'rhos' if key == 'rho' else key.replace('_', '')
-        return root + '_true'
+        root = "rhos" if key == "rho" else key.replace("_", "")
+        return root + "_true"
 
     def _plot(self, x, y, ylim=None, log=False):
         plt.figure()
-        colors     = np.where(self.results['s_true'] < 1, 'darkorange', 'darkcyan')
-        facecolors = np.where(self.results['q_true'] < 0.03, colors, 'none')
-        low_mag    = self.results['u0_true'].abs() > 0.05
+        colors = np.where(self.results["s_true"] < 1, "darkorange", "darkcyan")
+        facecolors = np.where(self.results["q_true"] < 0.03, colors, "none")
+        low_mag = self.results["u0_true"].abs() > 0.05
 
-        for mask, marker in zip([low_mag, ~low_mag], ['o', 'd']):
-            plt.scatter(x[mask], y[mask],
-                        c=colors[mask], facecolors=facecolors[mask],
-                        marker=marker, clip_on=False, zorder=3)
+        for mask, marker in zip([low_mag, ~low_mag], ["o", "d"]):
+            plt.scatter(
+                x[mask],
+                y[mask],
+                c=colors[mask],
+                facecolors=facecolors[mask],
+                marker=marker,
+                clip_on=False,
+                zorder=3,
+            )
 
         if log and ylim is not None:
             for tri_y, tri_mask, tri_marker in [
-                (ylim[1], y > ylim[1], '^'),
-                (ylim[0], y < ylim[0], 'v'),
+                (ylim[1], y > ylim[1], "^"),
+                (ylim[0], y < ylim[0], "v"),
             ]:
                 if tri_mask.any():
-                    plt.scatter(x[tri_mask], np.full(tri_mask.sum(), tri_y),
-                                marker=tri_marker,
-                                c=colors[tri_mask], facecolors=facecolors[tri_mask],
-                                clip_on=False, zorder=3)
+                    plt.scatter(
+                        x[tri_mask],
+                        np.full(tri_mask.sum(), tri_y),
+                        marker=tri_marker,
+                        c=colors[tri_mask],
+                        facecolors=facecolors[tri_mask],
+                        clip_on=False,
+                        zorder=3,
+                    )
 
     # ------------------------------------------------------------------
     # Evaluation methods
@@ -319,33 +386,41 @@ class EvaluateResults():
         With multi-row strategies (ALL_PRIMARY, ALL) a single LC can appear in
         both lists if some of its solutions are good and others are not.
         """
-        good_lcs = sorted(self.results[good]['lc_num'].unique())
-        bad_lcs  = sorted(self.results[~good]['lc_num'].unique())
-        print(f'  good ({len(good_lcs)} LCs): {good_lcs}')
-        print(f'  bad  ({len(bad_lcs)} LCs): {bad_lcs}')
+        good_lcs = sorted(self.results[good]["lc_num"].unique())
+        bad_lcs = sorted(self.results[~good]["lc_num"].unique())
+        print(f"  good ({len(good_lcs)} LCs): {good_lcs}")
+        print(f"  bad  ({len(bad_lcs)} LCs): {bad_lcs}")
 
         if self.strategy != SelectionStrategy.PRIMARY_FIRST:
             overlap = sorted(set(good_lcs) & set(bad_lcs))
             if overlap:
-                print(f'  Note: {len(overlap)} LC(s) appear in both lists '
-                      f'(mixed solutions): {overlap}')
+                print(
+                    f"  Note: {len(overlap)} LC(s) appear in both lists "
+                    f"(mixed solutions): {overlap}"
+                )
 
     def get_good_t0(self):
-        delta_t0 = np.abs(self.results['t_0'] - self.results['t0_true'])
-        good_t0 = (delta_t0 < self.results['tE_true'] * 0.1)
-        msg = f'\nt0 is good (within 0.1tE): {np.sum(good_t0)}'
+        delta_t0 = np.abs(self.results["t_0"] - self.results["t0_true"])
+        good_t0 = delta_t0 < self.results["tE_true"] * 0.1
+        msg = f"\nt0 is good (within 0.1tE): {np.sum(good_t0)}"
         return good_t0, msg
 
     def get_good_PSPL(self):
         good_t0, _ = self.get_good_t0()
 
-        delta_u0 = np.abs((self.results['u_0'] - self.results['u0_true'])/ self.results['u0_true'])
+        delta_u0 = np.abs(
+            (self.results["u_0"] - self.results["u0_true"])
+            / self.results["u0_true"]
+        )
         good_u0 = delta_u0 < 0.5
 
-        delta_tE = np.abs((self.results['t_E'] - self.results['tE_true'])/ self.results['tE_true'])
+        delta_tE = np.abs(
+            (self.results["t_E"] - self.results["tE_true"])
+            / self.results["tE_true"]
+        )
         good_tE = delta_tE < 0.5
         good = good_t0 & good_u0 & good_tE
-        msg = f'\nPSPL is good (t0 w/in 0.1tE, u0 50%, tE 50%): {np.sum(good)}'
+        msg = f"\nPSPL is good (t0 w/in 0.1tE, u0 50%, tE 50%): {np.sum(good)}"
 
         return good, msg
 
@@ -359,74 +434,112 @@ class EvaluateResults():
         self.print_indices(good)
 
     def is_log_q_good(self, threshold=1.0):
-        delta = np.log10(self.results['q']) - np.log10(self.results['q_true'])
-        good = (np.abs(delta) < threshold)
-        print(f'\n|dlog q| < {threshold}: '
-              f'{good.sum()} rows, {self.results[good]["idx"].nunique()} unique LCs')
+        delta = np.log10(self.results["q"]) - np.log10(self.results["q_true"])
+        good = np.abs(delta) < threshold
+        print(
+            f"\n|dlog q| < {threshold}: "
+            f"{good.sum()} rows, {self.results[good]['idx'].nunique()} unique LCs"
+        )
         self.print_indices(good)
 
     def is_sign_s_good(self):
-        self.results['sign_s_good'] = np.log10(self.results['s']) * np.log10(self.results['s_true']) > 0.
-        self.results['s_neg'] = 1. / self.results['s']
-        good = (self.results['s_true'] > 1.) & (self.results['solution_type'].str.match('ClosePlanet'))
+        self.results["sign_s_good"] = (
+            np.log10(self.results["s"]) * np.log10(self.results["s_true"])
+            > 0.0
+        )
+        self.results["s_neg"] = 1.0 / self.results["s"]
+        good = (self.results["s_true"] > 1.0) & (
+            self.results["solution_type"].str.match("ClosePlanet")
+        )
         print(np.sum(good))
-        with pd.option_context('display.max_rows', None, 'display.width', None):
-            print(self.results[
-                      ['lc_num', 'solution_type', 'is_alternate', 'is_inverse', 's_true', 's', 'sign_s_good', 'u0_true', 'tE_true']].sort_values(
-                by=['s_true', 'lc_num', 'solution_type', 'is_alternate']))
-            print(self.results[good][
-                      ['lc_num', 'solution_type', 'is_alternate', 'is_inverse', 's_true', 's', 's_neg', 'sign_s_good', 'u0_true', 'tE_true']].sort_values(
-                by=['lc_num']))
+        with pd.option_context(
+            "display.max_rows", None, "display.width", None
+        ):
+            print(
+                self.results[
+                    [
+                        "lc_num",
+                        "solution_type",
+                        "is_alternate",
+                        "is_inverse",
+                        "s_true",
+                        "s",
+                        "sign_s_good",
+                        "u0_true",
+                        "tE_true",
+                    ]
+                ].sort_values(
+                    by=["s_true", "lc_num", "solution_type", "is_alternate"]
+                )
+            )
+            print(
+                self.results[good][
+                    [
+                        "lc_num",
+                        "solution_type",
+                        "is_alternate",
+                        "is_inverse",
+                        "s_true",
+                        "s",
+                        "s_neg",
+                        "sign_s_good",
+                        "u0_true",
+                        "tE_true",
+                    ]
+                ].sort_values(by=["lc_num"])
+            )
 
     def is_the_planet_good(self, log_q_threshold=0.5):
-        delta = np.log10(self.results['q']) - np.log10(self.results['q_true'])
-        good  = (
-            (np.abs(delta) < log_q_threshold) &
-            ((self.results['s'] - 1) * (self.results['s_true'] - 1) > 0)
+        delta = np.log10(self.results["q"]) - np.log10(self.results["q_true"])
+        good = (np.abs(delta) < log_q_threshold) & (
+            (self.results["s"] - 1) * (self.results["s_true"] - 1) > 0
         )
-        print(f'\n|dlog q| < {log_q_threshold} AND close/wide correct: '
-              f'{good.sum()} rows, {self.results[good]["idx"].nunique()} unique LCs')
+        print(
+            f"\n|dlog q| < {log_q_threshold} AND close/wide correct: "
+            f"{good.sum()} rows, {self.results[good]['idx'].nunique()} unique LCs"
+        )
         self.print_indices(good)
 
     def is_there_a_good_guess(self):
-        #self.results['sol_dist'] = np.sqrt((np.log10(self.results['s_true']) - np.log10(self.results['s']))**2 +
+        # self.results['sol_dist'] = np.sqrt((np.log10(self.results['s_true']) - np.log10(self.results['s']))**2 +
         #                               (np.log10(self.results['q_true']) - np.log10(self.results['q']))**2)
-        self.results['sol_dist'] = np.abs(self.results['s_true'] - self.results['s'])
-        #good = self.results.groupby('lc_num').min('sol_dist')
-        good = self.results['sol_dist'] < 0.1
+        self.results["sol_dist"] = np.abs(
+            self.results["s_true"] - self.results["s"]
+        )
+        # good = self.results.groupby('lc_num').min('sol_dist')
+        good = self.results["sol_dist"] < 0.1
         self.print_indices(good)
-        #with pd.option_context('display.max_rows', None, 'display.width', None):
+        # with pd.option_context('display.max_rows', None, 'display.width', None):
         #    print(self.results[['sol_dist'] + self.print_columns].sort_values(by=['lc_num', 'sol_dist']))
 
-                    #['lc_num', 'solution_type', 'is_alternate', 'is_inverse', 'dist', 's_true', 's', 'q_true', 'q',
-                    #   'u0_true', 'tE_true']])
-
+        # ['lc_num', 'solution_type', 'is_alternate', 'is_inverse', 'dist', 's_true', 's', 'q_true', 'q',
+        #   'u0_true', 'tE_true']])
 
     # ------------------------------------------------------------------
     # Plotting
     # ------------------------------------------------------------------
 
     def _make_scatter_plot(self, key, log=False):
-        truth_key  = self._get_truth_key(key)
-        fit_value  = self.results[key]
+        truth_key = self._get_truth_key(key)
+        fit_value = self.results[key]
         true_value = self.results[truth_key]
 
-        if key == 'u_0' and log:
-            fit_value  = np.abs(fit_value)
+        if key == "u_0" and log:
+            fit_value = np.abs(fit_value)
             true_value = np.abs(true_value)
 
         if log:
-            delta  = np.log10(fit_value) - np.log10(true_value)
-            value  = np.log10(true_value)
-            xlabel = f'log ({key}_true)'
-            ylabel = f'log({key}) - log(True)'
-            ylim   = (-1.5, 1.5)
+            delta = np.log10(fit_value) - np.log10(true_value)
+            value = np.log10(true_value)
+            xlabel = f"log ({key}_true)"
+            ylabel = f"log({key}) - log(True)"
+            ylim = (-1.5, 1.5)
         else:
-            value  = true_value
-            delta  = fit_value - true_value
-            xlabel = f'{key}_true'
-            ylabel = f'({key} - True)'
-            ylim   = None
+            value = true_value
+            delta = fit_value - true_value
+            xlabel = f"{key}_true"
+            ylabel = f"({key} - True)"
+            ylim = None
 
         self._plot(value, delta, ylim=ylim, log=log)
         plt.xlabel(xlabel)
@@ -436,86 +549,101 @@ class EvaluateResults():
         plt.tight_layout()
 
     def make_all_delta_plots(self):
-        plot_list = {'u_0': True, 't_E': False, 'rho': True,
-                     'alpha': False, 's': True, 'q': True}
+        plot_list = {
+            "u_0": True,
+            "t_E": False,
+            "rho": True,
+            "alpha": False,
+            "s": True,
+            "q": True,
+        }
         for key, log in plot_list.items():
-            self._make_scatter_plot(key, log=log)     # _plot() creates the figure
-            plt.savefig(f'temp_output/no_par/figs/{key}_deltas.png', dpi=300)
+            self._make_scatter_plot(key, log=log)  # _plot() creates the figure
+            plt.savefig(f"temp_output/no_par/figs/{key}_deltas.png", dpi=300)
 
     def make_scatter_plot(self, key, log=False):
-        fit_value  = self.results[key]
+        fit_value = self.results[key]
         true_value = self.results[self._get_truth_key(key)]
 
-        self._plot(true_value, fit_value)             # _plot() creates the figure
+        self._plot(true_value, fit_value)  # _plot() creates the figure
 
         ax = plt.gca()
-        ax.set_aspect('equal')
-        lim = (min(ax.get_xlim()[0], ax.get_ylim()[0]),
-               max(ax.get_xlim()[1], ax.get_ylim()[1]))
-        ax.plot(lim, lim, zorder=0, color='black', clip_on=True)
+        ax.set_aspect("equal")
+        lim = (
+            min(ax.get_xlim()[0], ax.get_ylim()[0]),
+            max(ax.get_xlim()[1], ax.get_ylim()[1]),
+        )
+        ax.plot(lim, lim, zorder=0, color="black", clip_on=True)
 
         if log:
-            plt.xlabel(f'log {key} (True)')
-            plt.xscale('log')
-            plt.ylabel(f'log {key} (Fitted)')
-            plt.yscale('log')
+            plt.xlabel(f"log {key} (True)")
+            plt.xscale("log")
+            plt.ylabel(f"log {key} (Fitted)")
+            plt.yscale("log")
         else:
-            plt.xlabel(f'{key} (True)')
-            plt.ylabel(f'{key} (Fitted)')
+            plt.xlabel(f"{key} (True)")
+            plt.ylabel(f"{key} (Fitted)")
 
         plt.minorticks_on()
         plt.tight_layout()
 
     def make_all_scatter_plots(self):
-        for key in ['u_0', 't_E', 'rho', 'alpha', 's', 'q']:
-            self.make_scatter_plot(key, log=(key in ('q', 'rho')))
-            plt.savefig(f'temp_output/no_par/figs/{key}_vs.png', dpi=300)
+        for key in ["u_0", "t_E", "rho", "alpha", "s", "q"]:
+            self.make_scatter_plot(key, log=(key in ("q", "rho")))
+            plt.savefig(f"temp_output/no_par/figs/{key}_vs.png", dpi=300)
 
     def make_planet_plots(self):
-        keys = ['s', 'q']
+        keys = ["s", "q"]
         deltas = {}
         for key in keys:
-            truth_key  = self._get_truth_key(key)
-            fit_value  = self.results[key]
+            truth_key = self._get_truth_key(key)
+            fit_value = self.results[key]
             true_value = self.results[truth_key]
-            delta  = np.log10(fit_value) - np.log10(true_value)
+            delta = np.log10(fit_value) - np.log10(true_value)
             deltas[key] = delta
 
-        self._plot(deltas['s'], deltas['q'])
-        plt.xlabel('d log s')
-        plt.ylabel('d log q')
+        self._plot(deltas["s"], deltas["q"])
+        plt.xlabel("d log s")
+        plt.ylabel("d log q")
         plt.minorticks_on()
         plt.tight_layout()
 
 
 def check_bad_t0(evaluator):
-    ef_results = get_ef_grid_results().sort_values(by='lc_num').rename(columns={
-        't_0': 't0_ef'})
-    with pd.option_context('display.width', None, 'display.max_rows', None):
-        print(ef_results.sort_values(by='t_eff'))
+    ef_results = (
+        get_ef_grid_results()
+        .sort_values(by="lc_num")
+        .rename(columns={"t_0": "t0_ef"})
+    )
+    with pd.option_context("display.width", None, "display.max_rows", None):
+        print(ef_results.sort_values(by="t_eff"))
 
-    evaluator.results = pd.merge(evaluator.results, ef_results, on='lc_num')
+    evaluator.results = pd.merge(evaluator.results, ef_results, on="lc_num")
     good_t0, _ = evaluator.get_good_t0()
-    with pd.option_context('display.width', None, 'display.max_rows', None):
-        print(evaluator.results[~good_t0][evaluator.print_columns + ['t_eff']].sort_values(by='lc_num'))
+    with pd.option_context("display.width", None, "display.max_rows", None):
+        print(
+            evaluator.results[~good_t0][
+                evaluator.print_columns + ["t_eff"]
+            ].sort_values(by="lc_num")
+        )
 
 
-if __name__ == '__main__':
-    truth = ['lc_num', 'u0_true', 'tE_true', 's_true', 'q_true', 'rhos_true']
+if __name__ == "__main__":
+    truth = ["lc_num", "u0_true", "tE_true", "s_true", "q_true", "rhos_true"]
     evaluator = EvaluateResults(strategy=SelectionStrategy.BEST_S)
-    with pd.option_context('display.width', None, 'display.max_rows', None):
-        print(evaluator.results[truth].sort_values(by='lc_num'))
-    #check_bad_t0(evaluator)
+    with pd.option_context("display.width", None, "display.max_rows", None):
+        print(evaluator.results[truth].sort_values(by="lc_num"))
+    # check_bad_t0(evaluator)
 
-    #evaluator.is_there_a_good_guess()
-    #evaluator.is_the_pspl_fit_good()
-    #evaluator.is_log_q_good()
-    #evaluator.is_sign_s_good()
-    #evaluator.is_the_planet_good()
-    #evaluator.make_all_scatter_plots()
-    #evaluator.make_all_delta_plots()
+    # evaluator.is_there_a_good_guess()
+    # evaluator.is_the_pspl_fit_good()
+    # evaluator.is_log_q_good()
+    # evaluator.is_sign_s_good()
+    # evaluator.is_the_planet_good()
+    # evaluator.make_all_scatter_plots()
+    # evaluator.make_all_delta_plots()
 
-    #evaluator.make_planet_plots()
+    # evaluator.make_planet_plots()
     plt.show()
 
     # Switch strategies at any time without re-parsing:

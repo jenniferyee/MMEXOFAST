@@ -1,11 +1,12 @@
 import os.path
+
 from .config import PACKAGE_DATA_PATH
 from .dc18 import get_ephemerides as get_dc18_ephemerides
-
 
 # ============================================================================
 # Public API
 # ============================================================================
+
 
 def get_kwargs(filename):
     """
@@ -29,16 +30,16 @@ def get_kwargs(filename):
     if telescope in OBSERVATORIES:
         obs = OBSERVATORIES[telescope]
         kwargs = obs.get_kwargs()
-        kwargs['bandpass'] = band
-        kwargs['plot_properties'] = obs.get_plot_properties(band)
+        kwargs["bandpass"] = band
+        kwargs["plot_properties"] = obs.get_plot_properties(band)
         # Override label with filename
-        kwargs['plot_properties']['label'] = label
+        kwargs["plot_properties"]["label"] = label
     else:
         # Default for unknown telescopes
         kwargs = {
-            'phot_fmt': 'flux',
-            'bandpass': band,
-            'plot_properties': {'label': label, 'marker': 'o'}
+            "phot_fmt": "flux",
+            "bandpass": band,
+            "plot_properties": {"label": label, "marker": "o"},
         }
 
     return kwargs
@@ -58,18 +59,20 @@ def get_telescope_band_from_filename(filename):
     tuple
         (telescope, band)
     """
-    if filename[-1] == '.':
-        filename += ' '
+    if filename[-1] == ".":
+        filename += " "
 
-    basename = os.path.basename(filename).split('.')
+    basename = os.path.basename(filename).split(".")
     if len(basename) < 4:
         raise ValueError(
-            f"Filename ({filename}) must have the format " +
-            "nYYYYMMDD.BAND.TELESCOPE.whateveryouwant")
+            f"Filename ({filename}) must have the format "
+            + "nYYYYMMDD.BAND.TELESCOPE.whateveryouwant"
+        )
 
     band = basename[1]
     telescope = basename[2]
     return telescope, band
+
 
 # ============================================================================
 # Observatory Class and Registry
@@ -101,8 +104,15 @@ class Observatory:
         Dict mapping band names to plot properties dicts
     """
 
-    def __init__(self, name, phot_fmt='flux', usecols=None,
-                 ephemerides_file=None, ephemerides_loader=None, bands=None):
+    def __init__(
+        self,
+        name,
+        phot_fmt="flux",
+        usecols=None,
+        ephemerides_file=None,
+        ephemerides_loader=None,
+        bands=None,
+    ):
         self.name = name
         self.phot_fmt = phot_fmt
         self.usecols = usecols if usecols is not None else [0, 1, 2]
@@ -120,9 +130,9 @@ class Observatory:
             If this observatory needs an ephemerides file that cannot be
             found, rather than passing a nonexistent path on to MulensModel.
         """
-        kwargs = {'phot_fmt': self.phot_fmt}
+        kwargs = {"phot_fmt": self.phot_fmt}
         if self.usecols is not None:
-            kwargs['usecols'] = self.usecols
+            kwargs["usecols"] = self.usecols
 
         ephemerides_file = self.ephemerides_file
         if ephemerides_file is None and self.ephemerides_loader is not None:
@@ -134,18 +144,17 @@ class Observatory:
                     "Observatory {0!r} needs the ephemerides file {1!r}, "
                     "which does not exist. Pass ephemerides_file to "
                     "MulensData yourself to point at your own copy.".format(
-                        self.name, ephemerides_file))
+                        self.name, ephemerides_file
+                    )
+                )
 
-            kwargs['ephemerides_file'] = ephemerides_file
+            kwargs["ephemerides_file"] = ephemerides_file
 
         return kwargs
 
     def get_plot_properties(self, band):
         """Get plot properties for a specific band."""
-        default = {
-            'label': f'{self.name}-{band}',
-            'marker': 'o'
-        }
+        default = {"label": f"{self.name}-{band}", "marker": "o"}
         if band in self.bands:
             return {**default, **self.bands[band]}
         return default
@@ -259,27 +268,31 @@ def load_observatories_from_config(config_file):
 
     # Try JSON first
     try:
-        with open(config_file, 'r') as f:
+        with open(config_file, "r") as f:
             config = json.load(f)
     except json.JSONDecodeError:
         # Try YAML
         try:
             import yaml
-            with open(config_file, 'r') as f:
+
+            with open(config_file, "r") as f:
                 config = yaml.safe_load(f)
         except ImportError:
-            raise ImportError("YAML support requires PyYAML: pip install pyyaml")
+            raise ImportError(
+                "YAML support requires PyYAML: pip install pyyaml"
+            )
 
     # Register observatories from config
-    for obs_config in config.get('observatories', []):
+    for obs_config in config.get("observatories", []):
         obs = Observatory(
-            name=obs_config['name'],
-            phot_fmt=obs_config.get('phot_fmt', 'flux'),
-            usecols=obs_config.get('usecols'),
-            ephemerides_file=obs_config.get('ephemerides_file'),
-            bands=obs_config.get('bands', {})
+            name=obs_config["name"],
+            phot_fmt=obs_config.get("phot_fmt", "flux"),
+            usecols=obs_config.get("usecols"),
+            ephemerides_file=obs_config.get("ephemerides_file"),
+            bands=obs_config.get("bands", {}),
         )
         register_observatory(obs)
+
 
 # ============================================================================
 # Built-in Observatories
@@ -287,45 +300,54 @@ def load_observatories_from_config(config_file):
 # Fake
 
 
-register_observatory(Observatory(
-    name='WFIRST18',
-    phot_fmt='flux',
-    usecols=[0, 1, 2],
-    ephemerides_loader=get_dc18_ephemerides,
-    bands={
-        'W149': {'color': 'darkorange', 'marker': 'o'},
-        'Z087': {'color': 'darkcyan', 'marker': 's', 'zorder': 5}
-    }
-))
+register_observatory(
+    Observatory(
+        name="WFIRST18",
+        phot_fmt="flux",
+        usecols=[0, 1, 2],
+        ephemerides_loader=get_dc18_ephemerides,
+        bands={
+            "W149": {"color": "darkorange", "marker": "o"},
+            "Z087": {"color": "darkcyan", "marker": "s", "zorder": 5},
+        },
+    )
+)
 
-register_observatory(Observatory(
-    name='DC18',
-    phot_fmt='mag',
-    usecols=[0, 1, 2],
-    ephemerides_loader=get_dc18_ephemerides,
-    bands={
-        'W149': {'color': 'darkorange', 'marker': 'o'},
-        'Z087': {'color': 'darkcyan', 'marker': 's', 'zorder': 5}
-    }
-))
+register_observatory(
+    Observatory(
+        name="DC18",
+        phot_fmt="mag",
+        usecols=[0, 1, 2],
+        ephemerides_loader=get_dc18_ephemerides,
+        bands={
+            "W149": {"color": "darkorange", "marker": "o"},
+            "Z087": {"color": "darkcyan", "marker": "s", "zorder": 5},
+        },
+    )
+)
 
 # Space-based
-register_observatory(Observatory(
-    name='Spitzer',
-    phot_fmt='flux',
-    usecols=[0, 1, 2],
-    ephemerides_file=os.path.join(
-        PACKAGE_DATA_PATH, 'spitzer_ephemerides_2014_to_2019.txt'),
-    bands={
-        'L': {'color': 'red', 'marker': 'o'}
-    }
-))
+register_observatory(
+    Observatory(
+        name="Spitzer",
+        phot_fmt="flux",
+        usecols=[0, 1, 2],
+        ephemerides_file=os.path.join(
+            PACKAGE_DATA_PATH, "spitzer_ephemerides_2014_to_2019.txt"
+        ),
+        bands={"L": {"color": "red", "marker": "o"}},
+    )
+)
 
 # Ground-based
-register_observatory(Observatory(
-    name='OGLE',
-    phot_fmt='flux',
-    usecols=[0, 1, 2],
-    bands={
-        'I': {'color': 'black', 'marker': 'o'},
-        'V': {'color': 'black', 'marker': 'v', 'facecolor': 'none'}}))
+register_observatory(
+    Observatory(
+        name="OGLE",
+        phot_fmt="flux",
+        usecols=[0, 1, 2],
+        bands={
+            "I": {"color": "black", "marker": "o"},
+            "V": {"color": "black", "marker": "v", "facecolor": "none"},
+        },
+    )
+)

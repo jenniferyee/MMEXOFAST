@@ -1,36 +1,40 @@
 import glob
 import os
-import pytest
-import MulensModel
 import unittest
 
+import MulensModel
+import pytest
+
 from mmexofast.config import DATA_PATH
-from mmexofast.mulens_object_config import ModelConfig, EventConfig
+from mmexofast.mulens_object_config import EventConfig, ModelConfig
 from mmexofast.observatories import get_kwargs
 
 # ===========================================================================
 # Module-level constants
 # ===========================================================================
 
-PSPL_PARAMS = {'t_0': 2460000., 'u_0': 0.1, 't_E': 30., 'rho': 0.001}
-COORDS = '18:00:00 -30:00:00'
-BANDPASS = 'I'
+PSPL_PARAMS = {"t_0": 2460000.0, "u_0": 0.1, "t_E": 30.0, "rho": 0.001}
+COORDS = "18:00:00 -30:00:00"
+BANDPASS = "I"
 GAMMA = 0.5
 U_COEFF = 0.3
-MAG_METHODS = [2460000., 'finite_source_LD_WittMao94', 2460100.]
-DEFAULT_MAG_METHOD = 'finite_source_uniform_Gould94'
+MAG_METHODS = [2460000.0, "finite_source_LD_WittMao94", 2460100.0]
+DEFAULT_MAG_METHOD = "finite_source_uniform_Gould94"
 FIX_BLEND_FLUX_VALUE = 0.0
 DATA_REF = 1
 
-OB05390_FILES = sorted(glob.glob(os.path.join(DATA_PATH, 'OB05390', 'n200*.txt')))
+OB05390_FILES = sorted(
+    glob.glob(os.path.join(DATA_PATH, "OB05390", "n200*.txt"))
+)
 
-with open(os.path.join(DATA_PATH, 'OB05390', 'coords.txt')) as f:
+with open(os.path.join(DATA_PATH, "OB05390", "coords.txt")) as f:
     OB05390_COORDS = f.read().strip()
 
 
 # ===========================================================================
 # Fixtures
 # ===========================================================================
+
 
 @pytest.fixture
 def datasets():
@@ -43,6 +47,7 @@ def datasets():
 # ===========================================================================
 # TestModelConfig
 # ===========================================================================
+
 
 class TestModelConfig:
     """
@@ -74,9 +79,9 @@ class TestModelConfig:
         """Parameters passed to build() appear on the resulting model."""
         config = ModelConfig()
         model = config.build(parameters=PSPL_PARAMS)
-        assert model.parameters.t_0 == PSPL_PARAMS['t_0']
-        assert model.parameters.u_0 == PSPL_PARAMS['u_0']
-        assert model.parameters.t_E == PSPL_PARAMS['t_E']
+        assert model.parameters.t_0 == PSPL_PARAMS["t_0"]
+        assert model.parameters.u_0 == PSPL_PARAMS["u_0"]
+        assert model.parameters.t_E == PSPL_PARAMS["t_E"]
 
     def test_coords_passed_to_model(self):
         """coords stored in ModelConfig is passed to the model constructor."""
@@ -124,11 +129,16 @@ class TestModelConfig:
         by the second. build() must copy.
         """
         binary_params = {
-            't_0': 2458271.6, 'u_0': 0.91, 't_E': 27.7,
-            's': 1.64, 'alpha': 35.9, 'rho': 0.30, 'q': 3.4e-3,
+            "t_0": 2458271.6,
+            "u_0": 0.91,
+            "t_E": 27.7,
+            "s": 1.64,
+            "alpha": 35.9,
+            "rho": 0.30,
+            "q": 3.4e-3,
         }
-        methods = [2458182.7, 'VBBL', 2458310.6]
-        methods_parameters = {'VBBL': {'accuracy': 0.01}}
+        methods = [2458182.7, "VBBL", 2458310.6]
+        methods_parameters = {"VBBL": {"accuracy": 0.01}}
         times = [2458270.0, 2458271.0, 2458272.0]
 
         config = ModelConfig()
@@ -142,12 +152,13 @@ class TestModelConfig:
             # injects 'trajectory'.
             model.get_magnification(times)
 
-        assert methods_parameters == {'VBBL': {'accuracy': 0.01}}
+        assert methods_parameters == {"VBBL": {"accuracy": 0.01}}
 
 
 # ===========================================================================
 # TestEventConfig
 # ===========================================================================
+
 
 class TestEventConfig:
     """
@@ -213,7 +224,9 @@ class TestEventConfig:
         event.fit_fluxes()
         assert event.fits[0].source_fluxes[0] == source_flux_value
 
-    @unittest.skip("There's some problem with how MulensModel.Event stores data_ref.")
+    @unittest.skip(
+        "There's some problem with how MulensModel.Event stores data_ref."
+    )
     def test_data_ref_applied(self, datasets):
         """data_ref stored in EventConfig is passed to the event constructor."""
         config = EventConfig(data_ref=DATA_REF)

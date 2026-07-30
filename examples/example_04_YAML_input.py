@@ -1,16 +1,17 @@
 import os.path
-import numpy as np
-import astropy.units as u
 import sys
-import yaml
 
+import astropy.units as u
 import MulensModel as mm
-import mmexofast as mmexo
-
+import numpy as np
+import yaml
 from print_ex_metrics import print_metrics
 
+import mmexofast as mmexo
 
-raise NotImplementedError('priors and physical parameters not implemented for MMEXOFAST. This is an EXOZIPPy holdover.')
+raise NotImplementedError(
+    "priors and physical parameters not implemented for MMEXOFAST. This is an EXOZIPPy holdover."
+)
 
 
 def divide_settings(settings):
@@ -18,8 +19,8 @@ def divide_settings(settings):
     divide settings into expected, files, and all others
     """
     out = {**settings}
-    expected = out.pop('expected')
-    files_settings = out.pop('files')
+    expected = out.pop("expected")
+    files_settings = out.pop("files")
 
     return (out, expected, files_settings)
 
@@ -39,7 +40,7 @@ def process_files(files, root=None, subdir=None):
         root_path = os.path.join(root_path, subdir)
 
     if not isinstance(files, list):
-        raise TypeError('wrong value of files kwarg: ' + str(type(files)))
+        raise TypeError("wrong value of files kwarg: " + str(type(files)))
 
     out = []
     for file_ in files:
@@ -56,23 +57,29 @@ def parse_units(physical):
     """
     conversion = dict()
 
-    for text in ['u.earthMass', 'u.M_earth', 'u.Mearth']:
+    for text in ["u.earthMass", "u.M_earth", "u.Mearth"]:
         conversion[text] = u.earthMass
-    for text in ['u.jupiterMass', 'u.M_jup', 'u.Mjup', 'u.M_jupiter', 'u.Mjupiter']:
+    for text in [
+        "u.jupiterMass",
+        "u.M_jup",
+        "u.Mjup",
+        "u.M_jupiter",
+        "u.Mjupiter",
+    ]:
         conversion[text] = u.jupiterMass
-    for text in ['u.solMass', 'u.M_sun', 'u.Msun']:
+    for text in ["u.solMass", "u.M_sun", "u.Msun"]:
         conversion[text] = u.solMass
 
-    for (_, value) in physical.items():
+    for _, value in physical.items():
         if not isinstance(value, list):
             continue
         if value[-1] in conversion:
             value[-1] = conversion[value[-1]]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     if len(sys.argv) != 2:
-        raise ValueError('single yaml file with settings is needed')
+        raise ValueError("single yaml file with settings is needed")
 
     with open(sys.argv[1]) as in_file:
         settings = yaml.safe_load(in_file)
@@ -80,9 +87,9 @@ if __name__ == '__main__':
     (kwargs, expected, file_settings) = divide_settings(settings)
 
     files = process_files(**file_settings)
-    kwargs['files'] = files
+    kwargs["files"] = files
 
-    parse_units(expected['physical'])
+    parse_units(expected["physical"])
 
     print(kwargs)
     print()

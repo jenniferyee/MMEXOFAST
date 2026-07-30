@@ -14,10 +14,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
+
 import numpy as np
 
-from .results import GridSearchResult   # defined in results.py
-
+from .results import GridSearchResult  # defined in results.py
 
 # ============================================================================
 # Configuration
@@ -49,8 +49,9 @@ class OutputConfig:
     save_grid_results : bool
         If True, enable saving grid search results (EF/AF/PAR/etc.).
     """
-    base_dir: Path = Path('..')
-    file_head: str = 'mmexo'
+
+    base_dir: Path = Path("..")
+    file_head: str = "mmexo"
 
     save_log: bool = True
     save_plots: bool = False
@@ -137,7 +138,10 @@ class OutputManager:
         if not self.config.save_grid_results:
             return
 
-        path = self.config.base_dir / f"{self.config.file_head}_{result.name}_grid.npz"
+        path = (
+            self.config.base_dir
+            / f"{self.config.file_head}_{result.name}_grid.npz"
+        )
         np.savez_compressed(
             path,
             param_names=result.param_names,

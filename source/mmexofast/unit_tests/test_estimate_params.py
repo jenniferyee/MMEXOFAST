@@ -1,11 +1,12 @@
-import unittest
-import numpy.testing
 import os.path
+import unittest
+
+import matplotlib.pyplot as plt
 import MulensModel
 import numpy as np
-import matplotlib.pyplot as plt
+import numpy.testing
 
-from mmexofast import estimate_params, com_trans, fitters
+from mmexofast import com_trans, estimate_params, fitters
 from mmexofast.config import DATA_PATH
 
 
@@ -24,7 +25,14 @@ class TestGetWideParams_alpha(unittest.TestCase):
     """
 
     def setUp(self):
-        self.params = {'t_0': 0., 'u_0': 0.5, 't_E': 15., 't_pl': 0, 'dt': 0.7, 'dmag': 0.5}
+        self.params = {
+            "t_0": 0.0,
+            "u_0": 0.5,
+            "t_E": 15.0,
+            "t_pl": 0,
+            "dt": 0.7,
+            "dmag": 0.5,
+        }
 
     def estimate_params(self, params):
         return estimate_params.get_wide_params(params)
@@ -35,63 +43,73 @@ class TestGetWideParams_alpha(unittest.TestCase):
         planet model than for a PSPL model.
         """
         params = {key: value for key, value in self.params.items()}
-        params['t_pl'] = t_pl
+        params["t_pl"] = t_pl
         planet_params = self.estimate_params(params)
         if isinstance(planet_params, estimate_params.BinaryLensParams):
             planet_params = [planet_params]
 
         for params in planet_params:
             planet_model = MulensModel.Model(parameters=params.ulens)
-            planet_model.set_magnification_methods([t_pl - 1., 'VBBL', t_pl + 1.])
+            planet_model.set_magnification_methods(
+                [t_pl - 1.0, "VBBL", t_pl + 1.0]
+            )
             planet_model_mag = planet_model.get_magnification(t_pl)
 
-            #print(planet_model)
-            #plt.figure(figsize=(8, 4))
-            #plt.suptitle(
+            # print(planet_model)
+            # plt.figure(figsize=(8, 4))
+            # plt.suptitle(
             #    'u_0={0}, alpha={1:8.2f}'.format(params.ulens['u_0'], params.ulens['alpha']))
-            #plt.subplot(1, 2, 1)
+            # plt.subplot(1, 2, 1)
             ##plt.title('alpha = {0}'.format(planet_model.parameters.alpha))
-            #planet_model.plot_trajectory(caustics=True)
+            # planet_model.plot_trajectory(caustics=True)
             #
-            #plt.subplot(1, 2, 2)
-            #planet_model.plot_magnification()
-            #plt.axvline(t_pl, color='black')
-            #plt.show()
+            # plt.subplot(1, 2, 2)
+            # planet_model.plot_magnification()
+            # plt.axvline(t_pl, color='black')
+            # plt.show()
 
             pspl_model = MulensModel.Model(
-                parameters={'t_0': self.params['t_0'], 'u_0': self.params['u_0'], 't_E': self.params['t_E']})
+                parameters={
+                    "t_0": self.params["t_0"],
+                    "u_0": self.params["u_0"],
+                    "t_E": self.params["t_E"],
+                }
+            )
             pspl_model_mag = pspl_model.get_magnification(t_pl)
 
-            #print(params.ulens)
-            assert np.abs((planet_model_mag - pspl_model_mag) / pspl_model_mag) > 0.05
+            # print(params.ulens)
+            assert (
+                np.abs((planet_model_mag - pspl_model_mag) / pspl_model_mag)
+                > 0.05
+            )
 
     def test_1(self):
-        t_pl = self.params['t_0'] - 0.5 * self.params['t_E']
+        t_pl = self.params["t_0"] - 0.5 * self.params["t_E"]
         self.do_test(t_pl)
 
     def test_2(self):
-        t_pl = self.params['t_0'] - 1.5 * self.params['t_E']
+        t_pl = self.params["t_0"] - 1.5 * self.params["t_E"]
         self.do_test(t_pl)
 
     def test_3(self):
-        t_pl = self.params['t_0'] + 0.5 * self.params['t_E']
+        t_pl = self.params["t_0"] + 0.5 * self.params["t_E"]
         self.do_test(t_pl)
 
     def test_4(self):
-        t_pl = self.params['t_0'] + 1.5 * self.params['t_E']
+        t_pl = self.params["t_0"] + 1.5 * self.params["t_E"]
         self.do_test(t_pl)
 
 
 class TestGetCloseParams_alpha(TestGetWideParams_alpha):
-
     def estimate_params(self, params):
         return estimate_params.get_close_params(params)
 
 
-class KB160625():
+class KB160625:
     """
     Parameters for KMT-2016-BLG-0625 Shin et al. 2024.
     """
+
     def __init__(self):
         # Section 3.4
         self.tau_pl = 0.609
@@ -100,19 +118,40 @@ class KB160625():
         self.t_E = 11.5
         self.s_close = 0.739
         self.s_wide = 1.352
-        self.alpha = np.pi - np.array([0.12, 3.26])  # radians, alpha corrected to MMv3 system
+        self.alpha = np.pi - np.array(
+            [0.12, 3.26]
+        )  # radians, alpha corrected to MMv3 system
 
         # Data from Table 5 (alpha corrected to MMv3 system):
         # s-
-        self.close_params = {'t_0': 7655.951, 'u_0': 0.073, 't_E': 11.494,
-                             's': 0.741, 'q': 2.357e-4, 'alpha': 180. - np.rad2deg(3.217),
-                             'rho': 1.2256e-3}
+        self.close_params = {
+            "t_0": 7655.951,
+            "u_0": 0.073,
+            "t_E": 11.494,
+            "s": 0.741,
+            "q": 2.357e-4,
+            "alpha": 180.0 - np.rad2deg(3.217),
+            "rho": 1.2256e-3,
+        }
         # s+
-        self.wide_params = {'t_0': 7655.951, 'u_0': 0.075, 't_E':11.335,
-                            's': 1.367, 'q': 0.727e-4, 'alpha': 180. - np.rad2deg(0.122), 'rho': 1.7656e-3}
+        self.wide_params = {
+            "t_0": 7655.951,
+            "u_0": 0.075,
+            "t_E": 11.335,
+            "s": 1.367,
+            "q": 0.727e-4,
+            "alpha": 180.0 - np.rad2deg(0.122),
+            "rho": 1.7656e-3,
+        }
         # 1L2S
         self.binary_source_params = {
-            't_0_1': 7655.953, 'u_0_1': 0.078, 't_E': 10.946, 't_0_2': 7662.943, 'u_0_2': 3.751e-4, 'rho_2': 5.1309e-3, 'q_flux':  0.005
+            "t_0_1": 7655.953,
+            "u_0_1": 0.078,
+            "t_E": 10.946,
+            "t_0_2": 7662.943,
+            "u_0_2": 3.751e-4,
+            "rho_2": 5.1309e-3,
+            "q_flux": 0.005,
         }
 
         # dt and dmag estimated by-eye from figure in paper.
@@ -126,72 +165,131 @@ class KB160625():
         self.tol = 0.03  # 2% uncertainty based on variation in u0
 
         self.params = {
-            't_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E, 't_pl': self.t_pl,
-            'dt': self.dt, 'dmag': self.dmag
-            }
+            "t_0": self.t_0,
+            "u_0": self.u_0,
+            "t_E": self.t_E,
+            "t_pl": self.t_pl,
+            "dt": self.dt,
+            "dmag": self.dmag,
+        }
 
 
-class OB180383():
+class OB180383:
     """
     Parameters for OGLE-2018-BLG-0383 Wang et al. 2022.
     """
+
     def __init__(self):
         self.dmag = -0.07  # preamble to Section 3.2
 
         # Section 3.2.1 Heuristic analysis
-        self.pspl_est = {'t_0': 8199.2, 'u_0': 0.071, 't_E': 11.3}  # Eq. 8
-        self.t_0, self.u_0, self.t_E = self.pspl_est['t_0'], self.pspl_est['u_0'], self.pspl_est['t_E']
-        self.tau_pl, self.u_pl, self.alpha_est = -2.04, 2.05, 1.98  # deg, Eq. 9, u_anom --> u_pl
-        self.alpha = np.deg2rad(self.alpha_est)  # might need to check reflections/conversion to MMv3 system
-        self.t_pl = self.pspl_est['t_0'] + self.tau_pl * self.pspl_est['t_E']  # derived
+        self.pspl_est = {"t_0": 8199.2, "u_0": 0.071, "t_E": 11.3}  # Eq. 8
+        self.t_0, self.u_0, self.t_E = (
+            self.pspl_est["t_0"],
+            self.pspl_est["u_0"],
+            self.pspl_est["t_E"],
+        )
+        self.tau_pl, self.u_pl, self.alpha_est = (
+            -2.04,
+            2.05,
+            1.98,
+        )  # deg, Eq. 9, u_anom --> u_pl
+        self.alpha = np.deg2rad(
+            self.alpha_est
+        )  # might need to check reflections/conversion to MMv3 system
+        self.t_pl = (
+            self.pspl_est["t_0"] + self.tau_pl * self.pspl_est["t_E"]
+        )  # derived
         self.s_wide, self.s_close = 2.46, 0.41  # Eq. 10: s_plus, s_minus
-        self.dt = 2. * 0.55  # 2. * t_fwhm
+        self.dt = 2.0 * 0.55  # 2. * t_fwhm
         self.rho_est = 0.024  # Eq. 12
         self.delta_A = 0.61  # Eq. 13
         self.q_est = 1.8e-4  # Eq. 14
 
         self.params = {
-            't_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E, 't_pl': self.t_pl,
-            'dt': self.dt, 'dmag': self.dmag
-            }
+            "t_0": self.t_0,
+            "u_0": self.u_0,
+            "t_E": self.t_E,
+            "t_pl": self.t_pl,
+            "dt": self.dt,
+            "dmag": self.dmag,
+        }
         self.tol = 0.03  # 2% uncertainty based on variation in u0 for 1S solutions. (incr to 7% for 2S soln)
 
         # Table 2: Fitted parameters
-        pspl = {'t_0': 8199.244, 'u_0': 0.072, 't_E': 11.15}
-        self.wide_params = {'t_0': 8199.239, 'u_0': 0.071, 't_E': 11.35, 'rho': 0.0238, 'alpha': 181.98, 's': 2.453, 'q': 2.14e-4}
+        pspl = {"t_0": 8199.244, "u_0": 0.072, "t_E": 11.15}
+        self.wide_params = {
+            "t_0": 8199.239,
+            "u_0": 0.071,
+            "t_E": 11.35,
+            "rho": 0.0238,
+            "alpha": 181.98,
+            "s": 2.453,
+            "q": 2.14e-4,
+        }
         close_upper = {
-            't_0': 8199.247, 'u_0': 0.071, 't_E': 11.34, 'rho': 0.0060, 'alpha': 355.86, 's': 0.405, 'q': 23.6e-4}
+            "t_0": 8199.247,
+            "u_0": 0.071,
+            "t_E": 11.34,
+            "rho": 0.0060,
+            "alpha": 355.86,
+            "s": 0.405,
+            "q": 23.6e-4,
+        }
         close_lower = {
-            't_0': 8199.247, 'u_0': 0.072, 't_E': 11.46, 'rho': 0.0056, 'alpha': 7.84, 's': 0.404, 'q': 21.5e-4}
+            "t_0": 8199.247,
+            "u_0": 0.072,
+            "t_E": 11.46,
+            "rho": 0.0056,
+            "alpha": 7.84,
+            "s": 0.404,
+            "q": 21.5e-4,
+        }
         binary_source = {
-            't_0_1': 8199.244, 't_0_2': 8176.022, 'u_0_1': 0.074, 'u_0_2': 0.0007, 't_E': 11.34,
-            'rho_1': 0.058, 'rho_2': 0.0202, 'q_flux_I': 0.0057}
+            "t_0_1": 8199.244,
+            "t_0_2": 8176.022,
+            "u_0_1": 0.074,
+            "u_0_2": 0.0007,
+            "t_E": 11.34,
+            "rho_1": 0.058,
+            "rho_2": 0.0202,
+            "q_flux_I": 0.0057,
+        }
 
 
 class TestParameterEstimatorKB160625(unittest.TestCase, KB160625):
-
     def setUp(self):
         KB160625.__init__(self)
-        self.estimator = estimate_params.ParameterEstimator(self.params, limit='point')
-        #self.ulens_params = estimate_params.get_wide_params(self.params, limit='point')
+        self.estimator = estimate_params.ParameterEstimator(
+            self.params, limit="point"
+        )
+        # self.ulens_params = estimate_params.get_wide_params(self.params, limit='point')
 
     def test_correct_alpha(self):
-        expected = [20., 20., -20., -20.]
-        input = [20., 380., -20, -740.]
+        expected = [20.0, 20.0, -20.0, -20.0]
+        input = [20.0, 380.0, -20, -740.0]
         for value_exp, value_in in zip(expected, input):
-            print('expected', value_exp, 'input', value_in)
-            numpy.testing.assert_almost_equal(value_exp, self.estimator._correct_alpha(value_in))
+            print("expected", value_exp, "input", value_in)
+            numpy.testing.assert_almost_equal(
+                value_exp, self.estimator._correct_alpha(value_in)
+            )
 
     def test_get_rho_dwarf(self):
-        estimator = estimate_params.ParameterEstimator(self.params, limit='dwarf')
+        estimator = estimate_params.ParameterEstimator(
+            self.params, limit="dwarf"
+        )
         assert estimator.get_rho() == 0.001
 
     def test_get_rho_giant(self):
-        estimator = estimate_params.ParameterEstimator(self.params, limit='giant')
+        estimator = estimate_params.ParameterEstimator(
+            self.params, limit="giant"
+        )
         assert estimator.get_rho() == 0.05
 
     def test_get_rho_point(self):
-        estimator = estimate_params.ParameterEstimator(self.params, limit='point')
+        estimator = estimate_params.ParameterEstimator(
+            self.params, limit="point"
+        )
         assert estimator.get_rho() is None
 
     def test_get_rho_error(self):
@@ -200,26 +298,38 @@ class TestParameterEstimatorKB160625(unittest.TestCase, KB160625):
             estimator.get_rho()
 
     def test_t_0(self):
-        assert self.estimator.t_0 == self.params['t_0']
+        assert self.estimator.t_0 == self.params["t_0"]
 
     def test_u_0(self):
-        assert self.estimator.u_0 == self.params['u_0']
+        assert self.estimator.u_0 == self.params["u_0"]
 
     def test_t_E(self):
-        assert self.estimator.t_E == self.params['t_E']
+        assert self.estimator.t_E == self.params["t_E"]
 
     def test_tau_pl(self):
-        np.testing.assert_allclose(self.estimator.tau_pl, self.tau_pl, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.estimator.tau_pl, self.tau_pl, rtol=self.tol
+        )
 
     def test_u_pl(self):
-        np.testing.assert_allclose(self.estimator.u_pl, self.u_pl, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.estimator.u_pl, self.u_pl, rtol=self.tol
+        )
 
     def test_alpha(self):
         if isinstance(self.alpha, float):
-            np.testing.assert_allclose(self.estimator.alpha, np.rad2deg(self.alpha), rtol=self.tol)
+            np.testing.assert_allclose(
+                self.estimator.alpha, np.rad2deg(self.alpha), rtol=self.tol
+            )
         else:
-            index = np.argmin(np.abs(self.estimator.alpha - np.rad2deg(self.alpha)))
-            np.testing.assert_allclose(self.estimator.alpha, np.rad2deg(self.alpha[index]), rtol=self.tol)
+            index = np.argmin(
+                np.abs(self.estimator.alpha - np.rad2deg(self.alpha))
+            )
+            np.testing.assert_allclose(
+                self.estimator.alpha,
+                np.rad2deg(self.alpha[index]),
+                rtol=self.tol,
+            )
 
     def test_rho(self):
         assert self.estimator.rho is None
@@ -231,46 +341,67 @@ class TestParameterEstimatorKB160625(unittest.TestCase, KB160625):
 
 
 class TestParameterEstimatorOB180383(TestParameterEstimatorKB160625, OB180383):
-
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.ParameterEstimator(self.params, limit='point')
+        self.estimator = estimate_params.ParameterEstimator(
+            self.params, limit="point"
+        )
 
 
-class TestWideParameterEstimatorOB180383(TestParameterEstimatorOB180383, OB180383):
-
+class TestWideParameterEstimatorOB180383(
+    TestParameterEstimatorOB180383, OB180383
+):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.WidePlanetParameterEstimator(self.params, limit='GG97')
+        self.estimator = estimate_params.WidePlanetParameterEstimator(
+            self.params, limit="GG97"
+        )
 
     def test_rho(self):
-        np.testing.assert_allclose(self.estimator.rho, self.rho_est, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.estimator.rho, self.rho_est, rtol=self.tol
+        )
 
     def test_s(self):
-        np.testing.assert_allclose(self.estimator.s, self.s_wide, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.estimator.s, self.s_wide, rtol=self.tol
+        )
 
     def test_q_manual_dA(self):
-        estimator = estimate_params.WidePlanetParameterEstimator(self.params, limit='GG97')
+        estimator = estimate_params.WidePlanetParameterEstimator(
+            self.params, limit="GG97"
+        )
         estimator._delta_A = self.delta_A
         np.testing.assert_allclose(estimator.q, self.q_est, rtol=self.tol)
 
     def test_q(self):
-        self.skipTest('this test fails because of the large negative blending in the event, which affects the calculation of delta_A.')
+        self.skipTest(
+            "this test fails because of the large negative blending in the event, which affects the calculation of delta_A."
+        )
         np.testing.assert_allclose(self.estimator.q, self.q_est, rtol=self.tol)
 
     def test_delta_A(self):
-        self.skipTest('this test fails because of the large negative blending in the event, which affects the calculation of delta_A.')
-        np.testing.assert_allclose(self.estimator.delta_A, self.delta_A, rtol=self.tol)
+        self.skipTest(
+            "this test fails because of the large negative blending in the event, which affects the calculation of delta_A."
+        )
+        np.testing.assert_allclose(
+            self.estimator.delta_A, self.delta_A, rtol=self.tol
+        )
 
 
-class TestCloseUpperParameterEstimatorOB180383(TestParameterEstimatorOB180383, OB180383):
-
+class TestCloseUpperParameterEstimatorOB180383(
+    TestParameterEstimatorOB180383, OB180383
+):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseUpperBinaryParameterEstimator(self.params, limit='point')
+        self.estimator = estimate_params.CloseUpperBinaryParameterEstimator(
+            self.params, limit="point"
+        )
 
     def test_s(self):
-        np.testing.assert_allclose(self.estimator.s, self.s_close, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.estimator.s, self.s_close, rtol=self.tol
+        )
 
     def test_q(self):
         np.testing.assert_allclose(self.estimator.q, 0.004, rtol=self.tol)
@@ -286,24 +417,26 @@ class TestCloseUpperParameterEstimatorOB180383(TestParameterEstimatorOB180383, O
         up lazily. _grid_iterator() evaluates alpha_values before s_values,
         so alpha must not rely on s having initialized the trajectory.
         """
-        estimator = type(self.estimator)(self.params, limit='point')
+        estimator = type(self.estimator)(self.params, limit="point")
         self.assertIsNone(estimator._trajectory_1L)
         alpha_first = estimator.alpha
 
-        estimator = type(self.estimator)(self.params, limit='point')
+        estimator = type(self.estimator)(self.params, limit="point")
         _ = estimator.s
         np.testing.assert_allclose(estimator.alpha, alpha_first, rtol=self.tol)
 
 
-class TestCloseLowerParameterEstimatorOB180383(TestCloseUpperParameterEstimatorOB180383, OB180383):
-
+class TestCloseLowerParameterEstimatorOB180383(
+    TestCloseUpperParameterEstimatorOB180383, OB180383
+):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseLowerBinaryParameterEstimator(self.params, limit='point')
+        self.estimator = estimate_params.CloseLowerBinaryParameterEstimator(
+            self.params, limit="point"
+        )
 
 
 class TestGetWideParams(unittest.TestCase, KB160625):
-
     def setUp(self):
         KB160625.__init__(self)
         self.ulens_params = estimate_params.get_wide_params(self.params)
@@ -312,29 +445,56 @@ class TestGetWideParams(unittest.TestCase, KB160625):
         """
         t_0, u_0, t_E
         """
-        for key in ['t_0', 'u_0', 't_E']:
+        for key in ["t_0", "u_0", "t_E"]:
             assert self.ulens_params.ulens[key] == self.__getattribute__(key)
 
     def test_s(self):
-        np.testing.assert_allclose(self.ulens_params.ulens['s'], self.s_wide, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.ulens_params.ulens["s"], self.s_wide, rtol=self.tol
+        )
 
     def test_alpha(self):
         # self.alpha has 2 values. choose the one closest to the results.
         if isinstance(self.alpha, float):
-            np.testing.assert_allclose(self.ulens_params.ulens['alpha'], np.rad2deg(self.alpha), rtol=self.tol)
+            np.testing.assert_allclose(
+                self.ulens_params.ulens["alpha"],
+                np.rad2deg(self.alpha),
+                rtol=self.tol,
+            )
         else:
-            index = np.argmin(np.abs(self.ulens_params.ulens['alpha'] - np.rad2deg(self.alpha)))
-            np.testing.assert_allclose(self.ulens_params.ulens['alpha'], np.rad2deg(self.alpha[index]), rtol=self.tol)
+            index = np.argmin(
+                np.abs(
+                    self.ulens_params.ulens["alpha"] - np.rad2deg(self.alpha)
+                )
+            )
+            np.testing.assert_allclose(
+                self.ulens_params.ulens["alpha"],
+                np.rad2deg(self.alpha[index]),
+                rtol=self.tol,
+            )
 
     def test_mag_methods(self):
-        t_star = self.dt / 2.
+        t_star = self.dt / 2.0
         expected_values = [
-            np.min((self.t_0 - self.t_E, self.t_pl - self.t_E / 2.,
-                    self.t_pl - 20. * t_star)),
-            'VBBL',
-            np.max((self.t_0 + self.t_E, self.t_pl + self.t_E / 2.,
-                    self.t_pl + 20. * t_star))]
-        for actual, expected in zip(self.ulens_params.mag_methods, expected_values):
+            np.min(
+                (
+                    self.t_0 - self.t_E,
+                    self.t_pl - self.t_E / 2.0,
+                    self.t_pl - 20.0 * t_star,
+                )
+            ),
+            "VBBL",
+            np.max(
+                (
+                    self.t_0 + self.t_E,
+                    self.t_pl + self.t_E / 2.0,
+                    self.t_pl + 20.0 * t_star,
+                )
+            ),
+        ]
+        for actual, expected in zip(
+            self.ulens_params.mag_methods, expected_values
+        ):
             if isinstance(actual, str):
                 assert actual == expected
             else:
@@ -342,7 +502,6 @@ class TestGetWideParams(unittest.TestCase, KB160625):
 
 
 class TestGetWideParams2(TestGetWideParams, OB180383):
-
     def setUp(self):
         OB180383.__init__(self)
         self.ulens_params = estimate_params.get_wide_params(self.params)
@@ -350,87 +509,105 @@ class TestGetWideParams2(TestGetWideParams, OB180383):
     def test_rho(self):
         # Gould & Gaucherel approximation
         # Ap = 2(q / ρ^2)
-        np.testing.assert_allclose(self.ulens_params.ulens['rho'], self.rho_est, rtol=self.tol)
+        np.testing.assert_allclose(
+            self.ulens_params.ulens["rho"], self.rho_est, rtol=self.tol
+        )
 
         # These tests don't work because of negative blending.
-        #Ap_est = 2. * self.ulens_params.ulens['q'] / self.ulens_params.ulens['rho']**2
-        #np.testing.assert_allclose(Ap_est, self.delta_A, rtol=self.tol)
+        # Ap_est = 2. * self.ulens_params.ulens['q'] / self.ulens_params.ulens['rho']**2
+        # np.testing.assert_allclose(Ap_est, self.delta_A, rtol=self.tol)
         #
-        #np.testing.assert_allclose(self.ulens_params.ulens['q'], self.q_est, rtol=self.tol)
+        # np.testing.assert_allclose(self.ulens_params.ulens['q'], self.q_est, rtol=self.tol)
 
 
 class TestGetCloseParams(unittest.TestCase, KB160625):
-
     def setUp(self):
         KB160625.__init__(self)
-        self.ulens_params = estimate_params.get_close_params(self.params, q=self)
-        
+        self.ulens_params = estimate_params.get_close_params(
+            self.params, q=self
+        )
+
 
 class TestAnomalyParameterEstimator(unittest.TestCase):
-
     def setUp(self):
-        datafile = os.path.join(DATA_PATH, 'unit_test_data', 'planet4AF.dat')
-        self.data = MulensModel.MulensData(
-            file_name=datafile,
-            phot_fmt='mag')
+        datafile = os.path.join(DATA_PATH, "unit_test_data", "planet4AF.dat")
+        self.data = MulensModel.MulensData(file_name=datafile, phot_fmt="mag")
         self.true_params, self.input_fluxes = self._parse_header(datafile)
         new_params = com_trans.co_mass_to_co_magnif(self.true_params)
-        new_params['t_E'] = self.true_params['t_E']
+        new_params["t_E"] = self.true_params["t_E"]
         self.pspl_params = new_params
-        self.af_results = {'t_0': 17.43489583333333, 't_eff': 0.421875, 'j': 2.0, 'chi2': 98.97724735834696,
-                           'dchi2_zero': 218.83573427369782, 'dchi2_flat': 143.937564049782}
+        self.af_results = {
+            "t_0": 17.43489583333333,
+            "t_eff": 0.421875,
+            "j": 2.0,
+            "chi2": 98.97724735834696,
+            "dchi2_zero": 218.83573427369782,
+            "dchi2_flat": 143.937564049782,
+        }
 
     def _parse_header(self, datafile):
-        with open(datafile, 'r') as file_:
+        with open(datafile, "r") as file_:
             lines = file_.readlines()
 
         elements = lines[0].split()
         ulens_params = {}
         for i, element in enumerate(elements):
             if element[-2:] == "':":
-                key = element.strip('{')[1:-2]
-                ulens_params[key] = float(elements[i + 1].strip(',').strip('}'))
+                key = element.strip("{")[1:-2]
+                ulens_params[key] = float(
+                    elements[i + 1].strip(",").strip("}")
+                )
 
         elements = lines[1].split()
         fluxes = {}
         for i, element in enumerate(elements):
-            if element == '=':
-                fluxes[elements[i - 1]] = float(elements[i + 1].strip(','))
+            if element == "=":
+                fluxes[elements[i - 1]] = float(elements[i + 1].strip(","))
 
         return ulens_params, fluxes
 
     def test_update_pspl_model(self):
-        self.skipTest('JCY: this test does not work. Maybe there is a change in origin. Maybe it is a bad test, regardless.')
-        fitter = fitters.SFitFitter(datasets=[self.data], initial_model=self.pspl_params)
+        self.skipTest(
+            "JCY: this test does not work. Maybe there is a change in origin. Maybe it is a bad test, regardless."
+        )
+        fitter = fitters.SFitFitter(
+            datasets=[self.data], initial_model=self.pspl_params
+        )
         fitter.run()
         test_pspl = {key: fitter.best[key] for key in self.pspl_params.keys()}
         estimator = estimate_params.AnomalyPropertyEstimator(
-            datasets=self.data, pspl_params=test_pspl, af_results=self.af_results
+            datasets=self.data,
+            pspl_params=test_pspl,
+            af_results=self.af_results,
         )
         estimator.update_pspl_model()
 
         print(test_pspl)
         print(self.pspl_params)
         print(estimator.refined_pspl_params)
-        #event = MulensModel.Event(datasets=self.data, model=MulensModel.Model(parameters=test_pspl))
-        #event.plot()
+        # event = MulensModel.Event(datasets=self.data, model=MulensModel.Model(parameters=test_pspl))
+        # event.plot()
         #
-        #event_2 = MulensModel.Event(datasets=estimator.masked_datasets, model=MulensModel.Model(parameters=estimator.refined_pspl_params))
-        #event_2.plot(show_bad=True)
-        #plt.show()
+        # event_2 = MulensModel.Event(datasets=estimator.masked_datasets, model=MulensModel.Model(parameters=estimator.refined_pspl_params))
+        # event_2.plot(show_bad=True)
+        # plt.show()
 
         for key, value in estimator.refined_pspl_params.items():
-            np.testing.assert_allclose(value, self.pspl_params[key], rtol=0.001)
+            np.testing.assert_allclose(
+                value, self.pspl_params[key], rtol=0.001
+            )
 
     def test_get_anomaly_lc_params(self):
         estimator = estimate_params.AnomalyPropertyEstimator(
-            datasets=self.data, pspl_params=self.pspl_params, af_results=self.af_results
+            datasets=self.data,
+            pspl_params=self.pspl_params,
+            af_results=self.af_results,
         )
         results = estimator.get_anomaly_lc_parameters()
-        expected = {'t_pl': 17.44, 'dt': 0.3, 'dmag': -0.12}
+        expected = {"t_pl": 17.44, "dt": 0.3, "dmag": -0.12}
         print(results)
         for key, value in expected.items():
-            if key == 'dt':
+            if key == "dt":
                 np.testing.assert_allclose(results[key], value, rtol=2)
             else:
                 np.testing.assert_allclose(results[key], value, rtol=0.2)
@@ -441,9 +618,8 @@ def test_model_pspl_at_pl():
 
 
 class TestBinarySourceParams(unittest.TestCase):
-
     def test_set_source_flux_ratio(self):
-        self.skipTest('Not Implemented')
+        self.skipTest("Not Implemented")
 
 
 def test_get_binary_source_params():
@@ -467,15 +643,15 @@ class TestBinaryLensParams(unittest.TestCase):
         ob = OB180383()
 
         cls.test_cases = {
-            'KB160625': {'ulens': kb.wide_params, 'params': kb.params},
-            'OB180383': {'ulens': ob.wide_params, 'params': ob.params},
+            "KB160625": {"ulens": kb.wide_params, "params": kb.params},
+            "OB180383": {"ulens": ob.wide_params, "params": ob.params},
         }
 
     def _make_blp(self, event_name):
         """Return a BinaryLensParams with set_mag_method already called."""
         case = self.test_cases[event_name]
-        blp = estimate_params.BinaryLensParams(case['ulens'])
-        blp.set_mag_method(case['params'])
+        blp = estimate_params.BinaryLensParams(case["ulens"])
+        blp.set_mag_method(case["params"])
         return blp
 
     # ------------------------------------------------------------------ #
@@ -489,28 +665,32 @@ class TestBinaryLensParams(unittest.TestCase):
             with self.subTest(event=name):
                 blp = self._make_blp(name)
                 self.assertEqual(len(blp.mag_methods), 3)
-                self.assertEqual(blp.mag_methods[1], 'VBBL')
+                self.assertEqual(blp.mag_methods[1], "VBBL")
 
     def test_set_mag_method_stores_params(self):
         """set_mag_method should store params as self.params."""
         for name, case in self.test_cases.items():
             with self.subTest(event=name):
                 blp = self._make_blp(name)
-                self.assertIs(blp.params, case['params'])
+                self.assertIs(blp.params, case["params"])
 
     def test_set_mag_method_boundary_formulas(self):
         """Window edges should match the defining formulas exactly."""
         for name, case in self.test_cases.items():
             with self.subTest(event=name):
                 blp = self._make_blp(name)
-                p = case['params']
-                t_E = p['t_E']
-                t_0 = p['t_0']
-                t_pl = p['t_pl']
-                t_star = p['dt'] / 2.
+                p = case["params"]
+                t_E = p["t_E"]
+                t_0 = p["t_0"]
+                t_pl = p["t_pl"]
+                t_star = p["dt"] / 2.0
                 expected = [
-                    np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 20. * t_star)),
-                    np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 20. * t_star)),
+                    np.min(
+                        (t_0 - t_E, t_pl - t_E / 2.0, t_pl - 20.0 * t_star)
+                    ),
+                    np.max(
+                        (t_0 + t_E, t_pl + t_E / 2.0, t_pl + 20.0 * t_star)
+                    ),
                 ]
                 actual = blp.mag_methods[0::2]
                 for exp, act in zip(expected, actual):
@@ -523,13 +703,13 @@ class TestBinaryLensParams(unittest.TestCase):
             with self.subTest(event=name):
                 blp = self._make_blp(name)
                 t_start, t_end = blp.mag_methods[0::2]
-                p = case['params']
-                t_star = p['dt'] / 2.
+                p = case["params"]
+                t_star = p["dt"] / 2.0
                 self.assertLess(t_start, t_end)
-                self.assertLessEqual(t_start, p['t_pl'] - 20. * t_star)
-                self.assertGreaterEqual(t_end, p['t_pl'] + 20. * t_star)
-                self.assertLessEqual(t_start, p['t_0'] - p['t_E'])
-                self.assertGreaterEqual(t_end, p['t_0'] + p['t_E'])
+                self.assertLessEqual(t_start, p["t_pl"] - 20.0 * t_star)
+                self.assertGreaterEqual(t_end, p["t_pl"] + 20.0 * t_star)
+                self.assertLessEqual(t_start, p["t_0"] - p["t_E"])
+                self.assertGreaterEqual(t_end, p["t_0"] + p["t_E"])
 
     def test_vbbl_accuracy_default(self):
         """The default tolerance is VBM's own 0.01, exposed to MulensModel
@@ -538,16 +718,18 @@ class TestBinaryLensParams(unittest.TestCase):
             with self.subTest(event=name):
                 blp = self._make_blp(name)
                 self.assertEqual(blp.vbbl_accuracy, 0.01)
-                self.assertEqual(blp.mag_methods_parameters,
-                                 {'VBBL': {'accuracy': 0.01}})
+                self.assertEqual(
+                    blp.mag_methods_parameters, {"VBBL": {"accuracy": 0.01}}
+                )
 
     def test_vbbl_accuracy_override(self):
         """An explicit tolerance is passed through, and None falls back to
         MulensModel's own default by emitting no parameters at all."""
-        ulens = self.test_cases['KB160625']['ulens']
+        ulens = self.test_cases["KB160625"]["ulens"]
         blp = estimate_params.BinaryLensParams(ulens, vbbl_accuracy=1e-3)
-        self.assertEqual(blp.mag_methods_parameters,
-                         {'VBBL': {'accuracy': 1e-3}})
+        self.assertEqual(
+            blp.mag_methods_parameters, {"VBBL": {"accuracy": 1e-3}}
+        )
 
         blp_none = estimate_params.BinaryLensParams(ulens, vbbl_accuracy=None)
         self.assertIsNone(blp_none.mag_methods_parameters)
@@ -557,12 +739,14 @@ class TestBinaryLensParams(unittest.TestCase):
         builds, so a fitter-level override is not silently dropped."""
         case = KB160625()
         estimator = estimate_params.WidePlanetParameterEstimator(case.params)
-        self.assertEqual(estimator.get_binary_lens_params().vbbl_accuracy,
-                         0.01)
+        self.assertEqual(
+            estimator.get_binary_lens_params().vbbl_accuracy, 0.01
+        )
 
         estimator.vbbl_accuracy = 3e-3
-        self.assertEqual(estimator.get_binary_lens_params().vbbl_accuracy,
-                         3e-3)
+        self.assertEqual(
+            estimator.get_binary_lens_params().vbbl_accuracy, 3e-3
+        )
 
     def test_vbbl_used_throughout_window(self):
         """Inside the window the model must agree exactly with VBBL
@@ -574,35 +758,36 @@ class TestBinaryLensParams(unittest.TestCase):
                 t_start, t_end = blp.mag_methods[0::2]
                 times = np.linspace(t_start, t_end, 202)[1:-1]
 
-                windowed = MulensModel.Model(case['ulens'])
+                windowed = MulensModel.Model(case["ulens"])
                 windowed.set_magnification_methods(blp.mag_methods)
                 # Default method for a binary lens Model is point_source, so
                 # this second model is VBBL at every epoch.
-                everywhere = MulensModel.Model(case['ulens'])
-                everywhere.default_magnification_method = 'VBBL'
+                everywhere = MulensModel.Model(case["ulens"])
+                everywhere.default_magnification_method = "VBBL"
 
                 np.testing.assert_allclose(
                     windowed.get_magnification(times),
                     everywhere.get_magnification(times),
-                    rtol=1e-12)
+                    rtol=1e-12,
+                )
 
 
 class TestParameterUpdateEquivalence(unittest.TestCase):
-
     def setUp(self):
         self.base_params = {
-            't_0': 2460000.0,
-            'u_0': 0.1,
-            't_E': 30.0,
-            's': 1.5,
-            'q': 1e-4,
-            'alpha': 45.0,
+            "t_0": 2460000.0,
+            "u_0": 0.1,
+            "t_E": 30.0,
+            "s": 1.5,
+            "q": 1e-4,
+            "alpha": 45.0,
         }
         self.observation_times = np.linspace(2459990.0, 2460010.0, 100)
-        self.updated_values = {'alpha': 50.0, 's': 1.6, 'q': 1e-3}
+        self.updated_values = {"alpha": 50.0, "s": 1.6, "q": 1e-3}
 
-    def _build_model_with_attribute_assignment(self, params, updated_values,
-                                               mag_methods=None):
+    def _build_model_with_attribute_assignment(
+        self, params, updated_values, mag_methods=None
+    ):
         model = MulensModel.Model(params)
         if mag_methods is not None:
             model.set_magnification_methods(mag_methods)
@@ -610,8 +795,9 @@ class TestParameterUpdateEquivalence(unittest.TestCase):
             setattr(model.parameters, key, value)
         return model
 
-    def _build_model_with_dict_update(self, params, updated_values,
-                                      mag_methods=None):
+    def _build_model_with_dict_update(
+        self, params, updated_values, mag_methods=None
+    ):
         model = MulensModel.Model(params)
         if mag_methods is not None:
             model.set_magnification_methods(mag_methods)
@@ -633,43 +819,46 @@ class TestParameterUpdateEquivalence(unittest.TestCase):
         magnification as individual attribute assignment for alpha, s, and q.
         """
         model_attr = self._build_model_with_attribute_assignment(
-            self.base_params.copy(), self.updated_values)
+            self.base_params.copy(), self.updated_values
+        )
         model_update = self._build_model_with_dict_update(
-            self.base_params.copy(), self.updated_values)
+            self.base_params.copy(), self.updated_values
+        )
 
         np.testing.assert_allclose(
             self._get_magnifications(model_attr),
             self._get_magnifications(model_update),
-            rtol=self._RTOL
+            rtol=self._RTOL,
         )
 
     def test_parameter_update_with_rho_matches_attribute_assignment(self):
         """
         Same as above but includes rho using VBBL magnification.
         """
-        params = {**self.base_params, 'rho': 1e-3}
-        updated_values = {**self.updated_values, 'rho': 1e-2}
+        params = {**self.base_params, "rho": 1e-3}
+        updated_values = {**self.updated_values, "rho": 1e-2}
         mag_methods = [
             self.observation_times[0],
-            'VBBL',
-            self.observation_times[-1]
+            "VBBL",
+            self.observation_times[-1],
         ]
 
         model_attr = self._build_model_with_attribute_assignment(
-            params, updated_values, mag_methods)
+            params, updated_values, mag_methods
+        )
         model_update = self._build_model_with_dict_update(
-            params, updated_values, mag_methods)
+            params, updated_values, mag_methods
+        )
 
         np.testing.assert_allclose(
             self._get_magnifications(model_attr),
             self._get_magnifications(model_update),
-            rtol=self._RTOL
+            rtol=self._RTOL,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()
-

@@ -1,20 +1,20 @@
+import json
+import math
+import warnings
+from abc import ABC, abstractmethod
+from collections import deque
+from itertools import combinations
+from itertools import product as iproduct
+
+import matplotlib.pyplot as plt
+import MulensModel
 import numpy as np
 import pandas as pd
-from abc import ABC, abstractmethod
-from scipy.ndimage import minimum_filter, label
-import matplotlib.pyplot as plt
-from itertools import combinations
-from scipy import stats
-import math
-
-from collections import deque
-from itertools import product as iproduct
-import json
-import warnings
-
-import MulensModel
 import sfit_minimizer
-from .fitters import SFitFitter, AnomalyFitter
+from scipy import stats
+from scipy.ndimage import label, minimum_filter
+
+from .fitters import AnomalyFitter, SFitFitter
 
 # TODO: Separate EventFinder & AnomalyFinder grid searches from Rectangular grid searches.
 
@@ -23,36 +23,48 @@ from .fitters import SFitFitter, AnomalyFitter
 # ---------------------------------------------------------------------
 
 
-class EventFinderGridSearch():
+class EventFinderGridSearch:
     """
     Based on Kim et al. 2018, AJ, 155, 76
     """
 
-    def __init__(self,
-                 datasets=None, t_eff_3=1, d_t_eff=1/3., t_eff_max=99.,
-                 d_t_0=1/3., t_0_min=None, t_0_max=None, z_t_eff=5,
-                 n_min=50):
+    def __init__(
+        self,
+        datasets=None,
+        t_eff_3=1,
+        d_t_eff=1 / 3.0,
+        t_eff_max=99.0,
+        d_t_0=1 / 3.0,
+        t_0_min=None,
+        t_0_max=None,
+        z_t_eff=5,
+        n_min=50,
+    ):
         if datasets is None:
-            raise ValueError('You must define the datasets!')
+            raise ValueError("You must define the datasets!")
         elif isinstance(datasets, (MulensModel.MulensData)):
             datasets = [datasets]
         elif not isinstance(datasets, (list)):
             raise TypeError(
-                'datasets must be *list* or *MulensData*! Not',
-                type(datasets))
+                "datasets must be *list* or *MulensData*! Not", type(datasets)
+            )
 
         self.datasets = datasets
-        self.grid_params = {'t_eff_3': t_eff_3, 'd_t_eff': d_t_eff,
-                            't_eff_max': t_eff_max, 'd_t_0': d_t_0}
+        self.grid_params = {
+            "t_eff_3": t_eff_3,
+            "d_t_eff": d_t_eff,
+            "t_eff_max": t_eff_max,
+            "d_t_0": d_t_0,
+        }
         if t_0_min is None:
-            self.grid_params['t_0_min'] = self._get_t_0_min()
+            self.grid_params["t_0_min"] = self._get_t_0_min()
         else:
-            self.grid_params['t_0_min'] = t_0_min
+            self.grid_params["t_0_min"] = t_0_min
 
         if t_0_max is None:
-            self.grid_params['t_0_max'] = self._get_t_0_max()
+            self.grid_params["t_0_max"] = self._get_t_0_max()
         else:
-            self.grid_params['t_0_max'] = t_0_max
+            self.grid_params["t_0_max"] = t_0_max
 
         self._grid_t_eff = None
         self._grid_t_0 = None
@@ -77,7 +89,7 @@ class EventFinderGridSearch():
                 if t_min < t_0_min:
                     t_0_min = t_min
 
-        return t_0_min - self.grid_params['d_t_0']
+        return t_0_min - self.grid_params["d_t_0"]
 
     def _get_t_0_max(self):
         t_0_max = None
@@ -89,19 +101,19 @@ class EventFinderGridSearch():
                 if t_max > t_0_max:
                     t_0_max = t_max
 
-        return t_0_max + self.grid_params['d_t_0']
+        return t_0_max + self.grid_params["d_t_0"]
 
     def _setup_grid(self):
-        t_eff_factor = (1 + self.grid_params['d_t_eff'])
-        t_eff = self.grid_params['t_eff_3'] / t_eff_factor**2
+        t_eff_factor = 1 + self.grid_params["d_t_eff"]
+        t_eff = self.grid_params["t_eff_3"] / t_eff_factor**2
         self._grid_t_eff = []
         self._grid_t_0 = []
-        while t_eff < self.grid_params['t_eff_max']:
-            t_0 = self.grid_params['t_0_min']
-            while t_0 < self.grid_params['t_0_max']:
+        while t_eff < self.grid_params["t_eff_max"]:
+            t_0 = self.grid_params["t_0_min"]
+            while t_0 < self.grid_params["t_0_max"]:
                 self._grid_t_0.append(t_0)
                 self._grid_t_eff.append(t_eff)
-                t_0 += self.grid_params['d_t_0'] * t_eff
+                t_0 += self.grid_params["d_t_0"] * t_eff
 
             t_eff *= t_eff_factor
 
@@ -111,11 +123,11 @@ class EventFinderGridSearch():
 
     def run(self, verbose=False):
         results = []
-        for (t_0, t_eff) in zip(self.grid_t_0, self.grid_t_eff):
-            chi2s = self.do_fits({'t_0': t_0, 't_eff': t_eff}, verbose=verbose)
-            dchi2s = [chi2s['1'] - chi2s['flat'], chi2s['2'] - chi2s['flat']]
+        for t_0, t_eff in zip(self.grid_t_0, self.grid_t_eff):
+            chi2s = self.do_fits({"t_0": t_0, "t_eff": t_eff}, verbose=verbose)
+            dchi2s = [chi2s["1"] - chi2s["flat"], chi2s["2"] - chi2s["flat"]]
             if verbose:
-                print('t_0, t_eff, chi2s:', t_0, t_eff, chi2s)
+                print("t_0, t_eff, chi2s:", t_0, t_eff, chi2s)
 
             results.append(dchi2s)
 
@@ -136,37 +148,49 @@ class EventFinderGridSearch():
         """
 
         if self.results is None:
-            raise ValueError("Must run grid search before plotting. Call .run() first.")
+            raise ValueError(
+                "Must run grid search before plotting. Call .run() first."
+            )
 
         if fig is None:
             fig = plt.figure(figsize=(8, 4))
 
-        if self.grid_params['t_0_min'] > 2460000.:
-            delta = 2460000.
-        elif self.grid_params['t_0_min'] > 2450000.:
-            delta = 2450000.
+        if self.grid_params["t_0_min"] > 2460000.0:
+            delta = 2460000.0
+        elif self.grid_params["t_0_min"] > 2450000.0:
+            delta = 2450000.0
         else:
-            delta = 0.
+            delta = 0.0
 
         for j in [1, 2]:
             plt.subplot(1, 2, j)
-            plt.title(f'j={j}')
-            sorted_idx = np.argsort(self.results[:, j - 1])[::-1]  # smallest chi2 on top
+            plt.title(f"j={j}")
+            sorted_idx = np.argsort(self.results[:, j - 1])[
+                ::-1
+            ]  # smallest chi2 on top
             plt.scatter(
-                self.grid_t_0[sorted_idx] - delta, self.grid_t_eff[sorted_idx],
+                self.grid_t_0[sorted_idx] - delta,
+                self.grid_t_eff[sorted_idx],
                 c=self.results[sorted_idx, j - 1],
-                edgecolors='black', cmap='Set1')
-            plt.colorbar(label='chi2 - chi2_flat')
+                edgecolors="black",
+                cmap="Set1",
+            )
+            plt.colorbar(label="chi2 - chi2_flat")
 
             if self.best is not None:
                 plt.scatter(
-                    self.best['t_0'] - delta, self.best['t_eff'],
-                    color='black', marker='x', s=100, zorder=5)
+                    self.best["t_0"] - delta,
+                    self.best["t_eff"],
+                    color="black",
+                    marker="x",
+                    s=100,
+                    zorder=5,
+                )
 
             plt.minorticks_on()
-            plt.xlabel(f't_0 - {delta}')
-            plt.ylabel('t_eff')
-            plt.yscale('log')
+            plt.xlabel(f"t_0 - {delta}")
+            plt.ylabel("t_eff")
+            plt.yscale("log")
 
         plt.tight_layout()
         return fig
@@ -180,21 +204,35 @@ class EventFinderGridSearch():
         for dataset in self.datasets:
             # Restrict fitting to points t_0 +- z * t_eff with the
             # requirement N > 50.
-            index = ((dataset.time >
-                      (parameters['t_0'] - self.z_t_eff * parameters['t_eff'])) &
-                     (dataset.time <
-                      (parameters['t_0'] + self.z_t_eff * parameters['t_eff'])) &
-                     dataset.good)
+            index = (
+                (
+                    dataset.time
+                    > (parameters["t_0"] - self.z_t_eff * parameters["t_eff"])
+                )
+                & (
+                    dataset.time
+                    < (parameters["t_0"] + self.z_t_eff * parameters["t_eff"])
+                )
+                & dataset.good
+            )
             # Minimum requirement for including a dataset
             if np.sum(index) >= self.n_min:
                 trimmed_dataset = MulensModel.MulensData(
-                    [dataset.time[index], dataset.flux[index],
-                     dataset.err_flux[index]], phot_fmt='flux')
+                    [
+                        dataset.time[index],
+                        dataset.flux[index],
+                        dataset.err_flux[index],
+                    ],
+                    phot_fmt="flux",
+                )
                 trimmed_datasets.append(trimmed_dataset)
 
         if verbose:
-            print('trimmed datasets (N, epochs_i):', len(trimmed_datasets),
-                  [dataset.n_epochs for dataset in trimmed_datasets])
+            print(
+                "trimmed datasets (N, epochs_i):",
+                len(trimmed_datasets),
+                [dataset.n_epochs for dataset in trimmed_datasets],
+            )
 
         return trimmed_datasets
 
@@ -205,20 +243,21 @@ class EventFinderGridSearch():
         return flat_chi2
 
     def do_fits(self, parameters, verbose=False):
-        chi2s = {'1': np.nan, '2': np.nan, 'flat': np.nan}
+        chi2s = {"1": np.nan, "2": np.nan, "flat": np.nan}
 
         trimmed_datasets = self.get_trimmed_datasets(
-            parameters, verbose=verbose)
+            parameters, verbose=verbose
+        )
 
         # Only fit the window if there's enough data to do so.
         if len(trimmed_datasets) >= 1:
-            chi2s['flat'] = self.get_flat_chi2(trimmed_datasets)
+            chi2s["flat"] = self.get_flat_chi2(trimmed_datasets)
 
             for j in [1, 2]:
-                parameters['j'] = j
+                parameters["j"] = j
                 ef_sfit = EFSFitFunction(trimmed_datasets, parameters)
                 ef_sfit.update_all(theta=ef_sfit.theta + ef_sfit.get_step())
-                chi2s['{0}'.format(j)] = ef_sfit.chi2
+                chi2s["{0}".format(j)] = ef_sfit.chi2
 
         return chi2s
 
@@ -241,7 +280,11 @@ class EventFinderGridSearch():
 
     @property
     def best(self):
-        if (self._best is None) and (self.results is not None) and (len(self.results) > 0):
+        if (
+            (self._best is None)
+            and (self.results is not None)
+            and (len(self.results) > 0)
+        ):
             try:
                 index_1 = np.nanargmin(self.results[:, 0])
                 index_2 = np.nanargmin(self.results[:, 1])
@@ -252,12 +295,18 @@ class EventFinderGridSearch():
                     j = 2
                     index = index_2
 
-                self._best = {'t_0': self.grid_t_0[index],
-                              't_eff': self.grid_t_eff[index],
-                              'j': j,
-                              'chi2': self.results[index, j-1]}
+                self._best = {
+                    "t_0": self.grid_t_0[index],
+                    "t_eff": self.grid_t_eff[index],
+                    "j": j,
+                    "chi2": self.results[index, j - 1],
+                }
             except ValueError as e:
-                print(np.array(self.results).shape, np.sum(np.isnan(self.results)), np.sum(np.isfinite(self.results)))
+                print(
+                    np.array(self.results).shape,
+                    np.sum(np.isnan(self.results)),
+                    np.sum(np.isfinite(self.results)),
+                )
                 print(self.grid_params)
                 raise ValueError(e)
 
@@ -265,7 +314,6 @@ class EventFinderGridSearch():
 
 
 class FlatSFitFunction(sfit_minimizer.SFitFunction):
-
     def __init__(self, datasets):
         if isinstance(datasets, (MulensModel.MulensData)):
             self.datasets = [datasets]
@@ -285,14 +333,17 @@ class FlatSFitFunction(sfit_minimizer.SFitFunction):
         return data_indices
 
     def flatten_data(self):
-        """ Concatenate good points for all datasets into a single array with
-                columns: Date, flux, err.
-                """
+        """Concatenate good points for all datasets into a single array with
+        columns: Date, flux, err.
+        """
         self.data_len = []
         flattened_data = []
         for i, dataset in enumerate(self.datasets):
-            data = [dataset.time[dataset.good], dataset.flux[dataset.good],
-                    dataset.err_flux[dataset.good]]
+            data = [
+                dataset.time[dataset.good],
+                dataset.flux[dataset.good],
+                dataset.err_flux[dataset.good],
+            ]
             self.data_len.append(np.sum(dataset.good))
             if i == 0:
                 flattened_data = np.array(data)
@@ -310,8 +361,7 @@ class FlatSFitFunction(sfit_minimizer.SFitFunction):
             if i == 0:
                 model = np.array(model_fluxes[dataset.good])
             else:
-                model = np.hstack(
-                    (model, model_fluxes[dataset.good]))
+                model = np.hstack((model, model_fluxes[dataset.good]))
 
         self.ymod = model
 
@@ -324,7 +374,7 @@ class FlatSFitFunction(sfit_minimizer.SFitFunction):
         dfunc = np.zeros((self.n_params, self.data_indices[-1]))
         for i, dataset in enumerate(self.datasets):
             ind_start = self.data_indices[i]
-            ind_stop = self.data_indices[i+1]
+            ind_stop = self.data_indices[i + 1]
             dfunc_df_blend = np.ones((1, np.sum(dataset.good)))
             dfunc[i, ind_start:ind_stop] = dfunc_df_blend
 
@@ -332,7 +382,6 @@ class FlatSFitFunction(sfit_minimizer.SFitFunction):
 
 
 class EFSFitFunction(FlatSFitFunction):
-
     def __init__(self, datasets, parameters):
         self.parameters = parameters
         self._q = None
@@ -340,8 +389,9 @@ class EFSFitFunction(FlatSFitFunction):
 
         FlatSFitFunction.__init__(self, datasets=datasets)
         self.n_params = 2 * len(datasets)
-        self.theta = np.array([np.array([1, 0])
-                               for i in range(len(self.datasets))]).flatten()
+        self.theta = np.array(
+            [np.array([1, 0]) for i in range(len(self.datasets))]
+        ).flatten()
 
     def calc_model(self):
         model = None
@@ -349,13 +399,13 @@ class EFSFitFunction(FlatSFitFunction):
             fs = self.theta[2 * i]
             fb = self.theta[2 * i + 1]
             mag = self.magnification[
-                  self.data_indices[i]:self.data_indices[i + 1]]
+                self.data_indices[i] : self.data_indices[i + 1]
+            ]
             model_fluxes = fs * mag + fb
             if i == 0:
                 model = np.array(model_fluxes[dataset.good])
             else:
-                model = np.hstack(
-                    (model, model_fluxes[dataset.good]))
+                model = np.hstack((model, model_fluxes[dataset.good]))
 
         self.ymod = model
 
@@ -372,9 +422,10 @@ class EFSFitFunction(FlatSFitFunction):
         dfunc = np.zeros((self.n_params, self.data_indices[-1]))
         for i, dataset in enumerate(self.datasets):
             ind_start = self.data_indices[i]
-            ind_stop = self.data_indices[i+1]
+            ind_stop = self.data_indices[i + 1]
             dfunc_df_source = np.array(
-                [self.magnification[ind_start:ind_stop][dataset.good]])
+                [self.magnification[ind_start:ind_stop][dataset.good]]
+            )
             dfunc[2 * i, ind_start:ind_stop] = dfunc_df_source
             dfunc_df_blend = np.ones((1, np.sum(dataset.good)))
             dfunc[2 * i + 1, ind_start:ind_stop] = dfunc_df_blend
@@ -382,7 +433,10 @@ class EFSFitFunction(FlatSFitFunction):
         self.df = dfunc
 
     def _get_q(self, time):
-        q_ = 1. + ((time - self.parameters['t_0']) / self.parameters['t_eff']) ** 2
+        q_ = (
+            1.0
+            + ((time - self.parameters["t_0"]) / self.parameters["t_eff"]) ** 2
+        )
         return q_
 
     @property
@@ -393,12 +447,12 @@ class EFSFitFunction(FlatSFitFunction):
         return self._q
 
     def _get_magnification(self, q):
-        if self.parameters['j'] == 1:
-            magnification = 1. / np.sqrt(q)
-        elif self.parameters['j'] == 2:
-            magnification = 1. / np.sqrt(1. - (q / 2 + 1) ** (-2))
+        if self.parameters["j"] == 1:
+            magnification = 1.0 / np.sqrt(q)
+        elif self.parameters["j"] == 2:
+            magnification = 1.0 / np.sqrt(1.0 - (q / 2 + 1) ** (-2))
         else:
-            raise ValueError('Invalid value for j.', self.parameters)
+            raise ValueError("Invalid value for j.", self.parameters)
 
         return magnification
 
@@ -439,33 +493,48 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
     https://ui.adsabs.harvard.edu/abs/2021AJ....162..163Z/abstract
     """
 
-    def __init__(self, residuals=None, t_eff_3=0.75, d_t_eff=1/3., t_eff_max=10., d_t_0=1/6., z_t_eff=3, n_min=2,
-                 **kwargs):
+    def __init__(
+        self,
+        residuals=None,
+        t_eff_3=0.75,
+        d_t_eff=1 / 3.0,
+        t_eff_max=10.0,
+        d_t_0=1 / 6.0,
+        z_t_eff=3,
+        n_min=2,
+        **kwargs,
+    ):
         EventFinderGridSearch.__init__(
             self,
-            datasets=residuals, t_eff_3=t_eff_3, d_t_eff=d_t_eff,
-            t_eff_max=t_eff_max, d_t_0=d_t_0, z_t_eff=z_t_eff, n_min=n_min,
-            **kwargs)
+            datasets=residuals,
+            t_eff_3=t_eff_3,
+            d_t_eff=d_t_eff,
+            t_eff_max=t_eff_max,
+            d_t_0=d_t_0,
+            z_t_eff=z_t_eff,
+            n_min=n_min,
+            **kwargs,
+        )
         # print('max flux AF input',
         #      [np.max(residuals.flux) for residuals in self.datasets])
         self._anomalies = None
 
     def run(self, verbose=False):
         results = []
-        for (t_0, t_eff) in zip(self.grid_t_0, self.grid_t_eff):
-            chi2s = self.do_fits({'t_0': t_0, 't_eff': t_eff}, verbose=verbose)
+        for t_0, t_eff in zip(self.grid_t_0, self.grid_t_eff):
+            chi2s = self.do_fits({"t_0": t_0, "t_eff": t_eff}, verbose=verbose)
             if verbose:
                 print(t_0, t_eff, chi2s)
 
-            values = [chi2s[key] for key in ['1', '2', 'flat', 'zero']]
+            values = [chi2s[key] for key in ["1", "2", "flat", "zero"]]
             results.append(values)
 
         self.results = np.array(results)
 
     def get_zero_chi2(self, trimmed_datasets):
-        chi2 = 0.
+        chi2 = 0.0
         for dataset in trimmed_datasets:
-            chi2 += np.sum((dataset.flux / dataset.err_flux)**2)
+            chi2 += np.sum((dataset.flux / dataset.err_flux) ** 2)
 
         return chi2
 
@@ -473,7 +542,12 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
         """at least three successive points >=2 sigma away from the zero-residual curve."""
 
         times = np.hstack([dataset.time for dataset in trimmed_datasets])
-        residuals = np.hstack([np.abs(dataset.flux / dataset.err_flux) for dataset in trimmed_datasets])
+        residuals = np.hstack(
+            [
+                np.abs(dataset.flux / dataset.err_flux)
+                for dataset in trimmed_datasets
+            ]
+        )
 
         ind_sort = np.argsort(times)
         times = times[ind_sort]
@@ -492,10 +566,11 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
         return False
 
     def do_fits(self, parameters, verbose=False):
-        chi2s = {'1': np.nan, '2': np.nan, 'flat': np.nan, 'zero': np.nan}
+        chi2s = {"1": np.nan, "2": np.nan, "flat": np.nan, "zero": np.nan}
 
         trimmed_datasets = self.get_trimmed_datasets(
-            parameters, verbose=verbose)
+            parameters, verbose=verbose
+        )
         # plt.figure()
         # for dataset in trimmed_datasets:
         #    dataset.plot()
@@ -508,8 +583,9 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
             #      [np.max(residuals.flux) for residuals in trimmed_datasets])
 
             # Check for a minimum of 5 datapoints
-            n_tot = np.sum(np.hstack(
-                [dataset.good for dataset in trimmed_datasets]))
+            n_tot = np.sum(
+                np.hstack([dataset.good for dataset in trimmed_datasets])
+            )
             # print('n_tot', n_tot)
             successive = self.check_successive(trimmed_datasets)
             # print('successive', successive)
@@ -517,26 +593,32 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
                 do_fit = True
 
         if do_fit:
-            chi2s['zero'] = self.get_zero_chi2(trimmed_datasets)
-            chi2s['flat'] = self.get_flat_chi2(trimmed_datasets)
+            chi2s["zero"] = self.get_zero_chi2(trimmed_datasets)
+            chi2s["flat"] = self.get_flat_chi2(trimmed_datasets)
 
             for j in [1, 2]:
-                parameters['j'] = j
+                parameters["j"] = j
                 ef_sfit = EFSFitFunction(trimmed_datasets, parameters)
                 ef_sfit.update_all(theta=ef_sfit.theta + ef_sfit.get_step())
-                chi2s['{0}'.format(j)] = ef_sfit.chi2
+                chi2s["{0}".format(j)] = ef_sfit.chi2
 
         return chi2s
 
     def get_anomalies(self):
         anomalies = None
         for j in [1, 2]:
-            dchi2_zero = self.results[:, 3] - self.results[:, j-1]
-            dchi2_flat = self.results[:, 2] - self.results[:, j-1]
+            dchi2_zero = self.results[:, 3] - self.results[:, j - 1]
+            dchi2_flat = self.results[:, 2] - self.results[:, j - 1]
             values = np.vstack(
-                (self.grid_t_0, self.grid_t_eff,
-                 j * np.ones(self.results.shape[0], dtype=int), self.results[:, j - 1],
-                 dchi2_flat, dchi2_zero))
+                (
+                    self.grid_t_0,
+                    self.grid_t_eff,
+                    j * np.ones(self.results.shape[0], dtype=int),
+                    self.results[:, j - 1],
+                    dchi2_flat,
+                    dchi2_zero,
+                )
+            )
 
             if anomalies is None:
                 anomalies = values
@@ -545,7 +627,7 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
 
         return anomalies.transpose()
 
-    def filter_anomalies(self, tol_zero=120., tol_flat=35, tol_zero_alt=75.):
+    def filter_anomalies(self, tol_zero=120.0, tol_flat=35, tol_zero_alt=75.0):
         # Loop over j
         #    index_zero = dchi2_zero > tol_zero
         #    index_flat = (dchi2_zero > tol_zero_alt) & (dchi2_flat > tol_flat)
@@ -569,12 +651,18 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
     def best(self):
         if (self.results is not None) and (self._best is None):
             index = np.nanargmax(self.anomalies[:, 5])
-            self._best = {'t_0': self.anomalies[index, 0],
-                          't_eff': self.anomalies[index, 1],
-                          'j': self.anomalies[index, 2],
-                          'chi2': self.anomalies[index, 3],
-                          'dchi2_zero': (self.anomalies[index, 5] - self.anomalies[index, 3]),
-                          'dchi2_flat': (self.anomalies[index, 4] - self.anomalies[index, 3])}
+            self._best = {
+                "t_0": self.anomalies[index, 0],
+                "t_eff": self.anomalies[index, 1],
+                "j": self.anomalies[index, 2],
+                "chi2": self.anomalies[index, 3],
+                "dchi2_zero": (
+                    self.anomalies[index, 5] - self.anomalies[index, 3]
+                ),
+                "dchi2_flat": (
+                    self.anomalies[index, 4] - self.anomalies[index, 3]
+                ),
+            }
 
         return self._best
 
@@ -610,13 +698,20 @@ class BaseRectGridSearch(ABC):
     verbose : bool
         Print progress. Default False.
     """
+
     # TODO: This should be updated to use model_config/event_config to replace fitter_kwargs in the child classes.
-    def __init__(self, grid_params=None, datasets=None,
-                 evaluation_order='standard', start_point=None,
-                 use_nearest_neighbor_init=True,
-                 point_density_in_minimum=5,
-                 max_refinements=5, max_expansions=5,
-                 verbose=False):
+    def __init__(
+        self,
+        grid_params=None,
+        datasets=None,
+        evaluation_order="standard",
+        start_point=None,
+        use_nearest_neighbor_init=True,
+        point_density_in_minimum=5,
+        max_refinements=5,
+        max_expansions=5,
+        verbose=False,
+    ):
         self.grid_params = grid_params
         self.datasets = datasets
         self.evaluation_order = evaluation_order
@@ -667,7 +762,7 @@ class BaseRectGridSearch(ABC):
         -------
         bool
         """
-        return name.startswith('log_')
+        return name.startswith("log_")
 
     def _build_param_array(self, name, spec):
         """Build 1D array of parameter values for one parameter.
@@ -689,7 +784,7 @@ class BaseRectGridSearch(ABC):
         n = int(np.round((max_val - min_val) / step)) + 1
         values = np.linspace(min_val, max_val, n)
         if self._is_log_param(name):
-            return 10.0 ** values
+            return 10.0**values
         return values
 
     def _build_all_param_arrays(self):
@@ -700,8 +795,10 @@ class BaseRectGridSearch(ABC):
         dict
             {param_name: np.ndarray of actual parameter values}
         """
-        return {name: self._build_param_array(name, spec)
-                for name, spec in self.grid_params.items()}
+        return {
+            name: self._build_param_array(name, spec)
+            for name, spec in self.grid_params.items()
+        }
 
     def _build_grid_metadata(self):
         """Build grid metadata dict.
@@ -715,10 +812,12 @@ class BaseRectGridSearch(ABC):
         param_arrays = self._build_all_param_arrays()
         grid_shape = tuple(len(param_arrays[name]) for name in param_names)
         return {
-            'param_names': param_names,
-            'param_arrays': param_arrays,
-            'grid_shape': grid_shape,
-            'steps': {name: spec[2] for name, spec in self.grid_params.items()}
+            "param_names": param_names,
+            "param_arrays": param_arrays,
+            "grid_shape": grid_shape,
+            "steps": {
+                name: spec[2] for name, spec in self.grid_params.items()
+            },
         }
 
     def _build_empty_arrays(self, grid_shape):
@@ -774,8 +873,8 @@ class BaseRectGridSearch(ABC):
         tuple of int
         """
         return tuple(
-            self._value_to_index(point[name], metadata['param_arrays'][name])
-            for name in metadata['param_names']
+            self._value_to_index(point[name], metadata["param_arrays"][name])
+            for name in metadata["param_names"]
         )
 
     def _indices_to_point(self, indices, metadata):
@@ -792,8 +891,8 @@ class BaseRectGridSearch(ABC):
             Parameter name -> actual value.
         """
         return {
-            name: metadata['param_arrays'][name][idx]
-            for name, idx in zip(metadata['param_names'], indices)
+            name: metadata["param_arrays"][name][idx]
+            for name, idx in zip(metadata["param_names"], indices)
         }
 
     def _shift_indices(self, indices, offsets):
@@ -850,10 +949,13 @@ class BaseRectGridSearch(ABC):
             for delta in iproduct([-1, 0, 1], repeat=len(grid_shape)):
                 if all(d == 0 for d in delta):
                     continue
-                neighbor = tuple(idx[i] + delta[i] for i in range(len(grid_shape)))
-                if (neighbor not in visited and
-                        all(0 <= neighbor[i] < grid_shape[i]
-                            for i in range(len(grid_shape)))):
+                neighbor = tuple(
+                    idx[i] + delta[i] for i in range(len(grid_shape))
+                )
+                if neighbor not in visited and all(
+                    0 <= neighbor[i] < grid_shape[i]
+                    for i in range(len(grid_shape))
+                ):
                     visited.add(neighbor)
                     queue.append(neighbor)
 
@@ -873,9 +975,9 @@ class BaseRectGridSearch(ABC):
         -------
         list of tuple of int
         """
-        grid_shape = metadata['grid_shape']
+        grid_shape = metadata["grid_shape"]
 
-        if evaluation_order == 'standard':
+        if evaluation_order == "standard":
             return self._standard_order(grid_shape)
 
         if start_point is not None:
@@ -901,8 +1003,9 @@ class BaseRectGridSearch(ABC):
         -------
         bool
         """
-        return all(abs(indices1[i] - indices2[i]) <= 1
-                   for i in range(len(indices1)))
+        return all(
+            abs(indices1[i] - indices2[i]) <= 1 for i in range(len(indices1))
+        )
 
     def _build_grid_metadata(self):
         """Build grid metadata dict.
@@ -916,10 +1019,10 @@ class BaseRectGridSearch(ABC):
         param_arrays = self._build_all_param_arrays()
         grid_shape = tuple(len(param_arrays[name]) for name in param_names)
         return {
-            'param_names': param_names,
-            'param_arrays': param_arrays,
-            'grid_shape': grid_shape,
-            'steps': {name: self.grid_params[name][2] for name in param_names}
+            "param_names": param_names,
+            "param_arrays": param_arrays,
+            "grid_shape": grid_shape,
+            "steps": {name: self.grid_params[name][2] for name in param_names},
         }
 
     def _find_nearest_successful(self, params, param_names):
@@ -940,20 +1043,24 @@ class BaseRectGridSearch(ABC):
         best_result = None
 
         for cached_key, result in self._point_cache.items():
-            if not result.get('success', False):
+            if not result.get("success", False):
                 continue
-            dist = sum(
-                (params[name] - cached_key[i]) ** 2
-                for i, name in enumerate(param_names)
-            ) ** 0.5
+            dist = (
+                sum(
+                    (params[name] - cached_key[i]) ** 2
+                    for i, name in enumerate(param_names)
+                )
+                ** 0.5
+            )
             if dist < best_dist:
                 best_dist = dist
                 best_result = result
 
         return best_result
 
-    def _get_init_params(self, point, indices, last_indices,
-                         last_result, metadata):
+    def _get_init_params(
+        self, point, indices, last_indices, last_result, metadata
+    ):
         """Get initialization parameters for a grid point.
 
         Uses last point if adjacent and successful, otherwise
@@ -973,16 +1080,17 @@ class BaseRectGridSearch(ABC):
         dict or None
             Fitted params to initialize from, or None.
         """
-        if (last_indices is not None and
-                last_result is not None and
-                last_result.get('success', False) and
-                self._is_adjacent(indices, last_indices)):
-            return last_result.get('params')
+        if (
+            last_indices is not None
+            and last_result is not None
+            and last_result.get("success", False)
+            and self._is_adjacent(indices, last_indices)
+        ):
+            return last_result.get("params")
 
-        nearest = self._find_nearest_successful(
-            point, metadata['param_names'])
+        nearest = self._find_nearest_successful(point, metadata["param_names"])
         if nearest is not None:
-            return nearest.get('params')
+            return nearest.get("params")
 
         return None
 
@@ -990,8 +1098,15 @@ class BaseRectGridSearch(ABC):
     # Core evaluation loop
     # ----------------------------------------------------------------
 
-    def _run_grid(self, metadata, chi2_grid, result_grid,
-                  evaluation_order, start_point, use_nn_init):
+    def _run_grid(
+        self,
+        metadata,
+        chi2_grid,
+        result_grid,
+        evaluation_order,
+        start_point,
+        use_nn_init,
+    ):
         """Evaluate all grid points and populate chi2 and result arrays.
 
         Skips already-evaluated points. Caches results by parameter
@@ -1009,7 +1124,8 @@ class BaseRectGridSearch(ABC):
         use_nn_init : bool
         """
         ordered_indices = self._get_evaluation_order(
-            metadata, evaluation_order, start_point)
+            metadata, evaluation_order, start_point
+        )
         n_total = len(ordered_indices)
 
         last_indices = None
@@ -1023,19 +1139,20 @@ class BaseRectGridSearch(ABC):
 
             if use_nn_init:
                 init_params = self._get_init_params(
-                    point, indices, last_indices, last_result, metadata)
+                    point, indices, last_indices, last_result, metadata
+                )
                 if init_params is not None:
-                    point['_init_params'] = init_params
+                    point["_init_params"] = init_params
 
             if self.verbose:
                 print(f"Grid point {i + 1}/{n_total}: {point}")
 
             result = self._fit_grid_point(point)
 
-            chi2_grid[indices] = result.get('chi2', np.nan)
+            chi2_grid[indices] = result.get("chi2", np.nan)
             result_grid[indices] = result
 
-            key = self._make_cache_key(point, metadata['param_names'])
+            key = self._make_cache_key(point, metadata["param_names"])
             self._point_cache[key] = result
 
             last_indices = indices
@@ -1059,20 +1176,28 @@ class BaseRectGridSearch(ABC):
         """
         metadata = self._build_grid_metadata()
         chi2_grid, result_grid = self._build_empty_arrays(
-            metadata['grid_shape'])
-        self._run_grid(metadata, chi2_grid, result_grid,
-                       order, start, nn_init)
-        self.results_history = [{
-            'chi2_grid': chi2_grid,
-            'result_grid': result_grid,
-            'metadata': metadata
-        }]
+            metadata["grid_shape"]
+        )
+        self._run_grid(metadata, chi2_grid, result_grid, order, start, nn_init)
+        self.results_history = [
+            {
+                "chi2_grid": chi2_grid,
+                "result_grid": result_grid,
+                "metadata": metadata,
+            }
+        ]
         # TODO: There is no reason for results_history to be a list. It never gets appended to.
 
-    def run(self, refine=False, point_density_in_minimum=None,
-            evaluation_order=None, start_point=None,
-            use_nearest_neighbor_init=None,
-            max_refinements=None, max_expansions=None):
+    def run(
+        self,
+        refine=False,
+        point_density_in_minimum=None,
+        evaluation_order=None,
+        start_point=None,
+        use_nearest_neighbor_init=None,
+        max_refinements=None,
+        max_expansions=None,
+    ):
         """Execute grid search.
 
         Parameters
@@ -1098,9 +1223,11 @@ class BaseRectGridSearch(ABC):
 
         order = evaluation_order or self.evaluation_order
         start = start_point or self.start_point
-        nn_init = (use_nearest_neighbor_init
-                   if use_nearest_neighbor_init is not None
-                   else self.use_nearest_neighbor_init)
+        nn_init = (
+            use_nearest_neighbor_init
+            if use_nearest_neighbor_init is not None
+            else self.use_nearest_neighbor_init
+        )
         pt_dens = point_density_in_minimum or self.point_density_in_minimum
         max_ref = max_refinements or self.max_refinements
         max_exp = max_expansions or self.max_expansions
@@ -1109,8 +1236,7 @@ class BaseRectGridSearch(ABC):
         self._run_coarse_grid(order, start, nn_init)
 
         if refine:
-            self._run_refinement(pt_dens, max_ref, max_exp,
-                                 order, nn_init)
+            self._run_refinement(pt_dens, max_ref, max_exp, order, nn_init)
 
     # ----------------------------------------------------------------
     # Minima finding
@@ -1164,16 +1290,16 @@ class BaseRectGridSearch(ABC):
         chi2_safe = np.where(np.isnan(chi2_grid), np.inf, chi2_grid)
         structure = self._make_footprint(chi2_grid.ndim)
 
-        local_min = minimum_filter(chi2_safe, size=3,
-                                   mode='constant', cval=np.inf)
+        local_min = minimum_filter(
+            chi2_safe, size=3, mode="constant", cval=np.inf
+        )
         is_local_min = (chi2_grid == local_min) & np.isfinite(chi2_grid)
 
         candidates = np.argwhere(is_local_min)
         if len(candidates) == 0:
             return candidates
 
-        candidates = sorted(candidates,
-                            key=lambda idx: chi2_grid[tuple(idx)])
+        candidates = sorted(candidates, key=lambda idx: chi2_grid[tuple(idx)])
 
         accepted = []
         for candidate in candidates:
@@ -1183,13 +1309,17 @@ class BaseRectGridSearch(ABC):
             labeled, _ = label(mask, structure=structure)
             candidate_label = labeled[candidate_tuple]
 
-            dominated = any(labeled[tuple(acc)] == candidate_label
-                            for acc in accepted)
+            dominated = any(
+                labeled[tuple(acc)] == candidate_label for acc in accepted
+            )
             if not dominated:
                 accepted.append(candidate)
 
-        return (np.array(accepted) if accepted
-                else np.empty((0, chi2_grid.ndim), dtype=int))
+        return (
+            np.array(accepted)
+            if accepted
+            else np.empty((0, chi2_grid.ndim), dtype=int)
+        )
 
     def _build_minimum_entry(self, indices, chi2_grid, result_grid, level):
         """Build minimum dict for one grid point.
@@ -1211,13 +1341,13 @@ class BaseRectGridSearch(ABC):
         if result is None or not np.isfinite(chi2):
             return None
         return {
-            'indices': indices,
-            'chi2': chi2,
-            'params': result.get('params', {}),
-            'level': level,
-            'parent': None,
-            'children': [],
-            'refinement_history': []
+            "indices": indices,
+            "chi2": chi2,
+            "params": result.get("params", {}),
+            "level": level,
+            "parent": None,
+            "children": [],
+            "refinement_history": [],
         }
 
     def _find_minima_in_grid(self, chi2_grid, result_grid, level=0):
@@ -1237,7 +1367,8 @@ class BaseRectGridSearch(ABC):
         minima = []
         for idx in peak_idx_array:
             entry = self._build_minimum_entry(
-                tuple(idx), chi2_grid, result_grid, level)
+                tuple(idx), chi2_grid, result_grid, level
+            )
             if entry is not None:
                 minima.append(entry)
         return minima
@@ -1254,8 +1385,10 @@ class BaseRectGridSearch(ABC):
         -------
         bool
         """
-        return any(indices[i] == 0 or indices[i] == grid_shape[i] - 1
-                   for i in range(len(indices)))
+        return any(
+            indices[i] == 0 or indices[i] == grid_shape[i] - 1
+            for i in range(len(indices))
+        )
 
     # ----------------------------------------------------------------
     # Public minima access
@@ -1273,7 +1406,7 @@ class BaseRectGridSearch(ABC):
         list of tuple
             (chi2, params, level) sorted by chi2 ascending.
         """
-        result = [(m['chi2'], m['params'], m['level']) for m in minima]
+        result = [(m["chi2"], m["params"], m["level"]) for m in minima]
         result.sort(key=lambda x: x[0])
         return result
 
@@ -1289,17 +1422,15 @@ class BaseRectGridSearch(ABC):
             (chi2, params, level) sorted by chi2 ascending.
         """
         if self.results_history is None:
-            raise ValueError(
-                "No results available. Run grid search first.")
+            raise ValueError("No results available. Run grid search first.")
 
         if self.minima is not None:
             return self._format_minima_output(self.minima)
 
         level = self.results_history[0]
         raw_minima = self._find_minima_in_grid(
-            level['chi2_grid'],
-            level['result_grid'],
-            level=0)
+            level["chi2_grid"], level["result_grid"], level=0
+        )
 
         return self._format_minima_output(raw_minima)
 
@@ -1328,8 +1459,9 @@ class BaseRectGridSearch(ABC):
                 edge_dims.append((i, +1))
         return edge_dims
 
-    def _extend_param_array(self, name, param_array, direction,
-                            n_expand, step=None):
+    def _extend_param_array(
+        self, name, param_array, direction, n_expand, step=None
+    ):
         """Extend a 1D parameter array by n_expand steps in one direction.
 
         For log params, extension is in log10 space.
@@ -1354,12 +1486,15 @@ class BaseRectGridSearch(ABC):
 
         if self._is_log_param(name):
             if direction == -1:
-                new_log = (np.log10(param_array[0])
-                           - np.arange(n_expand, 0, -1) * step)
-                return np.concatenate([10.0 ** new_log, param_array])
-            new_log = (np.log10(param_array[-1])
-                       + np.arange(1, n_expand + 1) * step)
-            return np.concatenate([param_array, 10.0 ** new_log])
+                new_log = (
+                    np.log10(param_array[0])
+                    - np.arange(n_expand, 0, -1) * step
+                )
+                return np.concatenate([10.0**new_log, param_array])
+            new_log = (
+                np.log10(param_array[-1]) + np.arange(1, n_expand + 1) * step
+            )
+            return np.concatenate([param_array, 10.0**new_log])
 
         if direction == -1:
             new_vals = param_array[0] - np.arange(n_expand, 0, -1) * step
@@ -1392,7 +1527,9 @@ class BaseRectGridSearch(ABC):
             return np.concatenate([new_slice, arr], axis=dim)
         return np.concatenate([arr, new_slice], axis=dim)
 
-    def _apply_expansion(self, chi2_grid, result_grid, metadata, edge_dims, n_expand):
+    def _apply_expansion(
+        self, chi2_grid, result_grid, metadata, edge_dims, n_expand
+    ):
         """Expand arrays simultaneously in all edge dimensions.
 
         Parameters
@@ -1412,31 +1549,38 @@ class BaseRectGridSearch(ABC):
         """
         new_chi2 = chi2_grid
         new_result = result_grid
-        new_param_arrays = dict(metadata['param_arrays'])
-        offsets = [0] * len(metadata['param_names'])
+        new_param_arrays = dict(metadata["param_arrays"])
+        offsets = [0] * len(metadata["param_names"])
 
         for dim, direction in edge_dims:
-            name = metadata['param_names'][dim]
+            name = metadata["param_names"][dim]
             new_chi2 = self._expand_array_along_dim(
-                new_chi2, dim, direction, n_expand)
+                new_chi2, dim, direction, n_expand
+            )
             new_result = self._expand_array_along_dim(
-                new_result, dim, direction, n_expand)
+                new_result, dim, direction, n_expand
+            )
             new_param_arrays[name] = self._extend_param_array(
-                name, new_param_arrays[name], direction, n_expand,
-                step=metadata['steps'][name])
+                name,
+                new_param_arrays[name],
+                direction,
+                n_expand,
+                step=metadata["steps"][name],
+            )
             if direction == -1:
                 offsets[dim] = n_expand
 
         new_metadata = {
-            'param_names': metadata['param_names'],
-            'param_arrays': new_param_arrays,
-            'grid_shape': new_chi2.shape,
-            'steps': metadata['steps']
+            "param_names": metadata["param_names"],
+            "param_arrays": new_param_arrays,
+            "grid_shape": new_chi2.shape,
+            "steps": metadata["steps"],
         }
         return new_chi2, new_result, new_metadata, tuple(offsets)
 
-    def _get_strip_ranges(self, minimum_indices, old_shape, new_shape,
-                          edge_dims, strip_width):
+    def _get_strip_ranges(
+        self, minimum_indices, old_shape, new_shape, edge_dims, strip_width
+    ):
         """Compute index ranges for the strip to evaluate after expansion.
 
         In edge dimensions: all new indices.
@@ -1455,8 +1599,9 @@ class BaseRectGridSearch(ABC):
         -------
         list of range
         """
-        edge_dim_map = {dim: (direction, old_shape[dim])
-                        for dim, direction in edge_dims}
+        edge_dim_map = {
+            dim: (direction, old_shape[dim]) for dim, direction in edge_dims
+        }
         ranges = []
         for d in range(len(minimum_indices)):
             if d in edge_dim_map:
@@ -1471,8 +1616,9 @@ class BaseRectGridSearch(ABC):
                 ranges.append(range(lo, hi + 1))
         return ranges
 
-    def _evaluate_strip_points(self, chi2_grid, result_grid, metadata,
-                               strip_ranges, nn_init):
+    def _evaluate_strip_points(
+        self, chi2_grid, result_grid, metadata, strip_ranges, nn_init
+    ):
         """Evaluate all unevaluated points in the strip.
 
         Parameters
@@ -1491,13 +1637,14 @@ class BaseRectGridSearch(ABC):
             point = self._indices_to_point(indices, metadata)
             if nn_init:
                 init_params = self._get_init_params(
-                    point, indices, None, None, metadata)
+                    point, indices, None, None, metadata
+                )
                 if init_params is not None:
-                    point['_init_params'] = init_params
+                    point["_init_params"] = init_params
             result = self._fit_grid_point(point)
-            chi2_grid[indices] = result.get('chi2', np.nan)
+            chi2_grid[indices] = result.get("chi2", np.nan)
             result_grid[indices] = result
-            key = self._make_cache_key(point, metadata['param_names'])
+            key = self._make_cache_key(point, metadata["param_names"])
             self._point_cache[key] = result
 
     def _find_minimum_in_strip(self, chi2_grid, strip_ranges):
@@ -1521,8 +1668,16 @@ class BaseRectGridSearch(ABC):
                 best_indices = indices
         return best_indices
 
-    def _expand_once(self, indices, chi2_grid, result_grid, metadata,
-                     n_expand, strip_width, nn_init):
+    def _expand_once(
+        self,
+        indices,
+        chi2_grid,
+        result_grid,
+        metadata,
+        n_expand,
+        strip_width,
+        nn_init,
+    ):
         """Perform one expansion step around an edge minimum.
 
         Parameters
@@ -1542,12 +1697,15 @@ class BaseRectGridSearch(ABC):
         edge_dims = self._get_edge_dims(indices, chi2_grid.shape)
         old_shape = chi2_grid.shape
         chi2_grid, result_grid, metadata, offsets = self._apply_expansion(
-            chi2_grid, result_grid, metadata, edge_dims, n_expand)
+            chi2_grid, result_grid, metadata, edge_dims, n_expand
+        )
         indices = self._shift_indices(indices, offsets)
         strip_ranges = self._get_strip_ranges(
-            indices, old_shape, chi2_grid.shape, edge_dims, strip_width)
+            indices, old_shape, chi2_grid.shape, edge_dims, strip_width
+        )
         self._evaluate_strip_points(
-            chi2_grid, result_grid, metadata, strip_ranges, nn_init)
+            chi2_grid, result_grid, metadata, strip_ranges, nn_init
+        )
         strip_min = self._find_minimum_in_strip(chi2_grid, strip_ranges)
         if strip_min is not None and chi2_grid[strip_min] < chi2_grid[indices]:
             indices = strip_min
@@ -1557,7 +1715,15 @@ class BaseRectGridSearch(ABC):
     # Edge expansion entry point
     # ----------------------------------------------------------------
 
-    def _expand_edge_minimum(self, minimum, level_data, n_expand, strip_width, nn_init, max_expansions):
+    def _expand_edge_minimum(
+        self,
+        minimum,
+        level_data,
+        n_expand,
+        strip_width,
+        nn_init,
+        max_expansions,
+    ):
         """Expand grid around an edge minimum until interior or limit reached.
         Parameters
         ----------
@@ -1575,28 +1741,34 @@ class BaseRectGridSearch(ABC):
         level_data : dict
             Updated arrays and metadata.
         """
-        indices = minimum['indices']
-        chi2_grid = level_data['chi2_grid']
-        result_grid = level_data['result_grid']
-        metadata = level_data['metadata']
+        indices = minimum["indices"]
+        chi2_grid = level_data["chi2_grid"]
+        result_grid = level_data["result_grid"]
+        metadata = level_data["metadata"]
 
         for _ in range(max_expansions):
             if not self._is_edge_minimum(indices, chi2_grid.shape):
                 break
             indices, chi2_grid, result_grid, metadata = self._expand_once(
-                indices, chi2_grid, result_grid, metadata,
-                n_expand, strip_width, nn_init)
+                indices,
+                chi2_grid,
+                result_grid,
+                metadata,
+                n_expand,
+                strip_width,
+                nn_init,
+            )
 
-        minimum['indices'] = indices
-        minimum['chi2'] = chi2_grid[indices]
+        minimum["indices"] = indices
+        minimum["chi2"] = chi2_grid[indices]
         level_data = {
-            'chi2_grid': chi2_grid,
-            'result_grid': result_grid,
-            'metadata': metadata
+            "chi2_grid": chi2_grid,
+            "result_grid": result_grid,
+            "metadata": metadata,
         }
         return minimum, level_data
 
-# ----------------------------------------------------------------
+    # ----------------------------------------------------------------
     # Refinement: grid spec computation
     # ----------------------------------------------------------------
 
@@ -1659,8 +1831,9 @@ class BaseRectGridSearch(ABC):
         """
         return {
             name: self._compute_refined_spec_1d(
-                name, minimum['params'][name], metadata['steps'][name], n)
-            for name in metadata['param_names']
+                name, minimum["params"][name], metadata["steps"][name], n
+            )
+            for name in metadata["param_names"]
         }
 
     # ----------------------------------------------------------------
@@ -1692,12 +1865,12 @@ class BaseRectGridSearch(ABC):
             Modified in place.
         metadata : dict
         """
-        for indices in np.ndindex(*metadata['grid_shape']):
+        for indices in np.ndindex(*metadata["grid_shape"]):
             point = self._indices_to_point(indices, metadata)
-            key = self._make_cache_key(point, metadata['param_names'])
+            key = self._make_cache_key(point, metadata["param_names"])
             if key in self._point_cache:
                 result = self._point_cache[key]
-                chi2_grid[indices] = result.get('chi2', np.nan)
+                chi2_grid[indices] = result.get("chi2", np.nan)
                 result_grid[indices] = result
 
     # ----------------------------------------------------------------
@@ -1723,10 +1896,10 @@ class BaseRectGridSearch(ABC):
         }
         grid_shape = tuple(len(param_arrays[name]) for name in param_names)
         return {
-            'param_names': param_names,
-            'param_arrays': param_arrays,
-            'grid_shape': grid_shape,
-            'steps': {name: refined_spec[name][2] for name in param_names}
+            "param_names": param_names,
+            "param_arrays": param_arrays,
+            "grid_shape": grid_shape,
+            "steps": {name: refined_spec[name][2] for name in param_names},
         }
 
     def _build_subgrid_data(self, refined_spec, nn_init):
@@ -1743,21 +1916,26 @@ class BaseRectGridSearch(ABC):
             Keys: 'chi2_grid', 'result_grid', 'metadata'
         """
         metadata = self._build_subgrid_metadata(refined_spec)
-        chi2_grid, result_grid = self._build_empty_arrays(metadata['grid_shape'])
+        chi2_grid, result_grid = self._build_empty_arrays(
+            metadata["grid_shape"]
+        )
         self._fill_from_cache(chi2_grid, result_grid, metadata)
-        self._run_grid(metadata, chi2_grid, result_grid,
-                       'standard', None, nn_init)
+        self._run_grid(
+            metadata, chi2_grid, result_grid, "standard", None, nn_init
+        )
         return {
-            'chi2_grid': chi2_grid,
-            'result_grid': result_grid,
-            'metadata': metadata
+            "chi2_grid": chi2_grid,
+            "result_grid": result_grid,
+            "metadata": metadata,
         }
 
     # ----------------------------------------------------------------
     # Refinement: convergence
     # ----------------------------------------------------------------
 
-    def _count_below_threshold_1d(self, chi2_slice, center_pos, threshold, direction):
+    def _count_below_threshold_1d(
+        self, chi2_slice, center_pos, threshold, direction
+    ):
         """Count consecutive points at or below threshold in one direction.
 
         Parameters
@@ -1802,9 +1980,11 @@ class BaseRectGridSearch(ABC):
         chi2_slice = chi2_grid[tuple(slice_idx)]
         half_n = n // 2
         count_pos = self._count_below_threshold_1d(
-            chi2_slice, min_idx[dim], threshold, +1)
+            chi2_slice, min_idx[dim], threshold, +1
+        )
         count_neg = self._count_below_threshold_1d(
-            chi2_slice, min_idx[dim], threshold, -1)
+            chi2_slice, min_idx[dim], threshold, -1
+        )
         return count_pos >= half_n and count_neg >= half_n
 
     def _is_converged(self, min_idx, chi2_grid, n):
@@ -1844,13 +2024,13 @@ class BaseRectGridSearch(ABC):
         dict
         """
         return {
-            'indices': sub_min['indices'],
-            'chi2': sub_min['chi2'],
-            'params': sub_min['params'],
-            'level': level,
-            'parent': parent,
-            'children': [],
-            'refinement_history': []
+            "indices": sub_min["indices"],
+            "chi2": sub_min["chi2"],
+            "params": sub_min["params"],
+            "level": level,
+            "parent": parent,
+            "children": [],
+            "refinement_history": [],
         }
 
     def _update_minimum_from_subgrid(self, minimum, sub_min, level):
@@ -1863,10 +2043,10 @@ class BaseRectGridSearch(ABC):
         sub_min : dict
         level : int
         """
-        minimum['indices'] = sub_min['indices']
-        minimum['chi2'] = sub_min['chi2']
-        minimum['params'] = sub_min['params']
-        minimum['level'] = level
+        minimum["indices"] = sub_min["indices"]
+        minimum["chi2"] = sub_min["chi2"]
+        minimum["params"] = sub_min["params"]
+        minimum["level"] = level
 
     # ----------------------------------------------------------------
     # Refinement: core
@@ -1889,36 +2069,43 @@ class BaseRectGridSearch(ABC):
         subgrid_data : dict
         converged : bool
         """
-        current_metadata = (minimum['refinement_history'][-1]['metadata']
-                            if minimum['refinement_history']
-                            else self.results_history[0]['metadata'])
+        current_metadata = (
+            minimum["refinement_history"][-1]["metadata"]
+            if minimum["refinement_history"]
+            else self.results_history[0]["metadata"]
+        )
 
         refined_spec = self._compute_refined_spec(minimum, current_metadata, n)
         subgrid_data = self._build_subgrid_data(refined_spec, nn_init)
-        minimum['refinement_history'].append(subgrid_data)
+        minimum["refinement_history"].append(subgrid_data)
 
         sub_minima = self._find_minima_in_grid(
-            subgrid_data['chi2_grid'],
-            subgrid_data['result_grid'],
-            level=level)
+            subgrid_data["chi2_grid"], subgrid_data["result_grid"], level=level
+        )
 
         if len(sub_minima) == 0:
             return [], subgrid_data, True
 
         strip_width = max(3, n)
         for i, sub_min in enumerate(sub_minima):
-            if self._is_edge_minimum(sub_min['indices'],
-                                     subgrid_data['chi2_grid'].shape):
+            if self._is_edge_minimum(
+                sub_min["indices"], subgrid_data["chi2_grid"].shape
+            ):
                 sub_min, subgrid_data = self._expand_edge_minimum(
-                    sub_min, subgrid_data, strip_width, strip_width,
-                    nn_init, max_exp)
+                    sub_min,
+                    subgrid_data,
+                    strip_width,
+                    strip_width,
+                    nn_init,
+                    max_exp,
+                )
                 sub_minima[i] = sub_min
-                minimum['refinement_history'][-1] = subgrid_data
+                minimum["refinement_history"][-1] = subgrid_data
 
         if len(sub_minima) == 1:
             converged = self._is_converged(
-                sub_minima[0]['indices'],
-                subgrid_data['chi2_grid'], n)
+                sub_minima[0]["indices"], subgrid_data["chi2_grid"], n
+            )
             return sub_minima, subgrid_data, converged
 
         return sub_minima, subgrid_data, False
@@ -1941,7 +2128,8 @@ class BaseRectGridSearch(ABC):
         """
         for level in range(1, max_ref + 1):
             sub_minima, subgrid_data, converged = self._refine_once(
-                minimum, n, level, nn_init, max_exp)
+                minimum, n, level, nn_init, max_exp
+            )
 
             if len(sub_minima) == 0:
                 if self.verbose:
@@ -1954,13 +2142,16 @@ class BaseRectGridSearch(ABC):
                 children = []
                 for sub_min in sub_minima:
                     child = self._create_child_minimum(sub_min, minimum, level)
-                    minimum['children'].append(child)
+                    minimum["children"].append(child)
                     children.append(child)
                 remaining = max_ref - level
                 result = []
                 for child in children:
                     result.extend(
-                        self._refine_minimum(child, n, remaining, nn_init, max_exp))
+                        self._refine_minimum(
+                            child, n, remaining, nn_init, max_exp
+                        )
+                    )
                 return result
 
             self._update_minimum_from_subgrid(minimum, sub_minima[0], level)
@@ -1993,9 +2184,8 @@ class BaseRectGridSearch(ABC):
         # TODO: use Claude to clean up this entire workflow so there aren't 5 args being passed.
         level_data = self.results_history[0]
         coarse_minima = self._find_minima_in_grid(
-            level_data['chi2_grid'],
-            level_data['result_grid'],
-            level=0)
+            level_data["chi2_grid"], level_data["result_grid"], level=0
+        )
 
         if len(coarse_minima) == 0:
             self.minima = []
@@ -2003,21 +2193,29 @@ class BaseRectGridSearch(ABC):
 
         strip_width = max(3, n)
         for i, minimum in enumerate(coarse_minima):
-            if self._is_edge_minimum(minimum['indices'],
-                                     level_data['chi2_grid'].shape):
+            if self._is_edge_minimum(
+                minimum["indices"], level_data["chi2_grid"].shape
+            ):
                 minimum, level_data = self._expand_edge_minimum(
-                    minimum, level_data, strip_width, strip_width,
-                    nn_init, max_exp)
+                    minimum,
+                    level_data,
+                    strip_width,
+                    strip_width,
+                    nn_init,
+                    max_exp,
+                )
                 coarse_minima[i] = minimum
 
         self.results_history[0] = level_data
 
         self.minima = []
         for minimum in coarse_minima:
-            refined = self._refine_minimum(minimum, n, max_ref, nn_init, max_exp)
+            refined = self._refine_minimum(
+                minimum, n, max_ref, nn_init, max_exp
+            )
             self.minima.extend(refined)
 
-# ----------------------------------------------------------------
+    # ----------------------------------------------------------------
     # Uncertainties
     # ----------------------------------------------------------------
 
@@ -2035,8 +2233,8 @@ class BaseRectGridSearch(ABC):
         dict
             Keys: 'chi2_grid', 'result_grid', 'metadata'
         """
-        if minimum['refinement_history']:
-            return minimum['refinement_history'][-1]
+        if minimum["refinement_history"]:
+            return minimum["refinement_history"][-1]
         return self.results_history[0]
 
     def _chi2_slice_1d(self, chi2_grid, min_idx, dim):
@@ -2071,12 +2269,18 @@ class BaseRectGridSearch(ABC):
             (lo, hi) inclusive indices
         """
         lo = center_pos
-        while (lo > 0 and np.isfinite(chi2_slice[lo - 1])
-               and chi2_slice[lo - 1] <= threshold):
+        while (
+            lo > 0
+            and np.isfinite(chi2_slice[lo - 1])
+            and chi2_slice[lo - 1] <= threshold
+        ):
             lo -= 1
         hi = center_pos
-        while (hi < len(chi2_slice) - 1 and np.isfinite(chi2_slice[hi + 1])
-               and chi2_slice[hi + 1] <= threshold):
+        while (
+            hi < len(chi2_slice) - 1
+            and np.isfinite(chi2_slice[hi + 1])
+            and chi2_slice[hi + 1] <= threshold
+        ):
             hi += 1
         return lo, hi
 
@@ -2110,14 +2314,15 @@ class BaseRectGridSearch(ABC):
         tuple of float
             (lo_val, hi_val) actual parameter values
         """
-        chi2_grid = grid_data['chi2_grid']
-        metadata = grid_data['metadata']
-        name = metadata['param_names'][dim]
-        param_array = metadata['param_arrays'][name]
-        chi2_slice = self._chi2_slice_1d(chi2_grid, minimum['indices'], dim)
-        threshold = minimum['chi2'] + 1.0
+        chi2_grid = grid_data["chi2_grid"]
+        metadata = grid_data["metadata"]
+        name = metadata["param_names"][dim]
+        param_array = metadata["param_arrays"][name]
+        chi2_slice = self._chi2_slice_1d(chi2_grid, minimum["indices"], dim)
+        threshold = minimum["chi2"] + 1.0
         lo, hi = self._find_bounds_1d(
-            chi2_slice, minimum['indices'][dim], threshold)
+            chi2_slice, minimum["indices"][dim], threshold
+        )
         return self._indices_to_param_range(lo, hi, param_array)
 
     def get_uncertainties(self, minimum):
@@ -2137,10 +2342,10 @@ class BaseRectGridSearch(ABC):
             {param_name: (lo_val, hi_val)} for each parameter.
         """
         grid_data = self._get_minimum_grid(minimum)
-        metadata = grid_data['metadata']
+        metadata = grid_data["metadata"]
         return {
             name: self._get_uncertainty_1d(minimum, grid_data, dim)
-            for dim, name in enumerate(metadata['param_names'])
+            for dim, name in enumerate(metadata["param_names"])
         }
 
     # ----------------------------------------------------------------
@@ -2160,10 +2365,14 @@ class BaseRectGridSearch(ABC):
         -------
         np.ndarray, shape (n_dim1, n_dim2)
         """
-        dims_to_reduce = tuple(d for d in range(chi2_grid.ndim)
-                               if d != dim1 and d != dim2)
-        result = (np.nanmin(chi2_grid, axis=dims_to_reduce)
-                  if dims_to_reduce else chi2_grid.copy())
+        dims_to_reduce = tuple(
+            d for d in range(chi2_grid.ndim) if d != dim1 and d != dim2
+        )
+        result = (
+            np.nanmin(chi2_grid, axis=dims_to_reduce)
+            if dims_to_reduce
+            else chi2_grid.copy()
+        )
         if dim1 > dim2:
             result = result.T
         return result
@@ -2181,8 +2390,11 @@ class BaseRectGridSearch(ABC):
         np.ndarray
         """
         dims_to_reduce = tuple(d for d in range(chi2_grid.ndim) if d != dim)
-        return (np.nanmin(chi2_grid, axis=dims_to_reduce)
-                if dims_to_reduce else chi2_grid.copy().ravel())
+        return (
+            np.nanmin(chi2_grid, axis=dims_to_reduce)
+            if dims_to_reduce
+            else chi2_grid.copy().ravel()
+        )
 
     def _plot_heatmap_2d(self, ax, chi2_2d, param_arrays, names):
         """Plot 2D n-sigma heatmap (converted from chi2, 2 DOF).
@@ -2211,16 +2423,22 @@ class BaseRectGridSearch(ABC):
         delta_chi2 = chi2_2d - chi2_min
 
         # Convert to n-sigma (2 DOF): delta-chi2 = 2.30 -> 1σ, 6.18 -> 2σ, 11.83 -> 3σ
-        with np.errstate(invalid='ignore'):
+        with np.errstate(invalid="ignore"):
             p_values = stats.chi2.sf(delta_chi2, df=2)
             sigma_grid = stats.norm.isf(p_values / 2)
 
         finite_sigma = sigma_grid[np.isfinite(sigma_grid)]
         vmax = np.percentile(finite_sigma, 95) if len(finite_sigma) else 5.0
 
-        im = ax.imshow(sigma_grid.T, origin='lower', aspect='auto',
-                       extent=[arr1[0], arr1[-1], arr2[0], arr2[-1]],
-                       vmin=0, vmax=vmax, cmap='viridis')
+        im = ax.imshow(
+            sigma_grid.T,
+            origin="lower",
+            aspect="auto",
+            extent=[arr1[0], arr1[-1], arr2[0], arr2[-1]],
+            vmin=0,
+            vmax=vmax,
+            cmap="viridis",
+        )
         ax.set_xlabel(names[0])
         ax.set_ylabel(names[1])
         return im
@@ -2236,8 +2454,13 @@ class BaseRectGridSearch(ABC):
         name2 : str
         """
         for chi2, params, level in minima_list:
-            ax.plot(params[name1], params[name2], 'kx',
-                    markersize=10, markeredgewidth=2)
+            ax.plot(
+                params[name1],
+                params[name2],
+                "kx",
+                markersize=10,
+                markeredgewidth=2,
+            )
 
     def _plot_1d_projection(self, ax, chi2_1d, param_array, name, minima_list):
         """Plot 1D marginalized chi2 projection.
@@ -2252,12 +2475,16 @@ class BaseRectGridSearch(ABC):
         """
         ax.plot(param_array, chi2_1d)
         chi2_min = np.nanmin(chi2_1d)
-        ax.axhline(chi2_min + 1.0, color='r', linestyle='--',
-                   label=r'$\Delta\chi^2=1$')
+        ax.axhline(
+            chi2_min + 1.0,
+            color="r",
+            linestyle="--",
+            label=r"$\Delta\chi^2=1$",
+        )
         for chi2, params, level in minima_list:
-            ax.axvline(params[name], color='k', linestyle=':')
+            ax.axvline(params[name], color="k", linestyle=":")
         ax.set_xlabel(name)
-        ax.set_ylabel(r'$\chi^2$')
+        ax.set_ylabel(r"$\chi^2$")
         ax.legend(fontsize=8)
 
     def _plot_2d_projections(self, axes, chi2_grid, metadata, minima_list):
@@ -2271,20 +2498,24 @@ class BaseRectGridSearch(ABC):
         minima_list : list of tuple
         """
 
-        param_names = metadata['param_names']
-        param_arrays = metadata['param_arrays']
+        param_names = metadata["param_names"]
+        param_arrays = metadata["param_arrays"]
         for ax, (dim1, dim2) in zip(
-                axes, combinations(range(len(param_names)), 2)):
+            axes, combinations(range(len(param_names)), 2)
+        ):
             chi2_2d = self._marginalize_2d(chi2_grid, dim1, dim2)
-            arrays = (param_arrays[param_names[dim1]],
-                      param_arrays[param_names[dim2]])
+            arrays = (
+                param_arrays[param_names[dim1]],
+                param_arrays[param_names[dim2]],
+            )
             im = self._plot_heatmap_2d(
-                ax, chi2_2d, arrays,
-                (param_names[dim1], param_names[dim2]))
+                ax, chi2_2d, arrays, (param_names[dim1], param_names[dim2])
+            )
             self._mark_minima_2d(
-                ax, minima_list, param_names[dim1], param_names[dim2])
+                ax, minima_list, param_names[dim1], param_names[dim2]
+            )
             cbar = plt.colorbar(im, ax=ax)
-            cbar.set_label(r'$n_\sigma$')
+            cbar.set_label(r"$n_\sigma$")
 
     def _plot_1d_projections(self, axes, chi2_grid, metadata, minima_list):
         """Plot all 1D chi2 projections.
@@ -2296,12 +2527,13 @@ class BaseRectGridSearch(ABC):
         metadata : dict
         minima_list : list of tuple
         """
-        param_names = metadata['param_names']
-        param_arrays = metadata['param_arrays']
+        param_names = metadata["param_names"]
+        param_arrays = metadata["param_arrays"]
         for ax, (dim, name) in zip(axes, enumerate(param_names)):
             chi2_1d = self._marginalize_1d(chi2_grid, dim)
             self._plot_1d_projection(
-                ax, chi2_1d, param_arrays[name], name, minima_list)
+                ax, chi2_1d, param_arrays[name], name, minima_list
+            )
 
     def _create_figure(self, n_2d, n_1d):
         """Create figure and axes layout.
@@ -2319,7 +2551,9 @@ class BaseRectGridSearch(ABC):
         """
         n_cols = max(n_2d, n_1d, 1)
         n_rows = 1 if n_2d == 0 else 2
-        fig, axes = plt.subplots(n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False)
+        fig, axes = plt.subplots(
+            n_rows, n_cols, figsize=(4 * n_cols, 4 * n_rows), squeeze=False
+        )
         for ax in axes.ravel():
             ax.set_visible(False)
         axes_2d = list(axes[0, :n_2d]) if n_2d > 0 else []
@@ -2346,17 +2580,17 @@ class BaseRectGridSearch(ABC):
         if self.results_history is None:
             raise ValueError("No results. Run grid search first.")
         level_data = self.results_history[0]
-        chi2_grid = level_data['chi2_grid']
-        metadata = level_data['metadata']
-        n = len(metadata['param_names'])
+        chi2_grid = level_data["chi2_grid"]
+        metadata = level_data["metadata"]
+        n = len(metadata["param_names"])
         minima_list = self.find_local_minima()
         n_2d = n * (n - 1) // 2
         fig, axes_2d, axes_1d = self._create_figure(n_2d, n)
         if n_2d > 0:
             self._plot_2d_projections(
-                axes_2d, chi2_grid, metadata, minima_list)
-        self._plot_1d_projections(
-            axes_1d, chi2_grid, metadata, minima_list)
+                axes_2d, chi2_grid, metadata, minima_list
+            )
+        self._plot_1d_projections(axes_1d, chi2_grid, metadata, minima_list)
         plt.tight_layout()
         return fig
 
@@ -2373,11 +2607,11 @@ class BaseRectGridSearch(ABC):
         dict or None
         """
         if self.minima:
-            return min(self.minima, key=lambda m: m['chi2'])
+            return min(self.minima, key=lambda m: m["chi2"])
         if self.results_history is None:
             return None
-        chi2_grid = self.results_history[0]['chi2_grid']
-        result_grid = self.results_history[0]['result_grid']
+        chi2_grid = self.results_history[0]["chi2_grid"]
+        result_grid = self.results_history[0]["result_grid"]
         idx = np.unravel_index(np.nanargmin(chi2_grid), chi2_grid.shape)
         return result_grid[idx]
 
@@ -2404,23 +2638,25 @@ class BaseRectGridSearch(ABC):
             raise ValueError("No results available. Run grid search first.")
 
         level_data = self.results_history[0]
-        chi2_grid = level_data['chi2_grid']
-        result_grid = level_data['result_grid']
-        metadata = level_data['metadata']
-        param_names = metadata['param_names']
-        param_arrays = metadata['param_arrays']
+        chi2_grid = level_data["chi2_grid"]
+        result_grid = level_data["result_grid"]
+        metadata = level_data["metadata"]
+        param_names = metadata["param_names"]
+        param_arrays = metadata["param_arrays"]
 
         rows = []
-        for indices in np.ndindex(*metadata['grid_shape']):
+        for indices in np.ndindex(*metadata["grid_shape"]):
             result = result_grid[indices]
             if result is None:
                 continue
 
-            row = {'chi2': chi2_grid[indices]}
+            row = {"chi2": chi2_grid[indices]}
             for name in param_names:
-                row[name] = param_arrays[name][indices[param_names.index(name)]]
-            row['success'] = result.get('success', False)
-            row.update(result.get('params', {}))
+                row[name] = param_arrays[name][
+                    indices[param_names.index(name)]
+                ]
+            row["success"] = result.get("success", False)
+            row.update(result.get("params", {}))
             rows.append(row)
 
         if not rows:
@@ -2468,11 +2704,12 @@ class BaseRectGridSearch(ABC):
         if isinstance(obj, np.ndarray):
             return BaseRectGridSearch._make_json_serializable(obj.tolist())
         if isinstance(obj, dict):
-            return {k: BaseRectGridSearch._make_json_serializable(v)
-                    for k, v in obj.items()}
+            return {
+                k: BaseRectGridSearch._make_json_serializable(v)
+                for k, v in obj.items()
+            }
         if isinstance(obj, (list, tuple)):
-            return [BaseRectGridSearch._make_json_serializable(x)
-                    for x in obj]
+            return [BaseRectGridSearch._make_json_serializable(x) for x in obj]
         return obj
 
     @staticmethod
@@ -2517,18 +2754,18 @@ class BaseRectGridSearch(ABC):
         dict
         """
         mjs = BaseRectGridSearch._make_json_serializable
-        metadata = level_data['metadata']
+        metadata = level_data["metadata"]
         return {
-            'chi2_grid': mjs(level_data['chi2_grid']),
-            'result_grid': mjs(level_data['result_grid']),
-            'metadata': {
-                'param_names': metadata['param_names'],
-                'param_arrays': {k: mjs(v)
-                                 for k, v in
-                                 metadata['param_arrays'].items()},
-                'grid_shape': list(metadata['grid_shape']),
-                'steps': dict(metadata['steps'])
-            }
+            "chi2_grid": mjs(level_data["chi2_grid"]),
+            "result_grid": mjs(level_data["result_grid"]),
+            "metadata": {
+                "param_names": metadata["param_names"],
+                "param_arrays": {
+                    k: mjs(v) for k, v in metadata["param_arrays"].items()
+                },
+                "grid_shape": list(metadata["grid_shape"]),
+                "steps": dict(metadata["steps"]),
+            },
         }
 
     @staticmethod
@@ -2548,41 +2785,42 @@ class BaseRectGridSearch(ABC):
         dict
             Keys: 'chi2_grid', 'result_grid', 'metadata'
         """
-        metadata = data['metadata']
-        grid_shape = tuple(metadata['grid_shape'])
+        metadata = data["metadata"]
+        grid_shape = tuple(metadata["grid_shape"])
         flat = BaseRectGridSearch._flatten_nested_list
 
         # chi2_grid: null -> NaN
-        flat_chi2 = flat(data['chi2_grid'])
+        flat_chi2 = flat(data["chi2_grid"])
         chi2_grid = np.array(
             [np.nan if x is None else float(x) for x in flat_chi2]
         ).reshape(grid_shape)
 
         # result_grid: null elements -> None, null chi2 inside dicts -> NaN
-        flat_results = flat(data['result_grid'])
+        flat_results = flat(data["result_grid"])
         result_grid = np.empty(len(flat_results), dtype=object)
         for i, item in enumerate(flat_results):
             if item is None:
                 result_grid[i] = None
             else:
                 d = dict(item)
-                if d.get('chi2') is None:
-                    d['chi2'] = np.nan
+                if d.get("chi2") is None:
+                    d["chi2"] = np.nan
                 result_grid[i] = d
         result_grid = result_grid.reshape(grid_shape)
 
-        param_arrays = {k: np.array(v)
-                        for k, v in metadata['param_arrays'].items()}
+        param_arrays = {
+            k: np.array(v) for k, v in metadata["param_arrays"].items()
+        }
 
         return {
-            'chi2_grid': chi2_grid,
-            'result_grid': result_grid,
-            'metadata': {
-                'param_names': metadata['param_names'],
-                'param_arrays': param_arrays,
-                'grid_shape': grid_shape,
-                'steps': metadata['steps']
-            }
+            "chi2_grid": chi2_grid,
+            "result_grid": result_grid,
+            "metadata": {
+                "param_names": metadata["param_names"],
+                "param_arrays": param_arrays,
+                "grid_shape": grid_shape,
+                "steps": metadata["steps"],
+            },
         }
 
     @staticmethod
@@ -2599,14 +2837,14 @@ class BaseRectGridSearch(ABC):
         """
         mjs = BaseRectGridSearch._make_json_serializable
         return {
-            'indices': list(minimum['indices']),
-            'chi2': mjs(minimum['chi2']),
-            'params': mjs(minimum['params']),
-            'level': int(minimum['level']),
-            'refinement_history': [
+            "indices": list(minimum["indices"]),
+            "chi2": mjs(minimum["chi2"]),
+            "params": mjs(minimum["params"]),
+            "level": int(minimum["level"]),
+            "refinement_history": [
                 BaseRectGridSearch._serialize_level_data(ld)
-                for ld in minimum['refinement_history']
-            ]
+                for ld in minimum["refinement_history"]
+            ],
         }
 
     @staticmethod
@@ -2622,17 +2860,16 @@ class BaseRectGridSearch(ABC):
         dict
         """
         return {
-            'indices': tuple(data['indices']),
-            'chi2': (np.nan if data['chi2'] is None
-                     else float(data['chi2'])),
-            'params': data['params'],
-            'level': data['level'],
-            'parent': None,
-            'children': [],
-            'refinement_history': [
+            "indices": tuple(data["indices"]),
+            "chi2": (np.nan if data["chi2"] is None else float(data["chi2"])),
+            "params": data["params"],
+            "level": data["level"],
+            "parent": None,
+            "children": [],
+            "refinement_history": [
                 BaseRectGridSearch._deserialize_level_data(ld)
-                for ld in data['refinement_history']
-            ]
+                for ld in data["refinement_history"]
+            ],
         }
 
     # ----------------------------------------------------------------
@@ -2648,22 +2885,23 @@ class BaseRectGridSearch(ABC):
         """
         mjs = self._make_json_serializable
         return {
-            'grid_params': mjs(self.grid_params),
-            'evaluation_order': self.evaluation_order,
-            'start_point': mjs(self.start_point),
-            'use_nearest_neighbor_init': bool(self.use_nearest_neighbor_init),
-            'max_refinements': int(self.max_refinements),
-            'max_expansions': int(self.max_expansions),
-            'verbose': bool(self.verbose),
-            'results_history': (
-                [self._serialize_level_data(ld)
-                 for ld in self.results_history]
-                if self.results_history is not None else None
+            "grid_params": mjs(self.grid_params),
+            "evaluation_order": self.evaluation_order,
+            "start_point": mjs(self.start_point),
+            "use_nearest_neighbor_init": bool(self.use_nearest_neighbor_init),
+            "max_refinements": int(self.max_refinements),
+            "max_expansions": int(self.max_expansions),
+            "verbose": bool(self.verbose),
+            "results_history": (
+                [self._serialize_level_data(ld) for ld in self.results_history]
+                if self.results_history is not None
+                else None
             ),
-            'minima': (
+            "minima": (
                 [self._serialize_minimum(m) for m in self.minima]
-                if self.minima is not None else None
-            )
+                if self.minima is not None
+                else None
+            ),
         }
 
     def _get_extra_save_state(self):
@@ -2698,19 +2936,19 @@ class BaseRectGridSearch(ABC):
             raise ValueError("No results to save. Run grid search first.")
 
         state = {
-            'class': type(self).__name__,
-            'version': 1,
-            'base': self._get_base_save_state(),
-            'extra': self._get_extra_save_state()
+            "class": type(self).__name__,
+            "version": 1,
+            "base": self._get_base_save_state(),
+            "extra": self._get_extra_save_state(),
         }
 
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             json.dump(state, f, indent=2)
 
     def save_grid_points(self, filepath):
         """Save evaluated grid points to a fixed-width format text file."""
         df = self.results
-        with open(filepath, 'w') as f:
+        with open(filepath, "w") as f:
             f.write(df.to_string(index=False))
 
         if self.verbose:
@@ -2725,25 +2963,28 @@ class BaseRectGridSearch(ABC):
         instance : BaseRectGridSearch
         base_data : dict
         """
-        instance.grid_params = base_data['grid_params']
-        instance.evaluation_order = base_data['evaluation_order']
-        instance.start_point = base_data['start_point']
-        instance.use_nearest_neighbor_init = (
-            base_data['use_nearest_neighbor_init'])
-        instance.max_refinements = base_data['max_refinements']
-        instance.max_expansions = base_data['max_expansions']
-        instance.verbose = base_data['verbose']
+        instance.grid_params = base_data["grid_params"]
+        instance.evaluation_order = base_data["evaluation_order"]
+        instance.start_point = base_data["start_point"]
+        instance.use_nearest_neighbor_init = base_data[
+            "use_nearest_neighbor_init"
+        ]
+        instance.max_refinements = base_data["max_refinements"]
+        instance.max_expansions = base_data["max_expansions"]
+        instance.verbose = base_data["verbose"]
 
-        rh = base_data.get('results_history')
+        rh = base_data.get("results_history")
         instance.results_history = (
             [cls._deserialize_level_data(ld) for ld in rh]
-            if rh is not None else None
+            if rh is not None
+            else None
         )
 
-        minima_data = base_data.get('minima')
+        minima_data = base_data.get("minima")
         instance.minima = (
             [cls._deserialize_minimum(m) for m in minima_data]
-            if minima_data is not None else None
+            if minima_data is not None
+            else None
         )
 
     @classmethod
@@ -2784,17 +3025,17 @@ class BaseRectGridSearch(ABC):
         UserWarning
             If the file version is not 1.
         """
-        with open(filepath, 'r') as f:
+        with open(filepath, "r") as f:
             state = json.load(f)
 
-        saved_class = state.get('class', 'unknown')
+        saved_class = state.get("class", "unknown")
         if saved_class != cls.__name__:
             warnings.warn(
                 f"File was saved by '{saved_class}' but is being "
                 f"loaded into '{cls.__name__}'."
             )
 
-        if state.get('version', 1) != 1:
+        if state.get("version", 1) != 1:
             warnings.warn(
                 f"File version {state.get('version')} may not be "
                 f"compatible with the current code (version 1)."
@@ -2804,8 +3045,8 @@ class BaseRectGridSearch(ABC):
         instance._point_cache = {}
         instance.datasets = datasets
 
-        cls._restore_base_state(instance, state['base'])
-        cls._restore_extra_state(instance, state.get('extra', {}))
+        cls._restore_base_state(instance, state["base"])
+        cls._restore_extra_state(instance, state.get("extra", {}))
 
         return instance
 
@@ -2818,10 +3059,18 @@ class ParallaxGridSearch(BaseRectGridSearch):
     parameters and returns chi2 + fit results.
     """
 
-    def __init__(self, static_params, datasets=None, grid_params=None,
-                 evaluation_order='outward', start_point=None,
-                 fitter_kwargs=None, skip_optimization=False,
-                 verbose=False, **kwargs):
+    def __init__(
+        self,
+        static_params,
+        datasets=None,
+        grid_params=None,
+        evaluation_order="outward",
+        start_point=None,
+        fitter_kwargs=None,
+        skip_optimization=False,
+        verbose=False,
+        **kwargs,
+    ):
         """
         Parameters
         ----------
@@ -2875,7 +3124,7 @@ class ParallaxGridSearch(BaseRectGridSearch):
             (e.g. use_nearest_neighbor_init, max_refinements, max_expansions).
         """
         if start_point is None:
-            start_point = {'pi_E_E': 0.0, 'pi_E_N': 0.0}
+            start_point = {"pi_E_E": 0.0, "pi_E_N": 0.0}
 
         super().__init__(
             grid_params=grid_params,
@@ -2883,10 +3132,12 @@ class ParallaxGridSearch(BaseRectGridSearch):
             evaluation_order=evaluation_order,
             start_point=start_point,
             verbose=verbose,
-            **kwargs
+            **kwargs,
         )
         self.static_params = static_params.copy()
-        self.parameters_to_fit = [] if skip_optimization else list(static_params.keys())
+        self.parameters_to_fit = (
+            [] if skip_optimization else list(static_params.keys())
+        )
         self.fitter_kwargs = self._set_fitter_kwargs(fitter_kwargs)
         self.skip_optimization = skip_optimization
 
@@ -2905,14 +3156,14 @@ class ParallaxGridSearch(BaseRectGridSearch):
                 "At minimum, provide fitter_kwargs={'event_config': "
                 "EventConfig(coords=<sky coordinates>)}."
             )
-        if 'event_config' not in fitter_kwargs:
+        if "event_config" not in fitter_kwargs:
             raise ValueError(
                 "fitter_kwargs must contain an 'event_config' key with the sky "
                 "coordinates of the event set. Without coords, SFitFitter cannot "
                 "compute parallax trajectories and every grid point will silently "
                 "return NaN chi2."
             )
-        if fitter_kwargs['event_config'].coords is None:
+        if fitter_kwargs["event_config"].coords is None:
             raise ValueError(
                 "fitter_kwargs['event_config'].coords must not be None. Provide "
                 "the sky coordinates of the event as a string or MulensModel "
@@ -2938,7 +3189,7 @@ class ParallaxGridSearch(BaseRectGridSearch):
             raise ValueError("datasets must be set before running.")
 
         # Extract initialization params if provided by base class
-        init_params = grid_params.get('_init_params', None)
+        init_params = grid_params.get("_init_params", None)
 
         # Build model params: use init_params if available,
         # otherwise start from static_params. Then fix grid point values.
@@ -2947,8 +3198,8 @@ class ParallaxGridSearch(BaseRectGridSearch):
         else:
             model_params = self.static_params.copy()
 
-        model_params['pi_E_E'] = grid_params['pi_E_E']
-        model_params['pi_E_N'] = grid_params['pi_E_N']
+        model_params["pi_E_E"] = grid_params["pi_E_E"]
+        model_params["pi_E_N"] = grid_params["pi_E_N"]
 
         # TODO: investigate whether skip_optimization and non-skip branches can be unified
         # (differ in fitter.run() call and chi2 retrieval method)
@@ -2959,23 +3210,23 @@ class ParallaxGridSearch(BaseRectGridSearch):
                     initial_model_params=model_params,
                     datasets=self.datasets,
                     parameters_to_fit=self.parameters_to_fit,
-                    **self.fitter_kwargs
+                    **self.fitter_kwargs,
                 )
                 event = fitter.get_event()
                 chi2 = event.get_chi2()
                 return {
-                    'chi2': chi2,
-                    'params': model_params,
-                    'success': True,
+                    "chi2": chi2,
+                    "params": model_params,
+                    "success": True,
                 }
             except Exception as e:
                 if self.verbose:
                     print(f"  Chi2 calculation failed: {e}")
                 return {
-                    'chi2': np.nan,
-                    'params': None,
-                    'success': False,
-                    'error': str(e)
+                    "chi2": np.nan,
+                    "params": None,
+                    "success": False,
+                    "error": str(e),
                 }
         else:
             try:
@@ -2983,27 +3234,27 @@ class ParallaxGridSearch(BaseRectGridSearch):
                     initial_model_params=model_params,
                     datasets=self.datasets,
                     parameters_to_fit=self.parameters_to_fit,
-                    **self.fitter_kwargs
+                    **self.fitter_kwargs,
                 )
                 fitter.run()
                 params = {key: value for key, value in fitter.best.items()}
-                params.pop('chi2', None)
+                params.pop("chi2", None)
                 # Ensure grid parameters are always present in params
-                params['pi_E_E'] = grid_params['pi_E_E']
-                params['pi_E_N'] = grid_params['pi_E_N']
+                params["pi_E_E"] = grid_params["pi_E_E"]
+                params["pi_E_N"] = grid_params["pi_E_N"]
                 return {
-                    'chi2': fitter.best['chi2'],
-                    'params': params,
-                    'success': fitter.results.success,
+                    "chi2": fitter.best["chi2"],
+                    "params": params,
+                    "success": fitter.results.success,
                 }
             except Exception as e:
                 if self.verbose:
                     print(f"  Fit failed: {e}")
                 return {
-                    'chi2': np.nan,
-                    'params': None,
-                    'success': False,
-                    'error': str(e)
+                    "chi2": np.nan,
+                    "params": None,
+                    "success": False,
+                    "error": str(e),
                 }
 
     def _split_fitter_kwargs_for_saving(self):
@@ -3045,11 +3296,11 @@ class ParallaxGridSearch(BaseRectGridSearch):
         mjs = self._make_json_serializable
         fitter_kwargs, dropped = self._split_fitter_kwargs_for_saving()
         return {
-            'static_params': mjs(self.static_params),
-            'parameters_to_fit': list(self.parameters_to_fit),
-            'fitter_kwargs': fitter_kwargs,
-            'dropped_fitter_kwargs': dropped,
-            'skip_optimization': bool(self.skip_optimization)
+            "static_params": mjs(self.static_params),
+            "parameters_to_fit": list(self.parameters_to_fit),
+            "fitter_kwargs": fitter_kwargs,
+            "dropped_fitter_kwargs": dropped,
+            "skip_optimization": bool(self.skip_optimization),
         }
 
     @classmethod
@@ -3068,12 +3319,12 @@ class ParallaxGridSearch(BaseRectGridSearch):
             then be supplied through ``load_results(fitter_kwargs=...)``
             before the loaded instance can fit anything.
         """
-        instance.static_params = extra_data.get('static_params', {})
-        instance.parameters_to_fit = extra_data.get('parameters_to_fit', [])
-        instance.fitter_kwargs = extra_data.get('fitter_kwargs', {})
-        instance.skip_optimization = extra_data.get('skip_optimization', False)
+        instance.static_params = extra_data.get("static_params", {})
+        instance.parameters_to_fit = extra_data.get("parameters_to_fit", [])
+        instance.fitter_kwargs = extra_data.get("fitter_kwargs", {})
+        instance.skip_optimization = extra_data.get("skip_optimization", False)
 
-        dropped = extra_data.get('dropped_fitter_kwargs', [])
+        dropped = extra_data.get("dropped_fitter_kwargs", [])
         if dropped:
             warnings.warn(
                 "fitter_kwargs entries {0} were not saved (they hold live "
@@ -3102,12 +3353,11 @@ class ParallaxGridSearch(BaseRectGridSearch):
         """
         instance = super().load_results(filepath, datasets=datasets)
         if fitter_kwargs is not None:
-            instance.fitter_kwargs = instance._set_fitter_kwargs(
-                fitter_kwargs)
+            instance.fitter_kwargs = instance._set_fitter_kwargs(fitter_kwargs)
 
         return instance
 
-    def plot_grid_points(self, ax=None, cmap='Set1', min_chi2=None):
+    def plot_grid_points(self, ax=None, cmap="Set1", min_chi2=None):
         """
         Plot grid search results as colored points.
 
@@ -3140,9 +3390,9 @@ class ParallaxGridSearch(BaseRectGridSearch):
             ax = plt.gca()
 
         # Extract data for plotting
-        pi_E_E = self.results['pi_E_E'].values
-        pi_E_N = self.results['pi_E_N'].values
-        chi2 = self.results['chi2'].values
+        pi_E_E = self.results["pi_E_E"].values
+        pi_E_N = self.results["pi_E_N"].values
+        chi2 = self.results["chi2"].values
 
         # Calculate sigma (delta chi2 from minimum)
         if min_chi2 is None:
@@ -3150,7 +3400,9 @@ class ParallaxGridSearch(BaseRectGridSearch):
         sigma = [np.sqrt(c - min_chi2) for c in chi2]
 
         # Create scatter plot
-        scatter = ax.scatter(pi_E_E, pi_E_N, c=sigma, cmap=cmap, vmin=0, vmax=9, s=50)
+        scatter = ax.scatter(
+            pi_E_E, pi_E_N, c=sigma, cmap=cmap, vmin=0, vmax=9, s=50
+        )
 
         return scatter
 
@@ -3164,11 +3416,25 @@ class BinaryGridSearch(BaseRectGridSearch):
     parameters and returns chi2 + fit results.
     """
 
-    def __init__(self, datasets, static_params, grid_params=None,
-                 s_min=0.5, s_max=2.0, s_n=10, s_log=True,
-                 q_min=0.001, q_max=1.0, q_n=10, q_log=True,
-                 alpha_min=0.0, alpha_max=360.0, alpha_step=30.0,
-                 fitter_kwargs=None, verbose=False):
+    def __init__(
+        self,
+        datasets,
+        static_params,
+        grid_params=None,
+        s_min=0.5,
+        s_max=2.0,
+        s_n=10,
+        s_log=True,
+        q_min=0.001,
+        q_max=1.0,
+        q_n=10,
+        q_log=True,
+        alpha_min=0.0,
+        alpha_max=360.0,
+        alpha_step=30.0,
+        fitter_kwargs=None,
+        verbose=False,
+    ):
         """
         Parameters:
             datasets: MulensData object(s) to fit
@@ -3216,25 +3482,39 @@ class BinaryGridSearch(BaseRectGridSearch):
         if grid_params is not None:
             self.grid_params = grid_params.copy()
             # Validate required keys
-            required_keys = ['s_min', 's_max', 's_n', 's_log',
-                             'q_min', 'q_max', 'q_n', 'q_log',
-                             'alpha_min', 'alpha_max', 'alpha_step']
-            missing_keys = [k for k in required_keys if k not in self.grid_params]
+            required_keys = [
+                "s_min",
+                "s_max",
+                "s_n",
+                "s_log",
+                "q_min",
+                "q_max",
+                "q_n",
+                "q_log",
+                "alpha_min",
+                "alpha_max",
+                "alpha_step",
+            ]
+            missing_keys = [
+                k for k in required_keys if k not in self.grid_params
+            ]
             if missing_keys:
-                raise ValueError(f"grid_params missing required keys: {missing_keys}")
+                raise ValueError(
+                    f"grid_params missing required keys: {missing_keys}"
+                )
         else:
             self.grid_params = {
-                's_min': s_min,
-                's_max': s_max,
-                's_n': s_n,
-                's_log': s_log,
-                'q_min': q_min,
-                'q_max': q_max,
-                'q_n': q_n,
-                'q_log': q_log,
-                'alpha_min': alpha_min,
-                'alpha_max': alpha_max,
-                'alpha_step': alpha_step,
+                "s_min": s_min,
+                "s_max": s_max,
+                "s_n": s_n,
+                "s_log": s_log,
+                "q_min": q_min,
+                "q_max": q_max,
+                "q_n": q_n,
+                "q_log": q_log,
+                "alpha_min": alpha_min,
+                "alpha_max": alpha_max,
+                "alpha_step": alpha_step,
             }
 
         self.fitter_kwargs = fitter_kwargs if fitter_kwargs is not None else {}
@@ -3242,43 +3522,46 @@ class BinaryGridSearch(BaseRectGridSearch):
     def _setup_grid(self):
         """Set up rectangular grid over s, q, and alpha"""
         # Create s grid (log or linear)
-        if self.grid_params['s_log']:
+        if self.grid_params["s_log"]:
             s_array = self._log_grid_1d(
-                self.grid_params['s_min'],
-                self.grid_params['s_max'],
-                self.grid_params['s_n']
+                self.grid_params["s_min"],
+                self.grid_params["s_max"],
+                self.grid_params["s_n"],
             )
         else:
             # For linear spacing, would need s_step parameter
             raise NotImplementedError(
-                "Linear spacing for s not implemented. Use s_log=True.")
+                "Linear spacing for s not implemented. Use s_log=True."
+            )
 
         # Create q grid (log or linear)
-        if self.grid_params['q_log']:
+        if self.grid_params["q_log"]:
             q_array = self._log_grid_1d(
-                self.grid_params['q_min'],
-                self.grid_params['q_max'],
-                self.grid_params['q_n']
+                self.grid_params["q_min"],
+                self.grid_params["q_max"],
+                self.grid_params["q_n"],
             )
         else:
             raise NotImplementedError(
-                "Linear spacing for q not implemented. Use q_log=True.")
+                "Linear spacing for q not implemented. Use q_log=True."
+            )
 
         # Create alpha grid (always linear)
         alpha_array = self._linear_grid_1d(
-            self.grid_params['alpha_min'],
-            self.grid_params['alpha_max'],
-            self.grid_params['alpha_step']
+            self.grid_params["alpha_min"],
+            self.grid_params["alpha_max"],
+            self.grid_params["alpha_step"],
         )
 
         self._grid = self._make_rect_grid(
-            [s_array, q_array, alpha_array],
-            ['s', 'q', 'alpha']
+            [s_array, q_array, alpha_array], ["s", "q", "alpha"]
         )
 
         if self.verbose:
-            print(f"Grid setup: {len(s_array)} s × {len(q_array)} q × "
-                  f"{len(alpha_array)} alpha = {len(self._grid)} total points")
+            print(
+                f"Grid setup: {len(s_array)} s × {len(q_array)} q × "
+                f"{len(alpha_array)} alpha = {len(self._grid)} total points"
+            )
 
     def _fit_grid_point(self, grid_params):
         """
@@ -3296,33 +3579,35 @@ class BinaryGridSearch(BaseRectGridSearch):
 
         # Combine static params with this grid point's binary values
         model_params = self.static_params.copy()
-        model_params['s'] = grid_params['s']
-        model_params['q'] = grid_params['q']
-        model_params['alpha'] = grid_params['alpha']
+        model_params["s"] = grid_params["s"]
+        model_params["q"] = grid_params["q"]
+        model_params["alpha"] = grid_params["alpha"]
 
         # Run fitter
         try:
             fitter = AnomalyFitter(
                 initial_guess=model_params,
                 datasets=self.datasets,
-                **self.fitter_kwargs
+                **self.fitter_kwargs,
             )
             fitter.run()
 
             result = {
-                'chi2': fitter.chi2,
-                'params': fitter.best_fit_params,
-                'success': fitter.converged if hasattr(fitter, 'success') else True,
+                "chi2": fitter.chi2,
+                "params": fitter.best_fit_params,
+                "success": fitter.converged
+                if hasattr(fitter, "success")
+                else True,
             }
 
         except Exception as e:
             if self.verbose:
                 print(f"  Fit failed: {e}")
             result = {
-                'chi2': np.nan,
-                'params': None,
-                'success': False,
-                'error': str(e)
+                "chi2": np.nan,
+                "params": None,
+                "success": False,
+                "error": str(e),
             }
 
         return result

@@ -1,12 +1,18 @@
-from typing import Dict, Any, Optional
-from dataclasses import dataclass
-import pandas as pd
-import numpy as np
-from collections.abc import MutableMapping
 from abc import ABC, abstractmethod
+from collections.abc import MutableMapping
+from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 import MulensModel
-from mmexofast.fit_types import model_key_to_label, label_to_model_key, FitKey, LensType
+import numpy as np
+import pandas as pd
+
+from mmexofast.fit_types import (
+    FitKey,
+    LensType,
+    label_to_model_key,
+    model_key_to_label,
+)
 from mmexofast.observatories import get_telescope_band_from_filename
 
 
@@ -118,7 +124,7 @@ class BaseFitResults(ABC):
     @property
     def chi2(self):
         """float or None : Best-fit chi2, or None if not available."""
-        return self.fitter.best.get('chi2')
+        return self.fitter.best.get("chi2")
 
 
 class MMEXOFASTFitResults(BaseFitResults):
@@ -175,7 +181,7 @@ class MMEXOFASTFitResults(BaseFitResults):
         -------
         bool
         """
-        return hasattr(self.fitter.results, 'sigma_minus')
+        return hasattr(self.fitter.results, "sigma_minus")
 
     # -----------------------------------------------------------------------
     # BaseFitResults interface
@@ -188,7 +194,7 @@ class MMEXOFASTFitResults(BaseFitResults):
         ``MulensModel.Model()``.
         """
         params = {key: value for key, value in self.best.items()}
-        params.pop('chi2', None)
+        params.pop("chi2", None)
         return params
 
     def get_sigmas_from_results(self) -> Dict[str, float]:
@@ -248,14 +254,16 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = list(self.parameters_to_fit)
-        values = list(self.results.x[0:len(parameters)])
-        sigmas = list(self.results.sigmas[0:len(parameters)])
+        values = list(self.results.x[0 : len(parameters)])
+        sigmas = list(self.results.sigmas[0 : len(parameters)])
 
-        return pd.DataFrame({
-            'parameter_names': parameters,
-            'values':          values,
-            'sigmas':          sigmas,
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": parameters,
+                "values": values,
+                "sigmas": sigmas,
+            }
+        )
 
     def _get_df_fixed_parameters_sfit(self) -> pd.DataFrame:
         """
@@ -272,19 +280,22 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``.
         """
         fixed_parameters = [
-            p for p in self.all_model_parameters
+            p
+            for p in self.all_model_parameters
             if p not in self.parameters_to_fit
         ]
         values = [self.best[param] for param in fixed_parameters]
-        fixed_parameters.append('N_data')
+        fixed_parameters.append("N_data")
         values.append(
             np.sum([np.sum(dataset.good) for dataset in self.datasets])
         )
 
-        return pd.DataFrame({
-            'parameter_names': fixed_parameters,
-            'values':          values,
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": fixed_parameters,
+                "values": values,
+            }
+        )
 
     def _get_df_flux_parameters_sfit(self) -> pd.DataFrame:
         """
@@ -306,32 +317,36 @@ class MMEXOFASTFitResults(BaseFitResults):
 
         for i, dataset in enumerate(self.datasets):
             obs, band = get_telescope_band_from_filename(
-                dataset.plot_properties['label']
+                dataset.plot_properties["label"]
             )
-            parameters.append(f'{band}_S_{obs}')
-            parameters.append(f'{band}_B_{obs}')
+            parameters.append(f"{band}_S_{obs}")
+            parameters.append(f"{band}_B_{obs}")
 
             obs_index = len(self.parameters_to_fit) + 2 * i
             for index in range(2):
                 flux = self.results.x[obs_index + index]
                 if flux > 0:
                     err_flux = self.results.sigmas[obs_index + index]
-                    mag, err_mag = MulensModel.utils.Utils.get_mag_and_err_from_flux(
-                        flux, err_flux
+                    mag, err_mag = (
+                        MulensModel.utils.Utils.get_mag_and_err_from_flux(
+                            flux, err_flux
+                        )
                     )
                 else:
                     # TODO: Maybe it would be better to give the blend ratio instead of neg flux
-                    mag = 'neg flux'
+                    mag = "neg flux"
                     err_mag = np.nan
 
                 values.append(mag)
                 sigmas.append(err_mag)
 
-        return pd.DataFrame({
-            'parameter_names': parameters,
-            'values':          values,
-            'sigmas':          sigmas,
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": parameters,
+                "values": values,
+                "sigmas": sigmas,
+            }
+        )
 
     # -----------------------------------------------------------------------
     # emcee private helpers
@@ -352,12 +367,14 @@ class MMEXOFASTFitResults(BaseFitResults):
             ``'sigma_minus'``, ``'sigma_plus'``.
         """
         p = self.fitter.results.percentiles
-        return pd.DataFrame({
-            'parameter_names': list(self.parameters_to_fit),
-            'values':          list(p[1]),
-            'sigma_minus':     list(self.fitter.results.sigma_minus),
-            'sigma_plus':      list(self.fitter.results.sigma_plus),
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": list(self.parameters_to_fit),
+                "values": list(p[1]),
+                "sigma_minus": list(self.fitter.results.sigma_minus),
+                "sigma_plus": list(self.fitter.results.sigma_plus),
+            }
+        )
 
     def _get_df_fixed_parameters_emcee(self) -> pd.DataFrame:
         """
@@ -376,27 +393,29 @@ class MMEXOFASTFitResults(BaseFitResults):
             ``'sigma_minus'``, ``'sigma_plus'``.
         """
         linear_params_to_fit = {
-            self.fitter.get_parameter_name(p)
-            for p in self.parameters_to_fit
+            self.fitter.get_parameter_name(p) for p in self.parameters_to_fit
         }
         fixed_parameters = [
-            p for p in self.all_model_parameters
+            p
+            for p in self.all_model_parameters
             if p not in linear_params_to_fit
         ]
         values = [self.best[p] for p in fixed_parameters]
 
-        fixed_parameters.append('N_data')
+        fixed_parameters.append("N_data")
         values.append(
             int(np.sum([np.sum(dataset.good) for dataset in self.datasets]))
         )
 
         n = len(fixed_parameters)
-        return pd.DataFrame({
-            'parameter_names': fixed_parameters,
-            'values':          values,
-            'sigma_minus':     [np.nan] * n,
-            'sigma_plus':      [np.nan] * n,
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": fixed_parameters,
+                "values": values,
+                "sigma_minus": [np.nan] * n,
+                "sigma_plus": [np.nan] * n,
+            }
+        )
 
     def _get_df_flux_parameters_emcee(self) -> pd.DataFrame:
         """
@@ -425,15 +444,15 @@ class MMEXOFASTFitResults(BaseFitResults):
 
         for i, dataset in enumerate(self.datasets):
             obs, band = get_telescope_band_from_filename(
-                dataset.plot_properties['label']
+                dataset.plot_properties["label"]
             )
             if len(source_fluxes[i]) == 1:
-                parameters.append(f'{band}_S_{obs}')
+                parameters.append(f"{band}_S_{obs}")
             else:
                 for j in range(len(source_fluxes[i])):
-                    parameters.append(f'{band}_S{j}_{obs}')
+                    parameters.append(f"{band}_S{j}_{obs}")
 
-            parameters.append(f'{band}_B_{obs}')
+            parameters.append(f"{band}_B_{obs}")
 
             for flux in list(source_fluxes[i]) + [blend_fluxes[i]]:
                 flux_scalar = float(np.squeeze(flux))
@@ -442,17 +461,19 @@ class MMEXOFASTFitResults(BaseFitResults):
                         flux_scalar, 0.0
                     )
                 else:
-                    mag = 'neg flux'
+                    mag = "neg flux"
 
                 values.append(mag)
 
         n = len(parameters)
-        return pd.DataFrame({
-            'parameter_names': parameters,
-            'values': values,
-            'sigma_minus': [np.nan] * n,
-            'sigma_plus': [np.nan] * n,
-        })
+        return pd.DataFrame(
+            {
+                "parameter_names": parameters,
+                "values": values,
+                "sigma_minus": [np.nan] * n,
+                "sigma_plus": [np.nan] * n,
+            }
+        )
 
     # -----------------------------------------------------------------------
     # Property
@@ -467,6 +488,7 @@ class MMEXOFASTFitResults(BaseFitResults):
 # ============================================================================
 # FitRecord and AllFitResults
 # ============================================================================
+
 
 @dataclass
 class FitRecord:
@@ -498,6 +520,7 @@ class FitRecord:
         Whether the fit completed successfully.
 
     """
+
     model_key: FitKey
     params: dict
     sigmas: dict = None
@@ -507,7 +530,9 @@ class FitRecord:
     is_complete: bool = False
 
     @classmethod
-    def from_full_result(cls, model_key, full_result, renorm_factors=None, fixed=False):
+    def from_full_result(
+        cls, model_key, full_result, renorm_factors=None, fixed=False
+    ):
         """
         Construct a FitRecord from a full MMEXOFASTFitResults object.
 
@@ -691,6 +716,7 @@ class GridSearchResult:
     best_index : int
         Index into grid_points / chi2 of the best point.
     """
+
     name: str
     param_names: tuple[str, ...]
     grid_points: np.ndarray
@@ -703,6 +729,7 @@ class AllFitResults(MutableMapping):
     """
     Central registry for all fit results, keyed by FitKey.
     """
+
     def __init__(self):
         self._records: Dict[FitKey, FitRecord] = {}
 
@@ -711,7 +738,9 @@ class AllFitResults(MutableMapping):
         key = self._normalize_key(key_or_label)
         return self._records[key]
 
-    def __setitem__(self, key_or_label: str | FitKey, record: FitRecord) -> None:
+    def __setitem__(
+        self, key_or_label: str | FitKey, record: FitRecord
+    ) -> None:
         key = self._normalize_key(key_or_label)
         self._records[key] = record
 
@@ -750,7 +779,9 @@ class AllFitResults(MutableMapping):
 
     def items(self, labels: bool = False):
         if labels:
-            return [(model_key_to_label(k), r) for k, r in self._records.items()]
+            return [
+                (model_key_to_label(k), r) for k, r in self._records.items()
+            ]
         return list(self._records.items())
 
     def __repr__(self) -> str:
@@ -814,7 +845,8 @@ class IntermediateResults:
        Type of anomaly. Allowed types are given in VALID_ANOMALY_TYPES
 
     """
-    VALID_ANOMALY_TYPES = {'close', 'wide', 'high_mag'}
+
+    VALID_ANOMALY_TYPES = {"close", "wide", "high_mag"}
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None
@@ -833,6 +865,7 @@ class IntermediateResults:
     def anomaly_type(self, value: Optional[str]) -> None:
         if value is not None and value not in self.VALID_ANOMALY_TYPES:
             raise ValueError(
-                f'{value!r} is not a valid anomaly_type. '
-                f'Must be one of {self.VALID_ANOMALY_TYPES}.')
+                f"{value!r} is not a valid anomaly_type. "
+                f"Must be one of {self.VALID_ANOMALY_TYPES}."
+            )
         self._anomaly_type = value

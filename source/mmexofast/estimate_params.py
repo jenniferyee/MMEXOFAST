@@ -15,22 +15,30 @@ estimation, and ensemble initialization for MCMC sampling.
 
 # Created by Luca Campiani in January 2024
 # Updated by Jennifer Yee, May 2025
+import warnings
 from itertools import product
-import pandas as pd
+
+import matplotlib.pyplot as plt
+
+# import copy
+import MulensModel
 import numpy as np
-from scipy.optimize import minimize
-from scipy.signal import find_peaks
+import pandas as pd
 import scipy.stats
 from matplotlib.gridspec import GridSpec
-import matplotlib.pyplot as plt
-import warnings
-# import copy
+from scipy.optimize import minimize
+from scipy.signal import find_peaks
 
-import MulensModel
-from .mulens_object_config import ModelConfig, EventConfig
+from .mulens_object_config import EventConfig, ModelConfig
 
 
-def get_PSPL_params(ef_grid_point, datasets, model_config=None, event_config=None, verbose=False):
+def get_PSPL_params(
+    ef_grid_point,
+    datasets,
+    model_config=None,
+    event_config=None,
+    verbose=False,
+):
     """
     Estimate initial PSPL parameters by grid search over u_0 and t_E.
 
@@ -58,13 +66,15 @@ def get_PSPL_params(ef_grid_point, datasets, model_config=None, event_config=Non
     _model_config = model_config if model_config is not None else ModelConfig()
     _event_config = event_config if event_config is not None else EventConfig()
 
-    t_0s = ef_grid_point['t_0'] + ef_grid_point['t_eff'] * np.linspace(-1, 1, 7)
+    t_0s = ef_grid_point["t_0"] + ef_grid_point["t_eff"] * np.linspace(
+        -1, 1, 7
+    )
     u_0s = [0.01, 0.1, 0.3, 1.0, 1.5]
-    t_Es = [1., 3., 10., 20., 40., 100.]
+    t_Es = [1.0, 3.0, 10.0, 20.0, 40.0, 100.0]
     best_chi2 = np.inf
     best_params = None
     for t_0, u_0, t_E in product(t_0s, u_0s, t_Es):
-        params = {'t_0': t_0, 't_E': t_E, 'u_0': u_0}
+        params = {"t_0": t_0, "t_E": t_E, "u_0": u_0}
         model = _model_config.build(parameters=params)
         event = _event_config.build(model=model, datasets=datasets)
         if event.get_chi2() < best_chi2:
@@ -74,7 +84,7 @@ def get_PSPL_params(ef_grid_point, datasets, model_config=None, event_config=Non
     return best_params
 
 
-class BinaryLensParams():
+class BinaryLensParams:
     """
     Container for binary lens model parameters and magnification methods.
 
@@ -131,7 +141,9 @@ class BinaryLensParams():
     more accurate than the brackets it replaces, at comparable cost.
     """
 
-    _N_TSTAR_WINDOW_HW = 5  # half-width of the anomaly window, in units of t_star
+    _N_TSTAR_WINDOW_HW = (
+        5  # half-width of the anomaly window, in units of t_star
+    )
     _DEFAULT_VBBL_ACCURACY = 0.01
 
     def __init__(self, ulens, vbbl_accuracy=_DEFAULT_VBBL_ACCURACY):
@@ -154,7 +166,7 @@ class BinaryLensParams():
         if self.vbbl_accuracy is None:
             return None
 
-        return {'VBBL': {'accuracy': self.vbbl_accuracy}}
+        return {"VBBL": {"accuracy": self.vbbl_accuracy}}
 
     @property
     def t_star(self):
@@ -166,9 +178,10 @@ class BinaryLensParams():
         """
         if self.params is None:
             raise RuntimeError(
-                "set_mag_method() must be called before accessing t_star.")
-        dt = self.params['dt']
-        return dt / 2.
+                "set_mag_method() must be called before accessing t_star."
+            )
+        dt = self.params["dt"]
+        return dt / 2.0
 
     def set_mag_method(self, params):
         """
@@ -201,17 +214,18 @@ class BinaryLensParams():
         None
         """
         self.params = params
-        t_E = params['t_E']
-        t_0 = params['t_0']
-        t_pl = params['t_pl']
+        t_E = params["t_E"]
+        t_0 = params["t_0"]
+        t_pl = params["t_pl"]
         width = self._N_TSTAR_WINDOW_HW * self.t_star
         self.mag_methods = [
-            np.min((t_0 - t_E, t_pl - t_E / 2., t_pl - 4. * width)),
-            'VBBL',
-            np.max((t_0 + t_E, t_pl + t_E / 2., t_pl + 4. * width))]
+            np.min((t_0 - t_E, t_pl - t_E / 2.0, t_pl - 4.0 * width)),
+            "VBBL",
+            np.max((t_0 + t_E, t_pl + t_E / 2.0, t_pl + 4.0 * width)),
+        ]
 
 
-def get_wide_params(params, limit='GG97'):
+def get_wide_params(params, limit="GG97"):
     """
     Transform initial anomaly parameters into wide binary lens model parameters.
 
@@ -276,22 +290,22 @@ def get_possible_bump_anomaly_solutions(params):
     """
     solutions = {}
 
-    for limit in ['GG97', 'dwarf', 'giant']:
+    for limit in ["GG97", "dwarf", "giant"]:
         estimator = WidePlanetParameterEstimator(params, limit=limit)
-        solutions[f'Wide {limit}'] = estimator.get_binary_ulens_params()
+        solutions[f"Wide {limit}"] = estimator.get_binary_ulens_params()
 
     close_upper = CloseUpperBinaryParameterEstimator(params)
-    solutions['CloseUpper'] = close_upper.get_binary_lens_params()
+    solutions["CloseUpper"] = close_upper.get_binary_lens_params()
 
     close_lower = CloseLowerBinaryParameterEstimator(params)
-    solutions['CloseLower'] = close_lower.get_binary_lens_params()
+    solutions["CloseLower"] = close_lower.get_binary_lens_params()
 
-    solutions['BinarySource'] = get_binary_source_params(params)
+    solutions["BinarySource"] = get_binary_source_params(params)
 
     return solutions
 
 
-class ParameterEstimator():
+class ParameterEstimator:
     """
     Base class for analytic microlensing parameter estimators.
 
@@ -372,14 +386,17 @@ class ParameterEstimator():
         ValueError
             If ``self.limit`` is not a recognized value.
         """
-        if self.limit == 'dwarf':
+        if self.limit == "dwarf":
             return 0.001
-        elif self.limit == 'giant':
+        elif self.limit == "giant":
             return 0.05
-        elif self.limit == 'point':
+        elif self.limit == "point":
             return None
         else:
-            raise ValueError('Your limit for calculating rho is not implemented: ', self.limit)
+            raise ValueError(
+                "Your limit for calculating rho is not implemented: ",
+                self.limit,
+            )
 
     @property
     def binary_params(self):
@@ -401,17 +418,17 @@ class ParameterEstimator():
     @property
     def t_0(self):
         """Time of maximum magnification, from ``self.params``."""
-        return self.params['t_0']
+        return self.params["t_0"]
 
     @property
     def u_0(self):
         """Impact parameter, from ``self.params``."""
-        return self.params['u_0']
+        return self.params["u_0"]
 
     @property
     def t_E(self):
         """Einstein crossing time, from ``self.params``."""
-        return self.params['t_E']
+        return self.params["t_E"]
 
     @property
     def tau_pl(self):
@@ -425,7 +442,9 @@ class ParameterEstimator():
         float
         """
         if self._tau_pl is None:
-            self._tau_pl = (self.params['t_pl'] - self.params['t_0']) / self.params['t_E']
+            self._tau_pl = (
+                self.params["t_pl"] - self.params["t_0"]
+            ) / self.params["t_E"]
 
         return self._tau_pl
 
@@ -441,7 +460,7 @@ class ParameterEstimator():
         float
         """
         if self._u_pl is None:
-            self._u_pl = np.sqrt(self.params['u_0'] ** 2 + self.tau_pl ** 2)
+            self._u_pl = np.sqrt(self.params["u_0"] ** 2 + self.tau_pl**2)
 
         return self._u_pl
 
@@ -459,11 +478,11 @@ class ParameterEstimator():
         float
             Normalized angle in degrees.
         """
-        while alpha > 360.:
-            alpha -= 360.
+        while alpha > 360.0:
+            alpha -= 360.0
 
         while alpha < -360:
-            alpha += 360.
+            alpha += 360.0
 
         return alpha
 
@@ -479,7 +498,7 @@ class ParameterEstimator():
         float
         """
         if self._alpha is None:
-            alpha = np.pi - np.arctan2(self.params['u_0'], self.tau_pl)
+            alpha = np.pi - np.arctan2(self.params["u_0"], self.tau_pl)
             alpha = np.rad2deg(alpha)
             self._alpha = self._correct_alpha(alpha)
 
@@ -527,7 +546,7 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         ``'dwarf'``, ``'giant'``, or ``'point'``.
     """
 
-    def __init__(self, params, limit='GG97'):
+    def __init__(self, params, limit="GG97"):
         super().__init__(params, limit=limit)
         self._delta_A = None
         self._a_pspl = None
@@ -546,8 +565,8 @@ class WidePlanetParameterEstimator(ParameterEstimator):
             Source size relative to the Einstein radius, or None for a
             point source.
         """
-        if self.limit == 'GG97':
-            rho = self.params['dt'] / self.params['t_E'] / 4.
+        if self.limit == "GG97":
+            rho = self.params["dt"] / self.params["t_E"] / 4.0
         else:
             rho = super().get_rho()
 
@@ -569,12 +588,18 @@ class WidePlanetParameterEstimator(ParameterEstimator):
             ``'u_0'``, ``'t_E'``, ``'s'``, ``'alpha'``, and ``'q'``.
             ``'rho'`` is included unless ``limit='point'``.
         """
-        new_params = {'t_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E, 's': self.s, 'alpha': self.alpha}
+        new_params = {
+            "t_0": self.t_0,
+            "u_0": self.u_0,
+            "t_E": self.t_E,
+            "s": self.s,
+            "alpha": self.alpha,
+        }
         rho = self.rho
         if rho is not None:
-            new_params['rho'] = rho
+            new_params["rho"] = rho
 
-        new_params['q'] = self.q
+        new_params["q"] = self.q
 
         return new_params
 
@@ -594,7 +619,8 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         """
         binary_ulens_params = self.calc_binary_ulens_params()
         out = BinaryLensParams(
-            binary_ulens_params, vbbl_accuracy=self.vbbl_accuracy)
+            binary_ulens_params, vbbl_accuracy=self.vbbl_accuracy
+        )
         out.set_mag_method(self.params)
         return out
 
@@ -612,7 +638,7 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         """
         if self._s is None:
             u = self.u_pl
-            self._s = 0.5 * (np.sqrt(u ** 2 + 4) + u)
+            self._s = 0.5 * (np.sqrt(u**2 + 4) + u)
         return self._s
 
     @property
@@ -627,7 +653,7 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         float
         """
         if self._q is None:
-            self._q = 0.5 * np.abs(self.delta_A) * (self.rho ** 2)
+            self._q = 0.5 * np.abs(self.delta_A) * (self.rho**2)
 
         return self._q
 
@@ -644,7 +670,9 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         float
         """
         if self._a_pspl is None:
-            self._a_pspl = (self.u_pl ** 2 + 2.) / np.sqrt(self.u_pl ** 2 * (self.u_pl ** 2 + 4.))
+            self._a_pspl = (self.u_pl**2 + 2.0) / np.sqrt(
+                self.u_pl**2 * (self.u_pl**2 + 4.0)
+            )
 
         return self._a_pspl
 
@@ -664,7 +692,9 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         # TODO: Might want to add an option to calculate delta_A using PSPL fitted fs and fb.
         # Current calculation assumes fb=0. This could be a problem if fb is large, e.g. OB180383.
         if self._delta_A is None:
-            self._delta_A = self.a_pspl * (10. ** (self.params['dmag'] / -2.5) - 1.)
+            self._delta_A = self.a_pspl * (
+                10.0 ** (self.params["dmag"] / -2.5) - 1.0
+            )
 
         return self._delta_A
 
@@ -726,17 +756,31 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
     hardcoding ['alpha', 's', 'q', 'rho'].
     """
 
-    def __init__(self, datasets, params, model_config=None, event_config=None,
-                 d_alpha=None, n_alpha=None,
-                 d_s=None, n_s=None,
-                 log_q_values=None, log_rho_values=None,
-                 alpha_grid=None, s_grid=None,
-                 refine=True,
-                 nelder_mead_options=None):
+    def __init__(
+        self,
+        datasets,
+        params,
+        model_config=None,
+        event_config=None,
+        d_alpha=None,
+        n_alpha=None,
+        d_s=None,
+        n_s=None,
+        log_q_values=None,
+        log_rho_values=None,
+        alpha_grid=None,
+        s_grid=None,
+        refine=True,
+        nelder_mead_options=None,
+    ):
         super().__init__(params)
         self.datasets = datasets
-        self.model_config = model_config if model_config is not None else ModelConfig()
-        self.event_config = event_config if event_config is not None else EventConfig()
+        self.model_config = (
+            model_config if model_config is not None else ModelConfig()
+        )
+        self.event_config = (
+            event_config if event_config is not None else EventConfig()
+        )
         self.d_alpha = d_alpha
         self.n_alpha = n_alpha
         self.d_s = d_s
@@ -759,7 +803,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
     def _require_run(self, attr_name):
         if not self._is_run:
             raise RuntimeError(
-                f"'{attr_name}' is not available until run() has been called.")
+                f"'{attr_name}' is not available until run() has been called."
+            )
 
     # ---- Public result properties ----
 
@@ -779,7 +824,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('binary_params')
+        self._require_run("binary_params")
         return self._binary_params
 
     @property
@@ -798,7 +843,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('best_params')
+        self._require_run("best_params")
         return self._binary_params.ulens
 
     @property
@@ -819,7 +864,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('results')
+        self._require_run("results")
         return self._results
 
     @property
@@ -835,7 +880,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('refinement_result')
+        self._require_run("refinement_result")
         return self._refinement_result
 
     @property
@@ -850,7 +895,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('refinement_results')
+        self._require_run("refinement_results")
         return self._refinement_results
 
     @property
@@ -871,7 +916,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         RuntimeError
             If :meth:`run` has not been called.
         """
-        self._require_run('all_results')
+        self._require_run("all_results")
         return self._all_results
 
     # ---- Alternate params ----
@@ -897,11 +942,12 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             Alternate binary lens parameters.
         """
         base_params = self.get_binary_lens_params()
-        s_new = base_params.ulens['s'] ** 2 / self.best_params['s']
+        s_new = base_params.ulens["s"] ** 2 / self.best_params["s"]
         alt_params = BinaryLensParams(
-            base_params.ulens, vbbl_accuracy=base_params.vbbl_accuracy)
+            base_params.ulens, vbbl_accuracy=base_params.vbbl_accuracy
+        )
         alt_params.mag_methods = base_params.mag_methods
-        alt_params.ulens['s'] = s_new
+        alt_params.ulens["s"] = s_new
         return alt_params
 
     # ---- Nelder-Mead options ----
@@ -919,7 +965,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         -------
         dict
         """
-        defaults = {'maxfev': 500, 'xatol': 1e-3, 'fatol': 0.1}
+        defaults = {"maxfev": 500, "xatol": 1e-3, "fatol": 0.1}
         if self.nelder_mead_options is not None:
             defaults.update(self.nelder_mead_options)
         return defaults
@@ -979,7 +1025,11 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         -------
         numpy.ndarray
         """
-        return self.log_q_values if self.log_q_values is not None else np.arange(-6, -1)
+        return (
+            self.log_q_values
+            if self.log_q_values is not None
+            else np.arange(-6, -1)
+        )
 
     @property
     def log_rho_grid(self):
@@ -993,7 +1043,11 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         -------
         numpy.ndarray
         """
-        return self.log_rho_values if self.log_rho_values is not None else np.arange(-4, -1)
+        return (
+            self.log_rho_values
+            if self.log_rho_values is not None
+            else np.arange(-4, -1)
+        )
 
     def _grid_iterator(self):
         """
@@ -1006,8 +1060,11 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             Iterator over (alpha, s, log_q, log_rho) tuples.
         """
         return product(
-            self.alpha_values, self.s_values,
-            self.log_q_grid, self.log_rho_grid)
+            self.alpha_values,
+            self.s_values,
+            self.log_q_grid,
+            self.log_rho_grid,
+        )
 
     # ---- Main pipeline ----
 
@@ -1051,7 +1108,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         return self._run_refinement(full_grid_best)
 
     def _select_best_params(self, best_grid_params, opt_result):
-        best_grid_chi2 = self._results['chi2'].min()
+        best_grid_chi2 = self._results["chi2"].min()
         if opt_result is not None and opt_result.fun < best_grid_chi2:
             return self._params_from_opt_result(opt_result)
         return best_grid_params
@@ -1072,8 +1129,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         """
         rows = self._collect_grid_rows()
         df = pd.DataFrame(rows)
-        best_row = df.loc[df['chi2'].idxmin()]
-        best_params = best_row[['alpha', 's', 'q', 'rho']].to_dict()
+        best_row = df.loc[df["chi2"].idxmin()]
+        best_params = best_row[["alpha", "s", "q", "rho"]].to_dict()
         return df, best_params
 
     def _collect_grid_rows(self):
@@ -1092,9 +1149,14 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         event = self._make_event(self._binary_params.ulens.copy())
         rows = []
         for alpha, s, log_q, log_rho in self._grid_iterator():
-            params = {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+            params = {
+                "alpha": alpha,
+                "s": s,
+                "q": 10.0**log_q,
+                "rho": 10.0**log_rho,
+            }
             event.model.parameters.parameters.update(params)
-            rows.append({'chi2': event.get_chi2(), **params})
+            rows.append({"chi2": event.get_chi2(), **params})
         return rows
 
     # ---- Refinement ----
@@ -1128,29 +1190,38 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
 
         try:
             result = minimize(
-                chi2_fn, x0, method='Nelder-Mead',
-                options={**self._nelder_mead_options,
-                         'initial_simplex': initial_simplex})
+                chi2_fn,
+                x0,
+                method="Nelder-Mead",
+                options={
+                    **self._nelder_mead_options,
+                    "initial_simplex": initial_simplex,
+                },
+            )
         except Exception as e:
             warnings.warn(
                 f"Nelder-Mead refinement exited in an error. "
-                f"Error:\n{type(e).__name__}: {e}.")
+                f"Error:\n{type(e).__name__}: {e}."
+            )
             return None, None
 
         if not result.success:
             warnings.warn(
                 f"Nelder-Mead refinement did not converge: {result.message}. "
-                f"Best chi2={result.fun:.4f} after {result.nfev} evaluations.")
+                f"Best chi2={result.fun:.4f} after {result.nfev} evaluations."
+            )
 
         return pd.DataFrame(trajectory), result
 
     def _make_refinement_x0(self, best_grid_params):
-        return np.array([
-            best_grid_params['alpha'],
-            best_grid_params['s'],
-            np.log10(best_grid_params['q']),
-            np.log10(best_grid_params['rho'])
-        ])
+        return np.array(
+            [
+                best_grid_params["alpha"],
+                best_grid_params["s"],
+                np.log10(best_grid_params["q"]),
+                np.log10(best_grid_params["rho"]),
+            ]
+        )
 
     def _make_initial_simplex(self, x0):
         d_alpha = self.d_alpha if self.d_alpha is not None else 0.1
@@ -1158,7 +1229,8 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         simplex_deltas = np.array([d_alpha, d_s, 0.5, 0.5])
         n = len(x0)
         return np.vstack(
-            [x0] + [x0 + simplex_deltas[i] * np.eye(n)[i] for i in range(n)])
+            [x0] + [x0 + simplex_deltas[i] * np.eye(n)[i] for i in range(n)]
+        )
 
     def _make_chi2_fn(self, event, trajectory):
         """
@@ -1173,18 +1245,25 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         -------
         callable
         """
+
         def chi2_fn(x):
             alpha, s, log_q, log_rho = x
-            params = {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+            params = {
+                "alpha": alpha,
+                "s": s,
+                "q": 10.0**log_q,
+                "rho": 10.0**log_rho,
+            }
             event.model.parameters.parameters.update(params)
             chi2 = event.get_chi2()
-            trajectory.append({'chi2': chi2, **params})
+            trajectory.append({"chi2": chi2, **params})
             return chi2
+
         return chi2_fn
 
     def _params_from_opt_result(self, result):
         alpha, s, log_q, log_rho = result.x
-        return {'alpha': alpha, 's': s, 'q': 10.**log_q, 'rho': 10.**log_rho}
+        return {"alpha": alpha, "s": s, "q": 10.0**log_q, "rho": 10.0**log_rho}
 
     # ---- Result building ----
 
@@ -1200,20 +1279,22 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         pandas.DataFrame
         """
         df_grid = self._results.copy()
-        df_grid['source'] = 'grid'
-        df_grid['iteration'] = 0
+        df_grid["source"] = "grid"
+        df_grid["iteration"] = 0
 
         if self.refine and self._refinement_results is not None:
             df_refine = self._refinement_results.copy()
-            df_refine['source'] = 'refinement'
-            df_refine['log_q'] = np.round(np.log10(df_refine['q'])).astype(int)
-            df_refine['log_rho'] = np.round(np.log10(df_refine['rho'])).astype(int)
+            df_refine["source"] = "refinement"
+            df_refine["log_q"] = np.round(np.log10(df_refine["q"])).astype(int)
+            df_refine["log_rho"] = np.round(np.log10(df_refine["rho"])).astype(
+                int
+            )
             combined = pd.concat([df_grid, df_refine], ignore_index=True)
         else:
             combined = df_grid
 
-        min_chi2 = combined['chi2'].min()
-        combined['sigma'] = np.sqrt(combined['chi2'] - min_chi2)
+        min_chi2 = combined["chi2"].min()
+        combined["sigma"] = np.sqrt(combined["chi2"] - min_chi2)
         return combined
 
     # ---- Event construction ----
@@ -1238,7 +1319,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         model = self.model_config.build(
             parameters=params,
             magnification_methods=self._binary_params.mag_methods,
-            default_magnification_method='point_source_point_lens',
+            default_magnification_method="point_source_point_lens",
         )
         return self.event_config.build(
             model=model,
@@ -1264,9 +1345,9 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             and ``'sigma'`` (relative to the minimum chi2 in this DataFrame).
         """
         df = df.copy()
-        df['log_q'] = np.round(np.log10(df['q'])).astype(int)
-        df['log_rho'] = np.round(np.log10(df['rho'])).astype(int)
-        df['sigma'] = np.sqrt(df['chi2'] - df['chi2'].min())
+        df["log_q"] = np.round(np.log10(df["q"])).astype(int)
+        df["log_rho"] = np.round(np.log10(df["rho"])).astype(int)
+        df["sigma"] = np.sqrt(df["chi2"] - df["chi2"].min())
         return df
 
     def get_results_within_n_sigma(self, n_sigma=3):
@@ -1284,7 +1365,7 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             Subset of :attr:`all_results` with ``sigma <= n_sigma``.
         """
         df = self.all_results
-        return df[df['sigma'] <= n_sigma]
+        return df[df["sigma"] <= n_sigma]
 
     @staticmethod
     def _get_sigma_marker(sigma):
@@ -1301,13 +1382,13 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         size : int
         """
         if sigma < 1:
-            return '*', 200
+            return "*", 200
         elif sigma < 2:
-            return 'D', 100
+            return "D", 100
         elif sigma < 3:
-            return 'o', 60
+            return "o", 60
         else:
-            return '^', 30
+            return "^", 30
 
     def plot_sigma_maps(self):
         """
@@ -1329,14 +1410,14 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
         future version.
         """
         df_all = self.all_results
-        df_grid = df_all[df_all['source'] == 'grid']
+        df_grid = df_all[df_all["source"] == "grid"]
 
-        unique_log_q = sorted(df_grid['log_q'].unique())
-        unique_log_rho = sorted(df_grid['log_rho'].unique())
+        unique_log_q = sorted(df_grid["log_q"].unique())
+        unique_log_rho = sorted(df_grid["log_rho"].unique())
         n_rho = len(unique_log_rho)
 
         if self.refine:
-            df_refine = df_all[df_all['source'] == 'refinement']
+            df_refine = df_all[df_all["source"] == "refinement"]
 
         for log_q in unique_log_q:
             fig = plt.figure(figsize=(10, 4 * n_rho))
@@ -1345,43 +1426,70 @@ class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
             for idx, log_rho in enumerate(unique_log_rho):
                 ax = fig.add_subplot(gs[idx, 0])
 
-                mask = (df_grid['log_q'] == log_q) & (df_grid['log_rho'] == log_rho)
+                mask = (df_grid["log_q"] == log_q) & (
+                    df_grid["log_rho"] == log_rho
+                )
                 subset = df_grid[mask]
-                grid = subset.pivot(index='s', columns='alpha', values='sigma')
-                im = ax.imshow(grid, cmap='Set1', vmin=0, vmax=100, aspect='auto',
-                               origin='lower',
-                               extent=[subset['alpha'].min(), subset['alpha'].max(),
-                                       subset['s'].min(), subset['s'].max()])
+                grid = subset.pivot(index="s", columns="alpha", values="sigma")
+                im = ax.imshow(
+                    grid,
+                    cmap="Set1",
+                    vmin=0,
+                    vmax=100,
+                    aspect="auto",
+                    origin="lower",
+                    extent=[
+                        subset["alpha"].min(),
+                        subset["alpha"].max(),
+                        subset["s"].min(),
+                        subset["s"].max(),
+                    ],
+                )
 
                 if self.refine:
-                    refine_mask = (
-                        (df_refine['log_q'] == log_q) &
-                        (df_refine['log_rho'] == log_rho))
+                    refine_mask = (df_refine["log_q"] == log_q) & (
+                        df_refine["log_rho"] == log_rho
+                    )
                     refine_subset = df_refine[refine_mask]
 
-                    for sigma_low, sigma_high in [(0, 1), (1, 2), (2, 3), (3, np.inf)]:
+                    for sigma_low, sigma_high in [
+                        (0, 1),
+                        (1, 2),
+                        (2, 3),
+                        (3, np.inf),
+                    ]:
                         pts = refine_subset[
-                            (refine_subset['sigma'] >= sigma_low) &
-                            (refine_subset['sigma'] < sigma_high)]
+                            (refine_subset["sigma"] >= sigma_low)
+                            & (refine_subset["sigma"] < sigma_high)
+                        ]
                         if not pts.empty:
                             marker, size = self._get_sigma_marker(sigma_low)
-                            ax.scatter(pts['alpha'], pts['s'],
-                                       marker=marker, s=size,
-                                       c=pts['sigma'], cmap='Set1', vmin=0, vmax=100,
-                                       edgecolors='black', linewidths=0.5, zorder=5)
+                            ax.scatter(
+                                pts["alpha"],
+                                pts["s"],
+                                marker=marker,
+                                s=size,
+                                c=pts["sigma"],
+                                cmap="Set1",
+                                vmin=0,
+                                vmax=100,
+                                edgecolors="black",
+                                linewidths=0.5,
+                                zorder=5,
+                            )
 
-                ax.set_xlabel('alpha', fontsize=10)
-                ax.set_ylabel('s', fontsize=10)
-                ax.set_title(f'log_q={log_q}, log_rho={log_rho}', fontsize=11)
+                ax.set_xlabel("alpha", fontsize=10)
+                ax.set_ylabel("s", fontsize=10)
+                ax.set_title(f"log_q={log_q}, log_rho={log_rho}", fontsize=11)
 
                 cbar = plt.colorbar(im, ax=ax)
-                cbar.set_label('sigma', fontsize=10)
+                cbar.set_label("sigma", fontsize=10)
 
-            fig.suptitle(f'log_q = {log_q}', fontsize=13, fontweight='bold')
+            fig.suptitle(f"log_q = {log_q}", fontsize=13, fontweight="bold")
             plt.tight_layout()
 
 
-class WidePlanetEnsembleInitializer():
+class WidePlanetEnsembleInitializer:
     """
     Builds an ensemble of starting points for emcee by running multiple
     WidePlanetGridSearchEstimators with perturbed PSPL parameters.
@@ -1412,17 +1520,30 @@ class WidePlanetEnsembleInitializer():
         Chi2 of the no-planet PSPL model. Used only for diagnostics
         (delta_chi2, summary counts). Default is None.
     """
+
     # TODO: Hypothesis that this is very slow because the event/Estimator class is getting created anew every time.
 
     vbbl_accuracy = BinaryLensParams._DEFAULT_VBBL_ACCURACY
 
-    def __init__(self, datasets, anomaly_params, sigmas, model_config=None,
-                 event_config=None, n_estimators=40, pspl_chi2=None):
+    def __init__(
+        self,
+        datasets,
+        anomaly_params,
+        sigmas,
+        model_config=None,
+        event_config=None,
+        n_estimators=40,
+        pspl_chi2=None,
+    ):
         self.datasets = datasets
         self.anomaly_params = anomaly_params
         self.sigmas = sigmas
-        self.model_config = model_config if model_config is not None else ModelConfig()
-        self.event_config = event_config if event_config is not None else EventConfig()
+        self.model_config = (
+            model_config if model_config is not None else ModelConfig()
+        )
+        self.event_config = (
+            event_config if event_config is not None else EventConfig()
+        )
 
         self.n_estimators = n_estimators
         self.pspl_chi2 = pspl_chi2
@@ -1436,17 +1557,17 @@ class WidePlanetEnsembleInitializer():
     @property
     def sigma_t0(self):
         """Perturbation step size for t_0, from ``self.sigmas`` (default 0.00001)."""
-        return self.sigmas.get('t_0', 0.00001)
+        return self.sigmas.get("t_0", 0.00001)
 
     @property
     def sigma_u0(self):
         """Perturbation step size for u_0, from ``self.sigmas`` (default 0.001 * u_0)."""
-        return self.sigmas.get('u_0', 0.001 * self.anomaly_params['u_0'])
+        return self.sigmas.get("u_0", 0.001 * self.anomaly_params["u_0"])
 
     @property
     def sigma_tE(self):
         """Perturbation step size for t_E, from ``self.sigmas`` (default 0.001 * t_E)."""
-        return self.sigmas.get('t_E', 0.001 * self.anomaly_params['t_E'])
+        return self.sigmas.get("t_E", 0.001 * self.anomaly_params["t_E"])
 
     def _perturb_params(self):
         """
@@ -1460,9 +1581,15 @@ class WidePlanetEnsembleInitializer():
             Perturbed anomaly_params.
         """
         params = self.anomaly_params.copy()
-        params['t_0'] = self.anomaly_params['t_0'] + np.random.randn() * self.sigma_t0
-        params['u_0'] = self.anomaly_params['u_0'] + np.random.randn() * self.sigma_u0
-        params['t_E'] = self.anomaly_params['t_E'] + np.random.randn() * self.sigma_tE
+        params["t_0"] = (
+            self.anomaly_params["t_0"] + np.random.randn() * self.sigma_t0
+        )
+        params["u_0"] = (
+            self.anomaly_params["u_0"] + np.random.randn() * self.sigma_u0
+        )
+        params["t_E"] = (
+            self.anomaly_params["t_E"] + np.random.randn() * self.sigma_tE
+        )
         return params
 
     def _get_seeded_grid_values(self, best_log_val):
@@ -1482,10 +1609,14 @@ class WidePlanetEnsembleInitializer():
         list of float
             Three grid values centered on the perturbed best log value.
         """
-        rand_best = best_log_val + np.random.randn() * 0.05 * np.abs(best_log_val)
+        rand_best = best_log_val + np.random.randn() * 0.05 * np.abs(
+            best_log_val
+        )
         return [rand_best - 0.5, rand_best, rand_best + 0.5]
 
-    def _run_single_estimator(self, params, log_q_values=None, log_rho_values=None):
+    def _run_single_estimator(
+        self, params, log_q_values=None, log_rho_values=None
+    ):
         """
         Run a single WidePlanetGridSearchEstimator for the given params.
 
@@ -1520,7 +1651,10 @@ class WidePlanetEnsembleInitializer():
         )
         estimator.vbbl_accuracy = self.vbbl_accuracy
         estimator.run()
-        return estimator.binary_params.ulens.copy(), estimator.binary_params.mag_methods
+        return (
+            estimator.binary_params.ulens.copy(),
+            estimator.binary_params.mag_methods,
+        )
 
     def _evaluate_chi2(self, best, mag_methods):
         """
@@ -1542,7 +1676,7 @@ class WidePlanetEnsembleInitializer():
             parameters=best,
             magnification_methods=mag_methods,
             magnification_methods_parameters=self.mag_methods_parameters,
-            default_magnification_method='point_source_point_lens',
+            default_magnification_method="point_source_point_lens",
         )
         event = self.event_config.build(
             model=model,
@@ -1565,15 +1699,18 @@ class WidePlanetEnsembleInitializer():
 
             if self._seed_log_q is None:
                 best, mag_methods = self._run_single_estimator(params)
-                self._seed_log_q = np.log10(best['q'])
-                self._seed_log_rho = np.log10(best['rho'])
+                self._seed_log_q = np.log10(best["q"])
+                self._seed_log_rho = np.log10(best["rho"])
             else:
                 log_q_values = self._get_seeded_grid_values(self._seed_log_q)
-                log_rho_values = self._get_seeded_grid_values(self._seed_log_rho)
+                log_rho_values = self._get_seeded_grid_values(
+                    self._seed_log_rho
+                )
                 best, mag_methods = self._run_single_estimator(
                     params,
                     log_q_values=log_q_values,
-                    log_rho_values=log_rho_values)
+                    log_rho_values=log_rho_values,
+                )
 
             if self._mag_methods is None:
                 self._mag_methods = mag_methods
@@ -1581,27 +1718,29 @@ class WidePlanetEnsembleInitializer():
             chi2 = self._evaluate_chi2(best, mag_methods)
 
             row = {
-                'chi2': chi2,
-                't_0': best['t_0'],
-                'u_0': best['u_0'],
-                't_E': best['t_E'],
-                's': best['s'],
-                'q': best['q'],
-                'rho': best['rho'],
-                'alpha': best['alpha']
+                "chi2": chi2,
+                "t_0": best["t_0"],
+                "u_0": best["u_0"],
+                "t_E": best["t_E"],
+                "s": best["s"],
+                "q": best["q"],
+                "rho": best["rho"],
+                "alpha": best["alpha"],
             }
             if self.pspl_chi2 is not None:
-                row['delta_chi2'] = self.pspl_chi2 - chi2
+                row["delta_chi2"] = self.pspl_chi2 - chi2
 
             rows.append(row)
 
-            log_str = (f'Estimator {i:3d}: chi2={chi2:.2f}  '
-                       f't_E={best["t_E"]:.3f}  '
-                       f'log_q={np.log10(best["q"]):.2f}  '
-                       f'log_rho={np.log10(best["rho"]):.2f}  '
-                       f'{"[seed]" if i == 0 else "[seeded]"}')
+            log_str = (
+                f"Estimator {i:3d}: chi2={chi2:.2f}  "
+                f"t_E={best['t_E']:.3f}  "
+                f"log_q={np.log10(best['q']):.2f}  "
+                f"log_rho={np.log10(best['rho']):.2f}  "
+                f"{'[seed]' if i == 0 else '[seeded]'}"
+            )
             if self.pspl_chi2 is not None:
-                log_str += f'  delta_chi2={self.pspl_chi2 - chi2:.2f}'
+                log_str += f"  delta_chi2={self.pspl_chi2 - chi2:.2f}"
             print(log_str)
 
         return pd.DataFrame(rows)
@@ -1655,7 +1794,7 @@ class WidePlanetEnsembleInitializer():
         if self.vbbl_accuracy is None:
             return None
 
-        return {'VBBL': {'accuracy': self.vbbl_accuracy}}
+        return {"VBBL": {"accuracy": self.vbbl_accuracy}}
 
     @property
     def initial_model(self):
@@ -1664,10 +1803,11 @@ class WidePlanetEnsembleInitializer():
         """
         if self._initial_model is None:
             df = self.results
-            best_row = df.loc[df['chi2'].idxmin()]
+            best_row = df.loc[df["chi2"].idxmin()]
             self._initial_model = {
                 k: best_row[k]
-                for k in ['t_0', 'u_0', 't_E', 's', 'q', 'rho', 'alpha']}
+                for k in ["t_0", "u_0", "t_E", "s", "q", "rho", "alpha"]
+            }
         return self._initial_model
 
     def summary(self):
@@ -1675,15 +1815,17 @@ class WidePlanetEnsembleInitializer():
         Print a summary of all estimator results sorted by chi2.
         """
         df = self.results
-        if 'delta_chi2' in df.columns:
-            n_better = np.sum(df['delta_chi2'] > 0)
-            print(f'\n{n_better} / {self.n_estimators} estimators better than PSPL')
+        if "delta_chi2" in df.columns:
+            n_better = np.sum(df["delta_chi2"] > 0)
+            print(
+                f"\n{n_better} / {self.n_estimators} estimators better than PSPL"
+            )
 
-        cols = ['chi2', 't_E', 'u_0', 's', 'q', 'rho', 'alpha']
-        if 'delta_chi2' in df.columns:
-            cols.insert(1, 'delta_chi2')
-        print('\nSorted by chi2:')
-        print(df.sort_values('chi2')[cols].to_string())
+        cols = ["chi2", "t_E", "u_0", "s", "q", "rho", "alpha"]
+        if "delta_chi2" in df.columns:
+            cols.insert(1, "delta_chi2")
+        print("\nSorted by chi2:")
+        print(df.sort_values("chi2")[cols].to_string())
 
     def plot_chi2_distribution(self):
         """
@@ -1691,14 +1833,18 @@ class WidePlanetEnsembleInitializer():
         """
         df = self.results
         fig, ax = plt.subplots(figsize=(8, 4))
-        ax.hist(df['chi2'], bins=20)
+        ax.hist(df["chi2"], bins=20)
         if self.pspl_chi2 is not None:
-            ax.axvline(self.pspl_chi2, color='red', linestyle='--',
-                       label=f'PSPL chi2={self.pspl_chi2:.0f}')
+            ax.axvline(
+                self.pspl_chi2,
+                color="red",
+                linestyle="--",
+                label=f"PSPL chi2={self.pspl_chi2:.0f}",
+            )
             ax.legend()
-        ax.set_xlabel('chi2')
-        ax.set_ylabel('N')
-        ax.set_title(f'{self.n_estimators} estimators: chi2 distribution')
+        ax.set_xlabel("chi2")
+        ax.set_ylabel("N")
+        ax.set_title(f"{self.n_estimators} estimators: chi2 distribution")
 
     def plot_models(self):
         """
@@ -1709,16 +1855,20 @@ class WidePlanetEnsembleInitializer():
         # mag_methods is a single VBBL window spanning the whole event, so
         # the zoom ranges come from the anomaly parameters directly. These
         # reproduce the old windows: +/- 2 * width and +/- width about t_pl.
-        t_pl = self.anomaly_params['t_pl']
-        width = BinaryLensParams._N_TSTAR_WINDOW_HW * self.anomaly_params['dt'] / 2.
-        t_range_anomaly = [t_pl - 2. * width, t_pl + 2. * width]
+        t_pl = self.anomaly_params["t_pl"]
+        width = (
+            BinaryLensParams._N_TSTAR_WINDOW_HW
+            * self.anomaly_params["dt"]
+            / 2.0
+        )
+        t_range_anomaly = [t_pl - 2.0 * width, t_pl + 2.0 * width]
         t_range_inner = [t_pl - width, t_pl + width]
 
         ref_model = self.model_config.build(
             parameters=self.initial_model,
             magnification_methods=self.mag_methods,
             magnification_methods_parameters=self.mag_methods_parameters,
-            default_magnification_method='point_source_point_lens',
+            default_magnification_method="point_source_point_lens",
         )
         ref_event = self.event_config.build(
             model=ref_model,
@@ -1726,34 +1876,48 @@ class WidePlanetEnsembleInitializer():
         )
         source_flux, blend_flux = ref_event.get_ref_fluxes()
 
-        sorted_idx = df['chi2'].argsort().values[::-1]  # worst first
-        cmap = plt.cm.get_cmap('RdYlGn', self.n_estimators)
+        sorted_idx = df["chi2"].argsort().values[::-1]  # worst first
+        cmap = plt.cm.get_cmap("RdYlGn", self.n_estimators)
 
-        for fig_title, t_range in [('Anomaly region', t_range_anomaly),
-                                   ('Anomaly zoom', t_range_inner)]:
+        for fig_title, t_range in [
+            ("Anomaly region", t_range_anomaly),
+            ("Anomaly zoom", t_range_inner),
+        ]:
             fig, ax = plt.subplots(figsize=(10, 5))
             plt.sca(ax)
             ref_event.plot_data()
 
             for rank, idx in enumerate(sorted_idx):
                 row = df.iloc[idx]
-                params = {k: row[k] for k in
-                          ['t_0', 'u_0', 't_E', 's', 'q', 'rho', 'alpha']}
+                params = {
+                    k: row[k]
+                    for k in ["t_0", "u_0", "t_E", "s", "q", "rho", "alpha"]
+                }
                 model = self.model_config.build(
                     parameters=params,
                     magnification_methods=self.mag_methods,
                     magnification_methods_parameters=self.mag_methods_parameters,
-                    default_magnification_method='point_source_point_lens',
+                    default_magnification_method="point_source_point_lens",
                 )
-                model.plot_lc(source_flux=source_flux, blend_flux=blend_flux,
-                              color=cmap(rank), alpha=0.6, t_range=t_range)
+                model.plot_lc(
+                    source_flux=source_flux,
+                    blend_flux=blend_flux,
+                    color=cmap(rank),
+                    alpha=0.6,
+                    t_range=t_range,
+                )
 
-            ref_event.plot_model(label='Best (grid)', color='black',
-                                 zorder=10, t_range=t_range, linewidth=2)
+            ref_event.plot_model(
+                label="Best (grid)",
+                color="black",
+                zorder=10,
+                t_range=t_range,
+                linewidth=2,
+            )
             ax.set_xlim(t_range)
-            ax.set_xlabel('Time (HJD)')
-            ax.set_ylabel('Magnitude')
-            ax.set_title(f'{fig_title} — red=worst, green=best chi2')
+            ax.set_xlabel("Time (HJD)")
+            ax.set_ylabel("Magnitude")
+            ax.set_title(f"{fig_title} — red=worst, green=best chi2")
             ax.minorticks_on()
 
 
@@ -1786,11 +1950,12 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         the value computed from ``limit``. Default is None.
     """
 
-    def __init__(self, params, limit='dwarf', q=None, rho=None):
-        if limit == 'GG97':
+    def __init__(self, params, limit="dwarf", q=None, rho=None):
+        if limit == "GG97":
             raise ValueError(
                 "'GG97' limit is not supported for close binary models. "
-                "Use 'dwarf', 'giant', or 'point'.")
+                "Use 'dwarf', 'giant', or 'point'."
+            )
         super().__init__(params, limit=limit)
         if q is None:
             q = 0.004
@@ -1813,14 +1978,16 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             Binary lens parameter dictionary with keys ``'t_0'``, ``'u_0'``,
             ``'t_E'``, ``'s'``, ``'q'``, and (if ``rho`` is not None) ``'rho'``.
         """
-        new_params = {'t_0': self.t_0,
-                      'u_0': self.u_0,
-                      't_E': self.t_E,
-                      's': self.s,
-                      'q': self.q}
+        new_params = {
+            "t_0": self.t_0,
+            "u_0": self.u_0,
+            "t_E": self.t_E,
+            "s": self.s,
+            "q": self.q,
+        }
 
         if self.rho is not None:
-            new_params['rho'] = self.rho
+            new_params["rho"] = self.rho
 
         return new_params
 
@@ -1835,9 +2002,10 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             TODO : add not static models
         """
         parameters_1L = MulensModel.ModelParameters(
-            {'t_0': self.t_0, 'u_0': self.u_0, 't_E': self.t_E})
+            {"t_0": self.t_0, "u_0": self.u_0, "t_E": self.t_E}
+        )
         model_1L = MulensModel.Model(parameters=parameters_1L)
-        self._trajectory_1L = model_1L.get_trajectory([self.params['t_pl']])
+        self._trajectory_1L = model_1L.get_trajectory([self.params["t_pl"]])
 
     def calc_binary_ulens_params(self):
         """
@@ -1854,7 +2022,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             not None) ``'rho'``.
         """
         new_params = self.setup_close_ulens_params()
-        new_params['alpha'] = self.alpha
+        new_params["alpha"] = self.alpha
 
         return new_params
 
@@ -1872,7 +2040,11 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         numpy.ndarray
         """
         # TODO: Does this go here or in CloseUpperBinaryGridSearchEstimator?
-        return self.log_q_values if self.log_q_values is not None else np.array([-2.5, -2, -1, -0.5])
+        return (
+            self.log_q_values
+            if self.log_q_values is not None
+            else np.array([-2.5, -2, -1, -0.5])
+        )
 
     @property
     def s(self):
@@ -1892,10 +2064,11 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
 
             # from center of magnification to center of mass,
             # A.18 in Skowron et al. (2011)
-            shift = (1. + 2. * self.q) / (1. + self.q)
+            shift = (1.0 + 2.0 * self.q) / (1.0 + self.q)
             # from center of light to cusp
             distance = -np.sqrt(
-                self._trajectory_1L.x[0]**2 + self._trajectory_1L.y[0]**2)
+                self._trajectory_1L.x[0] ** 2 + self._trajectory_1L.y[0] ** 2
+            )
             p = 0.5 * distance / shift
             self._s = p + np.sqrt(p**2 + 1.0)
 
@@ -1921,7 +2094,9 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         float
         """
         if self._eta_not is None:
-            self._eta_not = (self.q ** 0.5 / self.s) * (1 / (np.sqrt(1 + self.s ** 2)) + np.sqrt(1 - self.s ** 2))
+            self._eta_not = (self.q**0.5 / self.s) * (
+                1 / (np.sqrt(1 + self.s**2)) + np.sqrt(1 - self.s**2)
+            )
 
         return self._eta_not
 
@@ -1942,7 +2117,9 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         """
         if self._mu is None:
             self._mu = np.arctan2(
-                self.eta_not, (self.s - 1 / self.s) * (1.+2.*self.q)/(1.+self.q))
+                self.eta_not,
+                (self.s - 1 / self.s) * (1.0 + 2.0 * self.q) / (1.0 + self.q),
+            )
 
         return self._mu
 
@@ -1965,7 +2142,8 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
                 self.setup_trajectory_of_single_lens()
 
             self._phi = np.arctan2(
-                self._trajectory_1L.y[0], self._trajectory_1L.x[0])
+                self._trajectory_1L.y[0], self._trajectory_1L.x[0]
+            )
 
         return self._phi
 
@@ -1984,7 +2162,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         float
         """
         if self._alpha is None:
-            alpha = 180. - np.rad2deg(self.phi - self.mu)
+            alpha = 180.0 - np.rad2deg(self.phi - self.mu)
             self._alpha = self._correct_alpha(alpha)
 
         return self._alpha
@@ -2014,13 +2192,15 @@ class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
         float
         """
         if self._alpha is None:
-            alpha = 180. - np.rad2deg(self.phi + self.mu)
+            alpha = 180.0 - np.rad2deg(self.phi + self.mu)
             self._alpha = self._correct_alpha(alpha)
 
         return self._alpha
 
 
-class CloseUpperBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUpperBinaryParameterEstimator):
+class CloseUpperBinaryGridSearchEstimator(
+    WidePlanetGridSearchEstimator, CloseUpperBinaryParameterEstimator
+):
     """
     Grid search estimator for close binary lens models (upper caustic).
 
@@ -2028,10 +2208,13 @@ class CloseUpperBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseUp
     Nelder-Mead refinement) with :class:`CloseUpperBinaryParameterEstimator`
     (close-topology analytic parameter estimates and upper caustic ``alpha``).
     """
+
     pass
 
 
-class CloseLowerBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator):
+class CloseLowerBinaryGridSearchEstimator(
+    WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator
+):
     """
     Grid search estimator for close binary lens models (lower caustic).
 
@@ -2039,6 +2222,7 @@ class CloseLowerBinaryGridSearchEstimator(WidePlanetGridSearchEstimator, CloseLo
     Nelder-Mead refinement) with :class:`CloseLowerBinaryParameterEstimator`
     (close-topology analytic parameter estimates and lower caustic ``alpha``).
     """
+
     pass
 
 
@@ -2108,7 +2292,7 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
         """
         if self._s is None:
             u = self.u_pl
-            self._s = np.abs(0.5 * (np.sqrt(u ** 2 + 4) - u))
+            self._s = np.abs(0.5 * (np.sqrt(u**2 + 4) - u))
         return self._s
 
     @property
@@ -2127,8 +2311,11 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
         float
         """
         if self._q is None:
-            self._q = (self.params['dt'] / self.params['t_E'] / 4.) ** 2 * (self.s / self.u_0) * np.abs(
-                (np.sin(np.deg2rad(self.alpha))) ** 3)
+            self._q = (
+                (self.params["dt"] / self.params["t_E"] / 4.0) ** 2
+                * (self.s / self.u_0)
+                * np.abs((np.sin(np.deg2rad(self.alpha))) ** 3)
+            )
         return self._q
 
     @property
@@ -2144,14 +2331,16 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
         float
         """
         if self._alpha is None:
-            alpha = np.arctan2(self.params['u_0'], self.tau_pl)
+            alpha = np.arctan2(self.params["u_0"], self.tau_pl)
             alpha = np.rad2deg(-alpha)
             self._alpha = self._correct_alpha(alpha)
 
         return self._alpha
 
 
-class ClosePlanetGridSearchEstimator(WidePlanetGridSearchEstimator, ClosePlanetParameterEstimator):
+class ClosePlanetGridSearchEstimator(
+    WidePlanetGridSearchEstimator, ClosePlanetParameterEstimator
+):
     """
     Grid search estimator for close planet models.
 
@@ -2184,7 +2373,7 @@ class ClosePlanetGridSearchEstimator(WidePlanetGridSearchEstimator, ClosePlanetP
         n_s = self.n_s if self.n_s is not None else 7
         s_offset = np.arange(n_s) - (n_s - 1) / 2
         s_values = self.s + s_offset * d_s
-        return s_values[s_values < 1.]
+        return s_values[s_values < 1.0]
 
 
 def model_pspl_mag_at_pl(params):
@@ -2208,13 +2397,13 @@ def model_pspl_mag_at_pl(params):
     float
         PSPL magnification at ``t_pl``.
     """
-    model1 = MulensModel.Model({'t_0': params['t_0'],
-                                'u_0': params['u_0'],
-                                't_E': params['t_E']})
-    return model1.get_magnification(params['t_pl'])
+    model1 = MulensModel.Model(
+        {"t_0": params["t_0"], "u_0": params["u_0"], "t_E": params["t_E"]}
+    )
+    return model1.get_magnification(params["t_pl"])
 
 
-class BinarySourceParams():
+class BinarySourceParams:
     """
     Container for binary source model parameters.
 
@@ -2262,7 +2451,7 @@ class BinarySourceParams():
         None
         """
         A1 = model_pspl_mag_at_pl(params)
-        u_0_2 = params["dt"] / (12 ** 0.5 * params["t_E"])
+        u_0_2 = params["dt"] / (12**0.5 * params["t_E"])
         e = params["dmag"] * u_0_2 * A1
         self.source_flux_ratio = e
 
@@ -2290,18 +2479,20 @@ def get_binary_source_params(params):
     :class:`BinarySourceParams`
         Binary source model parameters with ``source_flux_ratio`` set.
     """
-    u_0_2 = params["dt"] / (12 ** 0.5 * params["t_E"])
-    new_params = {'t_0_1': params['t_0'],
-                  'u_0_1': params['u_0'],
-                  't_0_2': params['t_pl'],
-                  'u_0_2': u_0_2,
-                  't_E': params['t_E']}
+    u_0_2 = params["dt"] / (12**0.5 * params["t_E"])
+    new_params = {
+        "t_0_1": params["t_0"],
+        "u_0_1": params["u_0"],
+        "t_0_2": params["t_pl"],
+        "u_0_2": u_0_2,
+        "t_E": params["t_E"],
+    }
     out = BinarySourceParams(new_params)
     out.set_source_flux_ratio(params)
     return out
 
 
-class AnomalyPropertyEstimator():
+class AnomalyPropertyEstimator:
     """
     Estimates photometric anomaly properties from PSPL residuals.
 
@@ -2332,14 +2523,20 @@ class AnomalyPropertyEstimator():
         the dominant positive peak, it is considered unimportant.
         Default is 0.2.
     """
+
     # TODO: The old version revised the PSPL parameters after masking the anomaly.
     # Could consider whether it would be a good idea to reimplement that.
 
-    def __init__(self,
-                 datasets=None, pspl_params=None, af_results=None,
-                 model_config=None, event_config=None,
-                 n_mask=3,
-                 importance_threshold=0.2):
+    def __init__(
+        self,
+        datasets=None,
+        pspl_params=None,
+        af_results=None,
+        model_config=None,
+        event_config=None,
+        n_mask=3,
+        importance_threshold=0.2,
+    ):
 
         if isinstance(datasets, MulensModel.MulensData):
             datasets = [datasets]
@@ -2347,13 +2544,19 @@ class AnomalyPropertyEstimator():
         self.datasets = datasets
         self.pspl_params = pspl_params
         self.af_results = af_results
-        self.model_config = model_config if model_config is not None else ModelConfig()
-        self.event_config = event_config if event_config is not None else EventConfig()
+        self.model_config = (
+            model_config if model_config is not None else ModelConfig()
+        )
+        self.event_config = (
+            event_config if event_config is not None else EventConfig()
+        )
         self.n_mask = n_mask
         self.importance_threshold = importance_threshold
 
-        self.anom_t_range_af = self.af_results['t_0'] + self.n_mask * np.array(
-            [-1, 1]) * self.af_results['t_eff']
+        self.anom_t_range_af = (
+            self.af_results["t_0"]
+            + self.n_mask * np.array([-1, 1]) * self.af_results["t_eff"]
+        )
 
         self._peak_index = None
         self._peak_dflux = None
@@ -2405,8 +2608,9 @@ class AnomalyPropertyEstimator():
         None
         """
         if self._peak_dflux is None:
-            self._peak_dflux, self._peak_index, self._t_start, self._t_stop = self.find_extremum(
-                method='rolling')
+            self._peak_dflux, self._peak_index, self._t_start, self._t_stop = (
+                self.find_extremum(method="rolling")
+            )
 
     def get_anom_prop(self):
         """
@@ -2428,10 +2632,20 @@ class AnomalyPropertyEstimator():
         peak_width : float
             Duration of the anomaly (``t_stop - t_start``).
         """
-        if (self.peak_dflux is None) or (self.t_start is None) or (self.t_stop is None):
+        if (
+            (self.peak_dflux is None)
+            or (self.t_start is None)
+            or (self.t_stop is None)
+        ):
             self.set_anom_prop()
 
-        return self.peak_dflux, self.peak_index, self.t_start, self.t_stop, self.peak_width
+        return (
+            self.peak_dflux,
+            self.peak_index,
+            self.t_start,
+            self.t_stop,
+            self.peak_width,
+        )
 
     def _find_extremum_with_simple_line(self):
         """
@@ -2457,9 +2671,11 @@ class AnomalyPropertyEstimator():
         peak_dflux = self.residuals[peak_index]
         t_start, t_stop = None, None
         for i in [1, -1]:
-            slope = (self.sorted_times[peak_index] - self.sorted_times[i]) / (self.peak_dflux - self.residuals[i])
+            slope = (self.sorted_times[peak_index] - self.sorted_times[i]) / (
+                self.peak_dflux - self.residuals[i]
+            )
             intercept = self.sorted_times[peak_index] - slope * peak_dflux
-            t = slope * peak_dflux / 2. + intercept
+            t = slope * peak_dflux / 2.0 + intercept
             if i == 1:
                 t_start = t
             else:
@@ -2519,17 +2735,33 @@ class AnomalyPropertyEstimator():
 
         peaks = []
         for idx in pos_indices:
-            peaks.append({'peak_index': idx, 'peak_dflux': res_rolling_mean[idx]})
+            peaks.append(
+                {"peak_index": idx, "peak_dflux": res_rolling_mean[idx]}
+            )
         for idx in neg_indices:
-            peaks.append({'peak_index': idx, 'peak_dflux': res_rolling_mean[idx]})
+            peaks.append(
+                {"peak_index": idx, "peak_dflux": res_rolling_mean[idx]}
+            )
 
         if len(peaks) == 0:
             max_idx = np.argmax(res_rolling_mean)
             min_idx = np.argmin(res_rolling_mean)
-            if abs(res_rolling_mean[max_idx]) >= abs(res_rolling_mean[min_idx]):
-                peaks.append({'peak_index': max_idx, 'peak_dflux': res_rolling_mean[max_idx]})
+            if abs(res_rolling_mean[max_idx]) >= abs(
+                res_rolling_mean[min_idx]
+            ):
+                peaks.append(
+                    {
+                        "peak_index": max_idx,
+                        "peak_dflux": res_rolling_mean[max_idx],
+                    }
+                )
             else:
-                peaks.append({'peak_index': min_idx, 'peak_dflux': res_rolling_mean[min_idx]})
+                peaks.append(
+                    {
+                        "peak_index": min_idx,
+                        "peak_dflux": res_rolling_mean[min_idx],
+                    }
+                )
 
         return peaks
 
@@ -2566,17 +2798,19 @@ class AnomalyPropertyEstimator():
               return the largest positive peak.
         """
         # TODO: Are there more optimal/robust criteria for peak selection?
-        pos_peaks = [p for p in peaks if p['peak_dflux'] > 0]
-        neg_peaks = [p for p in peaks if p['peak_dflux'] < 0]
+        pos_peaks = [p for p in peaks if p["peak_dflux"] > 0]
+        neg_peaks = [p for p in peaks if p["peak_dflux"] < 0]
 
         if len(pos_peaks) == 0:
-            return max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
+            return max(neg_peaks, key=lambda p: abs(p["peak_dflux"]))
         elif len(neg_peaks) == 0:
-            return max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
+            return max(pos_peaks, key=lambda p: abs(p["peak_dflux"]))
         else:
-            biggest_pos = max(pos_peaks, key=lambda p: abs(p['peak_dflux']))
-            biggest_neg = max(neg_peaks, key=lambda p: abs(p['peak_dflux']))
-            if abs(biggest_neg['peak_dflux']) <= self.importance_threshold * abs(biggest_pos['peak_dflux']):
+            biggest_pos = max(pos_peaks, key=lambda p: abs(p["peak_dflux"]))
+            biggest_neg = max(neg_peaks, key=lambda p: abs(p["peak_dflux"]))
+            if abs(
+                biggest_neg["peak_dflux"]
+            ) <= self.importance_threshold * abs(biggest_pos["peak_dflux"]):
                 return biggest_pos
             else:
                 return biggest_neg
@@ -2610,21 +2844,23 @@ class AnomalyPropertyEstimator():
         kernel = np.ones(window_size) / window_size
 
         if (window_size > 0) and (window_size < np.sum(self.anom_index)):
-            res_rolling_mean = np.convolve(self.residuals, kernel, mode='same')
+            res_rolling_mean = np.convolve(self.residuals, kernel, mode="same")
 
             noise = scipy.stats.median_abs_deviation(self.residuals)
-            prominence = 3. * noise
+            prominence = 3.0 * noise
 
-            self.all_peaks = self._find_all_extrema(res_rolling_mean, prominence=prominence)
+            self.all_peaks = self._find_all_extrema(
+                res_rolling_mean, prominence=prominence
+            )
             dominant_peak = self._select_dominant_peak(self.all_peaks)
 
-            peak_index = dominant_peak['peak_index']
-            peak_dflux = dominant_peak['peak_dflux']
+            peak_index = dominant_peak["peak_index"]
+            peak_dflux = dominant_peak["peak_dflux"]
 
             if peak_dflux > 0:
-                half_anomaly = res_rolling_mean > (peak_dflux / 2.)
+                half_anomaly = res_rolling_mean > (peak_dflux / 2.0)
             else:
-                half_anomaly = res_rolling_mean < (peak_dflux / 2.)
+                half_anomaly = res_rolling_mean < (peak_dflux / 2.0)
 
             t_start = np.min(self.sorted_times[half_anomaly])
             t_stop = np.max(self.sorted_times[half_anomaly])
@@ -2656,7 +2892,7 @@ class AnomalyPropertyEstimator():
         t_stop : float
             End time of the anomaly.
         """
-        if method == 'rolling':
+        if method == "rolling":
             return self._find_extremum_with_rolling_mean()
 
     def get_anomaly_lc_parameters(self):
@@ -2679,40 +2915,48 @@ class AnomalyPropertyEstimator():
         """
         self.set_anom_prop()
         params = {key: value for key, value in self.pspl_params.items()}
-        params['dmag'] = self.dmag
-        params['dt'] = self.t_stop - self.t_start
-        params['t_pl'] = np.mean((self.t_start, self.t_stop))
+        params["dmag"] = self.dmag
+        params["dt"] = self.t_stop - self.t_start
+        params["t_pl"] = np.mean((self.t_start, self.t_stop))
 
         return params
 
     def _plot_peak_lines(self):
         """Draw vertical lines at peak_time, t_start, and t_stop on the current axes."""
-        plt.axvline(self.peak_time, color='darkgray', zorder=10, linestyle=':')
-        plt.axvline(self.t_start, color='darkgray')
-        plt.axvline(self.t_stop, color='darkgray')
+        plt.axvline(self.peak_time, color="darkgray", zorder=10, linestyle=":")
+        plt.axvline(self.t_start, color="darkgray")
+        plt.axvline(self.t_stop, color="darkgray")
 
     def _plot_peak_lines_res(self):
         """Draw peak lines and a horizontal line at peak_dflux; overlay all_peaks as scatter points."""
         self._plot_peak_lines()
-        plt.axhline(self.peak_dflux, color='darkgray', linestyle=':')
+        plt.axhline(self.peak_dflux, color="darkgray", linestyle=":")
         if self.all_peaks is not None:
             for peak in self.all_peaks:
                 plt.scatter(
-                    self.sorted_times[peak['peak_index']], peak['peak_dflux'],
-                    marker='d', color='red', zorder=5)
+                    self.sorted_times[peak["peak_index"]],
+                    peak["peak_dflux"],
+                    marker="d",
+                    color="red",
+                    zorder=5,
+                )
 
     def _plot_af_lines(self):
         """Draw vertical lines at the AnomalyFinder t_eff boundaries on the current axes."""
-        plt.axvline(self.af_results['t_0'] +
-                    self.af_results['t_eff'], color='black')
-        plt.axvline(self.af_results['t_0'] -
-                    self.af_results['t_eff'], color='black')
+        plt.axvline(
+            self.af_results["t_0"] + self.af_results["t_eff"], color="black"
+        )
+        plt.axvline(
+            self.af_results["t_0"] - self.af_results["t_eff"], color="black"
+        )
 
     def _setup_anom_xaxis(self):
         """Set x-axis limits to ±5 t_eff around the AnomalyFinder t_0 and label as 'time'."""
-        plt.xlim(self.af_results['t_0'] + 5. * np.array([-1, 1]) *
-                 self.af_results['t_eff'])
-        plt.xlabel('time')
+        plt.xlim(
+            self.af_results["t_0"]
+            + 5.0 * np.array([-1, 1]) * self.af_results["t_eff"]
+        )
+        plt.xlabel("time")
 
     def plot_residuals(self):
         """
@@ -2723,12 +2967,12 @@ class AnomalyPropertyEstimator():
         :meth:`_plot_af_lines`.
         """
         plt.figure()
-        plt.axhline(0, color='black')
+        plt.axhline(0, color="black")
         plt.scatter(self.sorted_times, self.residuals)
         self._plot_peak_lines_res()
         self._plot_af_lines()
         self._setup_anom_xaxis()
-        plt.ylabel('res')
+        plt.ylabel("res")
 
     def plot_anomaly(self):
         """
@@ -2740,16 +2984,23 @@ class AnomalyPropertyEstimator():
         """
         plt.figure()
         self.pspl_event.plot_data()
-        self.pspl_event.plot_model(color='black', zorder=5)
+        self.pspl_event.plot_model(color="black", zorder=5)
         peak_anom_mag = MulensModel.Utils.get_mag_from_flux(
-            self.expected_model_fluxes[self.peak_index] + self.peak_dflux)
-        plt.scatter(self.peak_time, peak_anom_mag, marker='d', color='darkgray', zorder=10)
+            self.expected_model_fluxes[self.peak_index] + self.peak_dflux
+        )
+        plt.scatter(
+            self.peak_time,
+            peak_anom_mag,
+            marker="d",
+            color="darkgray",
+            zorder=10,
+        )
 
         self._plot_peak_lines()
         self._plot_af_lines()
         self._setup_anom_xaxis()
 
-        plt.ylabel('mag')
+        plt.ylabel("mag")
 
     @property
     def peak_dflux(self):
@@ -2789,9 +3040,11 @@ class AnomalyPropertyEstimator():
         float
         """
         expected_mag = MulensModel.Utils.get_mag_from_flux(
-            self.expected_model_fluxes[self.peak_index])
+            self.expected_model_fluxes[self.peak_index]
+        )
         peak_anom_mag = MulensModel.Utils.get_mag_from_flux(
-            self.expected_model_fluxes[self.peak_index] + self.peak_dflux)
+            self.expected_model_fluxes[self.peak_index] + self.peak_dflux
+        )
 
         return peak_anom_mag - expected_mag
 
@@ -2813,7 +3066,9 @@ class AnomalyPropertyEstimator():
         numpy.ndarray of bool
         """
         if self._anom_index is None:
-            self._anom_index = (self.times > self.anom_t_range_af[0]) & (self.times < self.anom_t_range_af[1])
+            self._anom_index = (self.times > self.anom_t_range_af[0]) & (
+                self.times < self.anom_t_range_af[1]
+            )
 
         return self._anom_index
 
@@ -2841,7 +3096,9 @@ class AnomalyPropertyEstimator():
         numpy.ndarray
         """
         if self._times is None:
-            self._times = np.hstack([dataset.time for dataset in self.pspl_event.datasets])
+            self._times = np.hstack(
+                [dataset.time for dataset in self.pspl_event.datasets]
+            )
 
         return self._times
 
@@ -2894,8 +3151,11 @@ class AnomalyPropertyEstimator():
         """
         if self._scaled_fluxes is None:
             self._scaled_fluxes = np.hstack(
-                [np.array(flux) for (flux, err) in self.pspl_event.get_scaled_fluxes()])[self.anom_index][
-                self.sorted_index]
+                [
+                    np.array(flux)
+                    for (flux, err) in self.pspl_event.get_scaled_fluxes()
+                ]
+            )[self.anom_index][self.sorted_index]
 
         return self._scaled_fluxes
 
@@ -2909,7 +3169,9 @@ class AnomalyPropertyEstimator():
         numpy.ndarray
         """
         if self._scaled_residuals is None:
-            self._scaled_residuals = self.scaled_fluxes - self.expected_model_fluxes
+            self._scaled_residuals = (
+                self.scaled_fluxes - self.expected_model_fluxes
+            )
 
         return self._scaled_residuals
 
@@ -2923,7 +3185,9 @@ class AnomalyPropertyEstimator():
         numpy.ndarray
         """
         if self._chi2s is None:
-            self._chi2s = np.hstack(self.pspl_event.get_chi2_per_point())[self.anom_index][self.sorted_index]
+            self._chi2s = np.hstack(self.pspl_event.get_chi2_per_point())[
+                self.anom_index
+            ][self.sorted_index]
 
         return self._chi2s
 
@@ -2939,7 +3203,10 @@ class AnomalyPropertyEstimator():
         numpy.ndarray
         """
         if self._expected_model_fluxes is None:
-            self._expected_model_fluxes = self.source_flux * self.pspl_event.model.get_magnification(
-                self.sorted_times) + self.blend_flux
+            self._expected_model_fluxes = (
+                self.source_flux
+                * self.pspl_event.model.get_magnification(self.sorted_times)
+                + self.blend_flux
+            )
 
         return self._expected_model_fluxes

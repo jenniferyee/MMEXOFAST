@@ -2,9 +2,9 @@
 Functions and classes for converting between microlensing and physical
 parameters.
 """
-import numpy as np
-import MulensModel
 
+import MulensModel
+import numpy as np
 
 _kappa = 8.14  # Should this be imported from mulens model for consistency?
 _masyr2kms = 4.740470463533349
@@ -39,16 +39,15 @@ class Star(object):
     """
 
     def __init__(
-            self,
-            mass=None, radius=None,
-            distance=None, pi=None, mu=None, vel=None):
+        self, mass=None, radius=None, distance=None, pi=None, mu=None, vel=None
+    ):
 
         self.mass = mass
         self.radius = radius
         self._theta_star = None
 
         if (distance is not None) and (pi is not None):
-            raise KeyError('Define either *distance* or *pi*, not both!')
+            raise KeyError("Define either *distance* or *pi*, not both!")
         else:
             self._distance = distance
             self._pi = pi
@@ -56,7 +55,7 @@ class Star(object):
         self._mu = None
         self._vel = None
         if (mu is not None) and (vel is not None):
-            raise KeyError('Define either *mu* or *vel*, not both!')
+            raise KeyError("Define either *mu* or *vel*, not both!")
         elif mu is not None:
             self.mu = mu
         elif vel is not None:
@@ -72,10 +71,11 @@ class Star(object):
         if self._distance is None:
             if self._pi is None:
                 raise AttributeError(
-                    'Cannot return distance. ' +
-                    'Neither *distance* nor *pi* were defined.')
+                    "Cannot return distance. "
+                    + "Neither *distance* nor *pi* were defined."
+                )
             else:
-                self._distance = 1. / self._pi
+                self._distance = 1.0 / self._pi
 
         return self._distance
 
@@ -89,10 +89,11 @@ class Star(object):
         if self._pi is None:
             if self._distance is None:
                 raise AttributeError(
-                    'Cannot return pi. ' +
-                    'Neither *distance* nor *pi* were defined.')
+                    "Cannot return pi. "
+                    + "Neither *distance* nor *pi* were defined."
+                )
             else:
-                self._pi = 1. / self._distance
+                self._pi = 1.0 / self._distance
 
         return self._pi
 
@@ -106,8 +107,9 @@ class Star(object):
         if self._mu is None:
             if self._vel is None:
                 raise AttributeError(
-                    'Cannot return mu. ' +
-                    'Neither *mu* nor *vel* were defined.')
+                    "Cannot return mu. "
+                    + "Neither *mu* nor *vel* were defined."
+                )
             else:
                 self._mu = self._vel / self.distance / _masyr2kms
 
@@ -121,8 +123,10 @@ class Star(object):
             self._mu = new_value
         else:
             raise TypeError(
-                'Invalid type for mu. Must be *tuple*, *list*, ' +
-                ' or *np.ndarray: ', type(new_value))
+                "Invalid type for mu. Must be *tuple*, *list*, "
+                + " or *np.ndarray: ",
+                type(new_value),
+            )
 
     @property
     def vel(self):
@@ -134,8 +138,9 @@ class Star(object):
         if self._vel is None:
             if self._mu is None:
                 raise AttributeError(
-                    'Cannot return vel. ' +
-                    'Neither *mu* nor *vel* were defined.')
+                    "Cannot return vel. "
+                    + "Neither *mu* nor *vel* were defined."
+                )
             else:
                 self._vel = self._mu * self.distance * _masyr2kms
 
@@ -149,8 +154,10 @@ class Star(object):
             self._vel = new_value
         else:
             raise TypeError(
-                'Invalid type for vel. Must be *tuple*, *list*, ' +
-                ' or *np.ndarray: ', type(new_value))
+                "Invalid type for vel. Must be *tuple*, *list*, "
+                + " or *np.ndarray: ",
+                type(new_value),
+            )
 
     @property
     def theta_star(self):
@@ -216,8 +223,12 @@ class Phys2UlensConverter(object):
         """
         :return: *dict* of relevant microlensing model parameters.
         """
-        self.ulens_params = {'t_E': self.t_E, 'rho': self.rho,
-                             'pi_E_N': self.pi_E_N, 'pi_E_E': self.pi_E_E}
+        self.ulens_params = {
+            "t_E": self.t_E,
+            "rho": self.rho,
+            "pi_E_N": self.pi_E_N,
+            "pi_E_E": self.pi_E_E,
+        }
 
         return self.ulens_params
 
@@ -336,8 +347,9 @@ class Phys2UlensConverter(object):
         """
         # mu_rel, hel = mu_rel + v_earth,perp * pi_rel / au
         if self._mu_rel_vec is None:
-            self._mu_rel_vec = (self.mu_rel_hel -
-                                self.v_earth_perp * self.pi_rel / _masyr2kms)
+            self._mu_rel_vec = (
+                self.mu_rel_hel - self.v_earth_perp * self.pi_rel / _masyr2kms
+            )
 
         return self._mu_rel_vec
 
@@ -351,7 +363,8 @@ class Phys2UlensConverter(object):
         """
         if self._mu_rel is None:
             self._mu_rel = np.sqrt(
-                self.mu_rel_vec[0] ** 2 + self.mu_rel_vec[1] ** 2)
+                self.mu_rel_vec[0] ** 2 + self.mu_rel_vec[1] ** 2
+            )
 
         return self._mu_rel
 

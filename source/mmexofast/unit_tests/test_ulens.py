@@ -1,13 +1,15 @@
 """
 Unit tests for parameter conversions
 """
-import unittest
-import numpy as np
-from numpy import testing
-import astropy.units as u
-from astropy.coordinates import SkyCoord
 
-from mmexofast.ulens import Star, Phys2UlensConverter
+import unittest
+
+import astropy.units as u
+import numpy as np
+from astropy.coordinates import SkyCoord
+from numpy import testing
+
+from mmexofast.ulens import Phys2UlensConverter, Star
 
 
 class TestGRAVITYEvent(unittest.TestCase):
@@ -20,14 +22,14 @@ class TestGRAVITYEvent(unittest.TestCase):
     """
 
     def setUp(self):
-        self.coords = "05:07:42.72 24:47:56.4" # RA, Dec
+        self.coords = "05:07:42.72 24:47:56.4"  # RA, Dec
 
         # From Table 4
         ## Inputs
         self.M_L = 0.495
         self.D_L = 0.429
         self.D_S = 0.692
-        self.mu_L = [-28.89, 13.39] # N, E, helio
+        self.mu_L = [-28.89, 13.39]  # N, E, helio
         self.mu_S = [-6.42, -0.80]
         ## Outputs
         self.mu_rel_hel = [-22.45, 14.18]
@@ -55,15 +57,20 @@ class TestGRAVITYEvent(unittest.TestCase):
         ## Inputs
         self.r_source = 1.284
         ## Outputs
-        self.v_L_hel = [-58.75, 27.23] # N, E
+        self.v_L_hel = [-58.75, 27.23]  # N, E
         self.v_S_hel = [-21.06, -2.624]
         self.rho = 4.567e-3
 
         self.lens = Star(mass=self.M_L, distance=self.D_L, mu=self.mu_L)
         self.source = Star(
-            distance=self.D_S, radius=self.r_source, mu=self.mu_S)
+            distance=self.D_S, radius=self.r_source, mu=self.mu_S
+        )
         self.converter = Phys2UlensConverter(
-            source=self.source, lens=self.lens, coords=self.coords, t_ref=self.t_0)
+            source=self.source,
+            lens=self.lens,
+            coords=self.coords,
+            t_ref=self.t_0,
+        )
 
     def test_Star_calculations(self):
         testing.assert_allclose(self.lens.pi, self.pi_L, rtol=0.001)
@@ -71,51 +78,60 @@ class TestGRAVITYEvent(unittest.TestCase):
     def test_basic_calculations(self):
         print(self.lens.pi, self.source.pi)
         testing.assert_allclose(
-            self.converter.pi_rel, self.theta_E * self.pi_E, atol=0.001)
+            self.converter.pi_rel, self.theta_E * self.pi_E, atol=0.001
+        )
         testing.assert_allclose(
-            self.converter.theta_E, self.theta_E, rtol=0.001)
+            self.converter.theta_E, self.theta_E, rtol=0.001
+        )
         testing.assert_allclose(self.converter.pi_E, self.pi_E, rtol=0.001)
         testing.assert_allclose(self.converter.t_E, self.t_E, rtol=0.02)
 
     def test_mu_calculations(self):
         testing.assert_allclose(
-            self.converter.mu_rel_hel, self.mu_rel_hel, rtol=0.001)
+            self.converter.mu_rel_hel, self.mu_rel_hel, rtol=0.001
+        )
         testing.assert_allclose(
-            self.converter.v_earth_perp, self.v_earth_perp, rtol=0.02)
+            self.converter.v_earth_perp, self.v_earth_perp, rtol=0.02
+        )
         testing.assert_allclose(
-            self.converter.mu_rel_vec, self.mu_rel_geo, rtol=0.02)
-        mu_rel = np.sqrt(self.mu_rel_geo[0]**2 + self.mu_rel_geo[1]**2)
-        testing.assert_allclose(
-            self.converter.mu_rel, mu_rel, rtol=0.02)
+            self.converter.mu_rel_vec, self.mu_rel_geo, rtol=0.02
+        )
+        mu_rel = np.sqrt(self.mu_rel_geo[0] ** 2 + self.mu_rel_geo[1] ** 2)
+        testing.assert_allclose(self.converter.mu_rel, mu_rel, rtol=0.02)
         mu_rel_hat = self.mu_rel_geo / np.linalg.norm(self.mu_rel_geo)
         testing.assert_allclose(
-            self.converter.mu_rel_hat, mu_rel_hat, rtol=0.02)
+            self.converter.mu_rel_hat, mu_rel_hat, rtol=0.02
+        )
 
     def test_vel_calculations(self):
-        testing.assert_allclose(
-            self.lens.vel, self.v_L_hel, rtol=0.001)
-        testing.assert_allclose(
-            self.source.vel, self.v_S_hel, rtol=0.001)
+        testing.assert_allclose(self.lens.vel, self.v_L_hel, rtol=0.001)
+        testing.assert_allclose(self.source.vel, self.v_S_hel, rtol=0.001)
 
     def test_get_ulens_params(self):
         ulens_params = self.converter.get_ulens_params()
-        testing.assert_allclose(ulens_params['t_E'], self.t_E, rtol=0.02)
-        testing.assert_allclose(ulens_params['rho'], self.rho, rtol=0.001)
+        testing.assert_allclose(ulens_params["t_E"], self.t_E, rtol=0.02)
+        testing.assert_allclose(ulens_params["rho"], self.rho, rtol=0.001)
         testing.assert_allclose(
-            ulens_params['pi_E_N'], self.pi_E_vec[0], atol=0.002)
+            ulens_params["pi_E_N"], self.pi_E_vec[0], atol=0.002
+        )
         testing.assert_allclose(
-            ulens_params['pi_E_E'], self.pi_E_vec[1], atol=0.002)
+            ulens_params["pi_E_E"], self.pi_E_vec[1], atol=0.002
+        )
 
     def test_ulens_properties(self):
         testing.assert_allclose(self.converter.rho, self.rho, rtol=0.001)
         testing.assert_allclose(
-            self.converter.pi_E_vec[0], self.pi_E_vec[0], atol=0.002)
+            self.converter.pi_E_vec[0], self.pi_E_vec[0], atol=0.002
+        )
         testing.assert_allclose(
-            self.converter.pi_E_vec[1], self.pi_E_vec[1], atol=0.002)
+            self.converter.pi_E_vec[1], self.pi_E_vec[1], atol=0.002
+        )
         testing.assert_allclose(
-            self.converter.pi_E_N, self.pi_E_vec[0], atol=0.002)
+            self.converter.pi_E_N, self.pi_E_vec[0], atol=0.002
+        )
         testing.assert_allclose(
-            self.converter.pi_E_E, self.pi_E_vec[1], atol=0.002)
+            self.converter.pi_E_E, self.pi_E_vec[1], atol=0.002
+        )
 
     def test_coords(self):
         astropy_coords = SkyCoord(self.coords, unit=[u.hourangle, u.deg])
@@ -124,10 +140,14 @@ class TestGRAVITYEvent(unittest.TestCase):
 
     def test_coords_setter(self):
         test_conv = Phys2UlensConverter(
-            source=self.source, lens=self.lens, coords=self.coords, t_ref=self.t_0)
-        test_conv.coords = '18:00:00 -30:00:00'
-        testing.assert_almost_equal(test_conv.coords.ra.deg, 270.)
-        testing.assert_almost_equal(test_conv.coords.dec.deg, -30.)
+            source=self.source,
+            lens=self.lens,
+            coords=self.coords,
+            t_ref=self.t_0,
+        )
+        test_conv.coords = "18:00:00 -30:00:00"
+        testing.assert_almost_equal(test_conv.coords.ra.deg, 270.0)
+        testing.assert_almost_equal(test_conv.coords.dec.deg, -30.0)
 
 
 def test_v_earth_perp():
@@ -153,12 +173,12 @@ def test_v_earth_perp():
 
 class TestStar(unittest.TestCase):
     """
-        Test based on properties of Kojima-1:
-        https://ui.adsabs.harvard.edu/abs/2020ApJ...897..180Z/abstract
+    Test based on properties of Kojima-1:
+    https://ui.adsabs.harvard.edu/abs/2020ApJ...897..180Z/abstract
     """
 
     def setUp(self):
-        self.coords = "05:07:42.72 24:47:56.4" # RA, Dec
+        self.coords = "05:07:42.72 24:47:56.4"  # RA, Dec
         # From Table 4
         ## Inputs
         self.M_L = 0.495
@@ -200,7 +220,8 @@ class TestStar(unittest.TestCase):
         self.alt_lens = Star(mass=self.M_L, pi=self.pi_L, vel=self.v_L_hel)
         self.test_star = Star(mass=self.M_L, distance=self.D_L, mu=self.mu_L)
         self.source = Star(
-            distance=self.D_S, radius=self.r_source, mu=self.mu_S)
+            distance=self.D_S, radius=self.r_source, mu=self.mu_S
+        )
 
     def test_distance(self):
         assert self.lens.distance == self.D_L
@@ -235,22 +256,23 @@ class TestStar(unittest.TestCase):
         assert self.test_star.vel[1] == 9
 
     def test_theta_star(self):
-        theta_star = self.r_source * 0.00465047 / self.D_S  # R_Sun --> au, au / kpc = mas
+        theta_star = (
+            self.r_source * 0.00465047 / self.D_S
+        )  # R_Sun --> au, au / kpc = mas
         testing.assert_allclose(self.source.theta_star, theta_star, rtol=0.001)
 
 
 class TestStarErrors(unittest.TestCase):
-
     def setUp(self):
         self.star = Star()
 
     def test_distance_pi_conflict(self):
         with self.assertRaises(KeyError):
-            star = Star(distance=3., pi=1.)
+            star = Star(distance=3.0, pi=1.0)
 
     def test_mu_vel_conflict(self):
         with self.assertRaises(KeyError):
-            star = Star(mu=3., vel=20.)
+            star = Star(mu=3.0, vel=20.0)
 
     def test_distance_error(self):
         with self.assertRaises(AttributeError):
@@ -266,7 +288,7 @@ class TestStarErrors(unittest.TestCase):
 
     def test_mu_setter_type_error(self):
         with self.assertRaises(TypeError):
-            self.star.mu = 6.
+            self.star.mu = 6.0
 
     def test_vel_error(self):
         with self.assertRaises(AttributeError):
@@ -274,4 +296,4 @@ class TestStarErrors(unittest.TestCase):
 
     def test_vel_setter_type_error(self):
         with self.assertRaises(TypeError):
-            self.star.vel = 6.
+            self.star.vel = 6.0

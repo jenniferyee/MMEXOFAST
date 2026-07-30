@@ -89,7 +89,7 @@ class ModelConfig:
         dict
             Only includes fields that are not None.
         """
-        constructor_fields = ['coords', 'ra', 'dec', 'ephemerides_file']
+        constructor_fields = ["coords", "ra", "dec", "ephemerides_file"]
         return {
             f: getattr(self, f)
             for f in constructor_fields
@@ -129,9 +129,10 @@ class ModelConfig:
             # KeyError: "vbbl method allows ['accuracy',
             # 'relative_accuracy'] parameters, but got '{'trajectory'}'".
             model.set_magnification_methods_parameters(
-                {method: dict(parameters)
-                 for method, parameters
-                 in magnification_methods_parameters.items()}
+                {
+                    method: dict(parameters)
+                    for method, parameters in magnification_methods_parameters.items()
+                }
             )
         if default_magnification_method is not None:
             model.default_magnification_method = default_magnification_method
@@ -206,8 +207,10 @@ class EventConfig:
             Only includes fields that are not None or non-default.
         """
         constructor_fields = [
-            'coords', 'fix_blend_flux', 'fix_source_flux',
-            'fix_source_flux_ratio',
+            "coords",
+            "fix_blend_flux",
+            "fix_source_flux",
+            "fix_source_flux_ratio",
         ]
         kwargs = {
             f: getattr(self, f)
@@ -215,6 +218,6 @@ class EventConfig:
             if getattr(self, f) is not None
         }
         if self.data_ref is not None:
-            kwargs['data_ref'] = self.data_ref
+            kwargs["data_ref"] = self.data_ref
 
         return kwargs
