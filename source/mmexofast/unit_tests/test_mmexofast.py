@@ -1,5 +1,7 @@
 import unittest
 
+from mmexofast import MMEXOFASTFitter
+
 
 class TestMMEXOFASTFitter(unittest.TestCase):
 
@@ -97,7 +99,8 @@ class TestSatelliteData(unittest.TestCase):
 
     def _get_datasets(self, file_list):
         # Do something to read in the datasets
-        return datasets
+        raise NotImplementedError(
+            'test datasets are not set up yet; see setUp()')
 
     def do_test_datasets(self, file_list):
         self.skipTest('Not Implemented')
