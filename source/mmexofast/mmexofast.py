@@ -103,6 +103,24 @@ _PARAMETER_DECIMAL_PLACES = {
     "t_0_xi": 6,
 }
 
+# Parameters that are epochs, and so move when the time origin changes.
+# Deliberately excludes the durations t_E, t_star, t_star_1, t_star_2 and
+# xi_period, which are invariant under a shift: adding a JD offset to a
+# duration would be a bug, not a rounding difference. Used by
+# MMEXOFASTFitter.initialize_exozippy to convert reduced HJD to full JD.
+EPOCH_PARAMETERS = frozenset(
+    {
+        "t_0",
+        "t_0_1",
+        "t_0_2",
+        "t_0_kep",
+        "t_0_par",
+        "t_0_xi",
+        "t_caustic_in",
+        "t_caustic_out",
+    }
+)
+
 _FLUX_PARAM_DECIMAL_PLACES = 3
 
 
@@ -3210,6 +3228,64 @@ class MMEXOFASTFitter:
             f"table_type {table_type!r} is not implemented."
         )
 
+    def _exozippy_jd_offset(self) -> float:
+        """
+        JD offset needed to put the fitted epochs on a full JD scale.
+
+        Microlensing data are commonly published in reduced form,
+        ``HJD' = HJD - 2450000``, and MMEXOFAST fits in whatever system the
+        input files use. EXOZIPPy expects full JD, so report the offset
+        needed to get there: ``2450000`` when the data look reduced, and
+        ``0`` when they are already full JD.
+
+        Returns
+        -------
+        float
+            Offset added to every epoch parameter by
+            :meth:`initialize_exozippy`.
+        """
+        times = [
+            dataset.time.max()
+            for dataset in (self.datasets or [])
+            if len(dataset.time) > 0
+        ]
+        if len(times) == 0:
+            return 0.0
+
+        return 0.0 if max(times) >= 2450000.0 else 2450000.0
+
+    @staticmethod
+    def _shift_epochs(params: dict, offset: float) -> dict:
+        """
+        Copy ``params`` with every epoch parameter shifted by ``offset``.
+
+        Only epochs move. Durations (``t_E``, ``t_star``) and everything
+        else are invariant under a change of time origin, as are the
+        sigmas, so shifting them would be wrong rather than merely
+        redundant.
+
+        Parameters
+        ----------
+        params : dict
+            Model parameters. Not modified.
+        offset : float
+            Offset to add, from :meth:`_exozippy_jd_offset`.
+
+        Returns
+        -------
+        dict
+            A copy, shifted.
+        """
+        shifted = dict(params)
+        if offset == 0.0:
+            return shifted
+
+        for name in EPOCH_PARAMETERS:
+            if name in shifted:
+                shifted[name] = shifted[name] + offset
+
+        return shifted
+
     def initialize_exozippy(self) -> dict:
         """
         Return best-fit microlensing parameters for initializing
@@ -3227,23 +3303,32 @@ class MMEXOFASTFitter:
                 (``self.renorm_factors``).
             ``'mag_methods'``
                 Magnification methods in MulensModel convention.
+            ``'coords'``
+                Event coordinates as a sexagesimal string, or None if
+                none were supplied.
+            ``'jd_offset'``
+                Offset already added to every epoch in ``'fits'`` to put
+                them on a full JD scale; see
+                :meth:`_exozippy_jd_offset`. Subtract it to recover the
+                epochs as fitted.
 
         Raises
         ------
         NotImplementedError
             If ``fit_type`` is not ``'point_lens'``.
         """
+        jd_offset = self._exozippy_jd_offset()
+        coords = str(self.coords) if self.coords is not None else None
         if self.fit_type == "point_lens":
             fits = []
             for key in self._iter_parallax_point_lens_keys():
                 record = self.all_fit_results.get(key)
                 if record is not None:
-                    params = record.params.copy() 
-                    if params["t_0"] < 2450000.0: 
-                        params["t_0"] += 2450000.0 
                     fits.append(
                         {
-                            "parameters": params,
+                            "parameters": self._shift_epochs(
+                                record.params, jd_offset
+                            ),
                             "sigmas": record.sigmas,
                         }
                     )
@@ -3252,9 +3337,8 @@ class MMEXOFASTFitter:
                 "fits": fits,
                 "errfacs": self.renorm_factors,
                 "mag_methods": self.mag_methods,
-                "coords": str(self.coords)
-                if self.coords is not None
-                else None,
+                "coords": coords,
+                "jd_offset": jd_offset,
             }
         if self.fit_type == "binary_lens":
             fits = []
@@ -3267,12 +3351,11 @@ class MMEXOFASTFitter:
             if len(binary_lens_fits) > 0:
                 # Use real fits if they exist
                 for binary_fit in binary_lens_fits:
-                    params = binary_fit.params.copy()
-                    if params["t_0"] < 2450000.0:
-                        params["t_0"] += 2450000.0
                     fits.append(
                         {
-                            "parameters": params,
+                            "parameters": self._shift_epochs(
+                                binary_fit.params, jd_offset
+                            ),
                             "sigmas": binary_fit.sigmas,
                         }
                     )
@@ -3285,7 +3368,13 @@ class MMEXOFASTFitter:
                     key,
                     params,
                 ) in self.intermediate_results.estimate_binary_lens_parameters.items():
-                    fits.append({"parameters": params.ulens})
+                    fits.append(
+                        {
+                            "parameters": self._shift_epochs(
+                                params.ulens, jd_offset
+                            )
+                        }
+                    )
 
         else:
             raise NotImplementedError(
@@ -3296,7 +3385,8 @@ class MMEXOFASTFitter:
             "fits": fits,
             "errfacs": self.renorm_factors,
             "mag_methods": self.mag_methods,
-            "coords": str(self.coords) if self.coords is not None else None,
+            "coords": coords,
+            "jd_offset": jd_offset,
         }
 
     # ------------------------------------------------------------------

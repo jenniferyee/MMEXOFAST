@@ -1,5 +1,9 @@
+import json
 import unittest
 from types import SimpleNamespace
+
+import MulensModel
+import numpy as np
 
 from mmexofast import MMEXOFASTFitter
 
@@ -83,61 +87,153 @@ class TestMMEXOFASTFitter(unittest.TestCase):
     def test_results_setter(self):
         self.skipTest("Not Implemented")
 
-    def _make_fake_record(self, t_0, sigmas=None):
-        #lightweight stand-in for a fit-result record
-        return SimpleNamespace(
-           params=SimpleNamespace(copy=lambda: {"t_0": t_0}),
-            sigmas=sigmas or {},
-        )
 
-    def _make_fitter_for_exozippy(self, fit_type, all_fit_results):
-        #adjust MMEXOFASTFitter to the actual class name/import path
+class TestInitializeExozippy(unittest.TestCase):
+    """
+    The EXOZIPPy handoff: coordinates, and epochs on a full JD scale.
+
+    Built with __new__ and the handful of attributes the method reads,
+    rather than running a fit, so these stay fast and independent of the
+    fitting machinery.
+    """
+
+    def _make_fitter(self, fit_type, records=(), times=(2455000.0,)):
         fitter = MMEXOFASTFitter.__new__(MMEXOFASTFitter)
         fitter.fit_type = fit_type
-        fitter.all_fit_results = all_fit_results
         fitter.renorm_factors = {"OGLE": 1.0}
         fitter.mag_methods = []
         fitter.coords = None
+        fitter.datasets = [SimpleNamespace(time=np.array(times))]
+        fitter.all_fit_results = {}
+        keys = []
+        for i, params in enumerate(records):
+            key = "key{0}".format(i)
+            keys.append(key)
+            fitter.all_fit_results[key] = SimpleNamespace(
+                params=params, sigmas=None
+            )
+        fitter._iter_parallax_point_lens_keys = lambda: keys
         return fitter
 
-    def test_initialize_exozippy(self):
-        # t_0 below 2450000.0 shoul dbe baseline corrected in output
-        key = "key1"
-        record = self._make_fake_record(t_0=5000.0)
-        fitter = self._make_fitter_for_exozippy(
-            fit_type="point_lens",
-            all_fit_results={key: record},
+    def test_full_jd_data_is_left_alone(self):
+        """Data already in full JD needs no shift."""
+        fitter = self._make_fitter(
+            "point_lens",
+            records=[{"t_0": 2455000.0, "u_0": 0.1, "t_E": 20.0}],
+            times=(2455010.0,),
         )
-        
-        fitter._iter_parallax_point_lens_keys = lambda: [key]
-
         result = fitter.initialize_exozippy()
 
-        self.assertEqual(len(result["fits"]), 1)
+        self.assertEqual(result["jd_offset"], 0.0)
+        self.assertEqual(result["fits"][0]["parameters"]["t_0"], 2455000.0)
+
+    def test_reduced_hjd_is_converted(self):
+        """HJD' = HJD - 2450000 is detected from the data and undone."""
+        fitter = self._make_fitter(
+            "point_lens",
+            records=[{"t_0": 5000.0, "u_0": 0.1, "t_E": 20.0}],
+            times=(5010.0,),
+        )
+        result = fitter.initialize_exozippy()
+
+        self.assertEqual(result["jd_offset"], 2450000.0)
         self.assertAlmostEqual(
             result["fits"][0]["parameters"]["t_0"], 2455000.0
         )
 
-        record_late = self._make_fake_record(t_0=24590000.0)
-        fitter_late = self._make_fitter_for_exozippy(
-            fit_type="point_lens",
-            all_fit_results={key: record_late},
-
+    def test_shifts_every_epoch_not_just_t_0(self):
+        """
+        t_0_par and friends are epochs too. Shifting t_0 alone would leave
+        a parallax fit internally inconsistent.
+        """
+        fitter = self._make_fitter(
+            "point_lens",
+            records=[
+                {
+                    "t_0": 5000.0,
+                    "t_0_par": 5001.0,
+                    "u_0": 0.1,
+                    "t_E": 20.0,
+                    "pi_E_N": 0.1,
+                }
+            ],
+            times=(5010.0,),
         )
-        fitter_late._iter_parallax_point_lens_keys = lambda: [key]
-        
-        late_result = fitter_late.initialize_exozippy()
-        #unsupported fit_type should raise
-        fitter_bad = self._make_fitter_for_exozippy(
-            fit_type="something_else",
-            all_fit_results={},
-        )
+        params = fitter.initialize_exozippy()["fits"][0]["parameters"]
 
-        fitter_bad._iter_parallax_point_lens_keys = lambda: [key]
-        
+        self.assertAlmostEqual(params["t_0"], 2455000.0)
+        self.assertAlmostEqual(params["t_0_par"], 2455001.0)
+
+    def test_durations_are_not_shifted(self):
+        """t_E and t_star are invariant under a change of time origin."""
+        fitter = self._make_fitter(
+            "point_lens",
+            records=[{"t_0": 5000.0, "u_0": 0.1, "t_E": 20.0, "t_star": 0.3}],
+            times=(5010.0,),
+        )
+        params = fitter.initialize_exozippy()["fits"][0]["parameters"]
+
+        self.assertEqual(params["t_E"], 20.0)
+        self.assertEqual(params["t_star"], 0.3)
+
+    def test_does_not_mutate_the_stored_record(self):
+        """The fit record keeps the epochs it was fitted with."""
+        record = {"t_0": 5000.0, "u_0": 0.1, "t_E": 20.0}
+        fitter = self._make_fitter(
+            "point_lens", records=[record], times=(5010.0,)
+        )
+        fitter.initialize_exozippy()
+
+        self.assertEqual(record["t_0"], 5000.0)
+
+    def test_coords_reported_as_string(self):
+        fitter = self._make_fitter("point_lens")
+        fitter.coords = MulensModel.Coordinates("17:54:19.2 -30:22:38")
+        result = fitter.initialize_exozippy()
+
+        self.assertEqual(result["coords"], "17:54:19.20 -30:22:38.00")
+
+    def test_coords_none_when_not_supplied(self):
+        fitter = self._make_fitter("point_lens")
+        self.assertIsNone(fitter.initialize_exozippy()["coords"])
+
+    def test_no_datasets_means_no_shift(self):
+        """Without data there is nothing to infer a convention from."""
+        fitter = self._make_fitter("point_lens")
+        fitter.datasets = []
+        self.assertEqual(fitter.initialize_exozippy()["jd_offset"], 0.0)
+
+    def test_output_is_json_serializable(self):
+        """
+        The result is written straight to JSON with no custom encoder, so
+        everything in it has to survive json.dumps -- including the numpy
+        floats a real fit produces.
+        """
+        fitter = self._make_fitter(
+            "point_lens",
+            records=[
+                {
+                    "t_0": np.float64(5000.0),
+                    "u_0": np.float64(0.1),
+                    "t_E": np.float64(20.0),
+                }
+            ],
+            times=(5010.0,),
+        )
+        fitter.coords = MulensModel.Coordinates("17:54:19.2 -30:22:38")
+
+        loaded = json.loads(json.dumps(fitter.initialize_exozippy()))
+        self.assertAlmostEqual(
+            loaded["fits"][0]["parameters"]["t_0"], 2455000.0
+        )
+        self.assertEqual(loaded["jd_offset"], 2450000.0)
+
+    def test_unsupported_fit_type_raises(self):
+        fitter = self._make_fitter("something_else")
         with self.assertRaises(NotImplementedError):
-            fitter_bad.initialize_exozippy()
-            
+            fitter.initialize_exozippy()
+
+
 class TestSatelliteData(unittest.TestCase):
     def setUp(self):
         self.ground_data = None
