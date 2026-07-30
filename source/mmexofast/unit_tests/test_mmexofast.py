@@ -1,4 +1,5 @@
 import unittest
+from types import SimpleNamespace
 
 from mmexofast import MMEXOFASTFitter
 
@@ -82,7 +83,61 @@ class TestMMEXOFASTFitter(unittest.TestCase):
     def test_results_setter(self):
         self.skipTest("Not Implemented")
 
+    def _make_fake_record(self, t_0, sigmas=None):
+        #lightweight stand-in for a fit-result record
+        return SimpleNamespace(
+           params=SimpleNamespace(copy=lambda: {"t_0": t_0}),
+            sigmas=sigmas or {},
+        )
 
+    def _make_fitter_for_exozippy(self, fit_type, all_fit_results):
+        #adjust MMEXOFASTFitter to the actual class name/import path
+        fitter = MMEXOFASTFitter.__new__(MMEXOFASTFitter)
+        fitter.fit_type = fit_type
+        fitter.all_fit_results = all_fit_results
+        fitter.renorm_factors = {"OGLE": 1.0}
+        fitter.mag_methods = []
+        fitter.coords = None
+        return fitter
+
+    def test_initialize_exozippy(self):
+        # t_0 below 2450000.0 shoul dbe baseline corrected in output
+        key = "key1"
+        record = self._make_fake_record(t_0=5000.0)
+        fitter = self._make_fitter_for_exozippy(
+            fit_type="point_lens",
+            all_fit_results={key: record},
+        )
+        
+        fitter._iter_parallax_point_lens_keys = lambda: [key]
+
+        result = fitter.initialize_exozippy()
+
+        self.assertEqual(len(result["fits"]), 1)
+        self.assertAlmostEqual(
+            result["fits"][0]["parameters"]["t_0"], 2455000.0
+        )
+
+        record_late = self._make_fake_record(t_0=24590000.0)
+        fitter_late = self._make_fitter_for_exozippy(
+            fit_type="point_lens",
+            all_fit_results={key: record_late},
+
+        )
+        fitter_late._iter_parallax_point_lens_keys = lambda: [key]
+        
+        late_result = fitter_late.initialize_exozippy()
+        #unsupported fit_type should raise
+        fitter_bad = self._make_fitter_for_exozippy(
+            fit_type="something_else",
+            all_fit_results={},
+        )
+
+        fitter_bad._iter_parallax_point_lens_keys = lambda: [key]
+        
+        with self.assertRaises(NotImplementedError):
+            fitter_bad.initialize_exozippy()
+            
 class TestSatelliteData(unittest.TestCase):
     def setUp(self):
         self.ground_data = None
