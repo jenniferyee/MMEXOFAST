@@ -1,18 +1,46 @@
 name: Publish
 
-# Publishing is driven by GitHub Releases: cut a release and the tagged commit
-# is built and uploaded to PyPI. Nothing is published on an ordinary push.
+# MMEXOFAST is pure Python, so there are no per-platform binary wheels to
+# build -- one sdist plus one py3-none-any wheel covers everything.
 #
-# Authentication is PyPI Trusted Publishing (OIDC), so there is no API token
-# to store or rotate. It requires a one-time publisher registration on PyPI
-# for this repository, environment, and workflow filename.
+# Triggers:
+#   push of a v* tag  -> build, verify, run the suite, publish to PyPI
+#   workflow_dispatch -> build and verify only; optionally publish to TestPyPI
+#
+# Publishing uses PyPI Trusted Publishing (OIDC), so there is no API token in
+# the repository secrets. The trust is registered on PyPI against this exact
+# combination and nothing else can use it:
+#
+#     owner/repo:  jenniferyee/MMEXOFAST
+#     workflow:    publish.yml   <- this file's name; renaming it breaks
+#                                   publishing until PyPI is updated too
+#     environment: pypi          <- must also exist in repo Settings
 on:
-  release:
-    types: [published]
-  # Lets you build and inspect the artifacts without publishing anything.
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
+    inputs:
+      testpypi:
+        description: "Also publish the build to TestPyPI (rehearsal)"
+        required: false
+        type: boolean
+        default: false
 
 jobs:
+  # The full suite, gating the real PyPI upload below. Reused from tests.yml
+  # via workflow_call rather than copied, so a release runs the same suite CI
+  # runs and the two cannot drift.
+  tests:
+    uses: ./.github/workflows/tests.yml
+    # A called workflow cannot request more permission than its caller grants.
+    # tests.yml's latest-deps job asks for `issues: write`, and without this
+    # the whole workflow fails at startup -- before any job runs, and whether
+    # or not that job would have been skipped by its own `if:`.
+    permissions:
+      contents: read
+      issues: write
+
   build:
     name: Build distributions
     runs-on: ubuntu-latest
@@ -25,6 +53,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Build sdist and wheel
         run: uv build --sdist --wheel --out-dir dist
@@ -32,28 +61,70 @@ jobs:
       - name: Check metadata renders on PyPI
         run: uvx twine check --strict dist/*
 
+      # The version here is static in pyproject.toml, so tagging without
+      # bumping it builds artifacts named after the OLD version. PyPI would
+      # reject that as a duplicate if the old version is already up, and
+      # publish silently-wrong artifacts if it is not. A version can never be
+      # reused, so check before uploading rather than after.
+      - name: Version matches the tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#v}"
+          built=$(ls dist/*.tar.gz | sed -E 's|.*/mmexofast-(.*)\.tar\.gz|\1|')
+          echo "tag=$tag built=$built"
+          if [ "$tag" != "$built" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME implies version '$tag' but the" \
+                 "build produced '$built'. Refusing to publish. Bump" \
+                 "[project] version in pyproject.toml to match the tag."
+            exit 1
+          fi
+
       - uses: actions/upload-artifact@v7
         with:
-          name: distributions
-          path: dist/
+          name: dist
+          path: dist/*
 
-  publish:
-    name: Publish to PyPI
-    needs: build
+  # Rehearsal target. TestPyPI needs its own trusted publisher registered
+  # against this same workflow, with environment name "testpypi".
+  #
+  # Gated on build only, NOT on tests: this exists to exercise the publish
+  # plumbing quickly, and TestPyPI is disposable. The real upload below is the
+  # one that must wait for a green suite.
+  testpypi:
+    name: Publish to TestPyPI
+    needs: [build]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    # Only a published release uploads; workflow_dispatch stops after build.
-    if: github.event_name == 'release'
+    if: github.event_name == 'workflow_dispatch' && inputs.testpypi
     environment:
-      name: pypi
-      url: https://pypi.org/p/mmexofast
+      name: testpypi
+      url: https://test.pypi.org/p/mmexofast
     permissions:
-      # Required for Trusted Publishing; mints the short-lived OIDC token.
       id-token: write
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: distributions
-          path: dist/
+          name: dist
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
 
+  # needs: tests as well as build -- a PyPI version can never be reused, so a
+  # release must not be able to go out over a red suite.
+  pypi:
+    name: Publish to PyPI
+    needs: [build, tests]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mmexofast
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1

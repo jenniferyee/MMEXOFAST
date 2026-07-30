@@ -4,17 +4,33 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  # Nightly, for the unlocked-resolution job below. It catches an upstream
+  # release breaking us, which has nothing to do with when we push.
+  schedule:
+    - cron: "0 7 * * *"
+  # Callable from publish.yml, so a release runs exactly this suite rather
+  # than a copy of it that drifts out of sync.
+  workflow_call:
 
 jobs:
   tests:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
+      # Do not cancel the other combinations when one fails. When a new Python
+      # breaks something, "3.14 failed and everything else was cancelled" tells
+      # you much less than seeing which combinations passed.
       fail-fast: false
       matrix:
         include:
           - session: test
             python-version: "3.12"
+            uv-extra-args: "--extra test"
+            pytest-args: "--fast"
+            timeout: 15
+          - session: test
+            python-version: "3.13"
             uv-extra-args: "--extra test"
             pytest-args: "--fast"
             timeout: 15
@@ -40,8 +56,107 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: ${{ matrix.python-version }}
+          enable-cache: true
 
       - name: Run tests
         run: >
           uv run ${{ matrix.uv-extra-args }}
           pytest -v ${{ matrix.pytest-args }} source/mmexofast/unit_tests
+
+  # Installs WITHOUT uv.lock, resolving dependencies fresh the way a user's
+  # `pip install mmexofast` does.
+  #
+  # Every other job here runs `uv run`, which installs the lock: one exact,
+  # frozen dependency set. That verifies what we SHIP; it does not verify what
+  # users RESOLVE, and those are different artifacts. pyproject declares
+  # ranges (MulensModel>=3, sfit_minimizer>=1.0.3) that nothing else
+  # exercises, and MulensModel drives the magnification numerics here -- a
+  # minor release can shift results rather than fail loudly.
+  #
+  # Dependabot does not cover this. It has no ecosystem for uv, and even for
+  # the lock it would only tell us a new version works with our pins; it never
+  # tests a fresh resolution.
+  latest-deps:
+    name: tests (freshly resolved deps)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    # Scoped to this job, not the workflow. Only this job files issues.
+    permissions:
+      contents: read
+      issues: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      # No uv, no lock. pip resolves from pyproject's ranges, exactly as a
+      # user installing from PyPI would.
+      - name: Install with a fresh resolution
+        run: |
+          python -m pip install --upgrade pip
+          pip install ".[test]"
+
+      # Saved to a file, not just echoed: the failure report below quotes it,
+      # and "which versions did it actually pick" is the first question anyone
+      # asks about a resolution failure.
+      - name: Record what actually got resolved
+        run: pip freeze | tee resolved.txt
+
+      # Runs from the installed package, not the checkout, so this also
+      # covers the packaged data: the fixtures under mmexofast/data have to
+      # ship for these to pass at all.
+      - name: Run test suite
+        run: pytest -q --pyargs mmexofast.unit_tests
+
+      # Email alone is a weak alarm for a nightly. One that stays broken for a
+      # week sends seven identical mails, which is how an alarm becomes noise
+      # and then becomes invisible. One issue, updated in place, stays visible
+      # and has a state that means something: open = still broken.
+      #
+      # Uses the preinstalled gh CLI and the automatic GITHUB_TOKEN, so no
+      # marketplace action enters the supply chain for this.
+      - name: Open or update the tracking issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          TITLE="Nightly: suite fails against freshly resolved dependencies"
+
+          {
+            echo "The nightly unlocked-resolution job failed."
+            echo
+            echo "This job installs with \`pip install \".[test]\"\` -- no"
+            echo "uv.lock -- so it reflects what a user gets from PyPI rather"
+            echo "than what we ship. A failure here usually means an upstream"
+            echo "release is incompatible with our declared ranges, not that"
+            echo "anything in this repository changed."
+            echo
+            echo "Run: $RUN_URL"
+            echo
+            echo "<details><summary>Resolved versions</summary>"
+            echo
+            echo '```'
+            grep -iE '^(MulensModel|sfit.minimizer|numpy|scipy|astropy|emcee|matplotlib|pandas)' resolved.txt || true
+            echo '```'
+            echo "</details>"
+          } > body.md
+
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" \
+                       --json number --jq '.[0].number // empty')
+
+          if [ -n "$EXISTING" ]; then
+            echo "Updating existing issue #$EXISTING"
+            gh issue comment "$EXISTING" --body-file body.md
+          else
+            echo "Opening a new issue"
+            gh issue create --title "$TITLE" --body-file body.md
+          fi
