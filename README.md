@@ -128,6 +128,22 @@ pytest source/mmexofast/unit_tests/            # everything
 pytest source/mmexofast/unit_tests/ --fast     # skip grid searches and other slow tests
 ```
 
+Linting, import sorting and formatting are all [ruff](https://docs.astral.sh/ruff/),
+configured in `pyproject.toml` and run as a pre-commit hook. The same checks run
+in CI, so this is optional, but it saves a round trip:
+
+```bash
+pip install pre-commit
+pre-commit install
+```
+
+The tree was reformatted in one mechanical commit. Tell your local `git blame`
+to skip it, once per clone (GitHub already does this automatically):
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
 The unit tests run from an installed package too, since their fixtures ship
 with it:
 

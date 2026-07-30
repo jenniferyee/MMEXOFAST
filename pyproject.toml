@@ -53,3 +53,66 @@ include = ["mmexofast*"]
 # 2018 Data Challenge is excluded -- see config.SAMPLE_DATA_PATH.
 [tool.setuptools.package-data]
 mmexofast = ["data/*.txt", "data/*/*.txt", "data/*/*.dat"]
+
+[tool.ruff]
+# One tool for linting, import sorting and formatting, as in EXOZIPPy. It
+# replaces the flake8 pass this codebase had been style-checked with by hand;
+# there is no .flake8 or setup.cfg to keep in sync.
+#
+# 79 matches EXOZIPPy, so contributors moving between the two repositories get
+# identical behaviour rather than two line lengths to remember.
+line-length = 79
+
+# Only .py, matching EXOZIPPy's reformat, which deliberately touched nothing
+# else. ruff also handles Markdown code blocks and notebooks, and both are the
+# wrong target here:
+#   *.md      -- the specs under documents/ are dated design records. Their
+#                code blocks are illustrative, and their trailing `# NEW`
+#                comments are column-aligned on purpose; reformatting collapses
+#                that alignment and churns 600+ lines of history nobody re-runs.
+#   *.ipynb   -- the example notebooks are committed with outputs, so
+#                reformatting them adds diff noise to files that are narrative
+#                rather than shipped code.
+# examples/#*# is an editor backup file that is not valid Python.
+extend-exclude = ["*.md", "*.ipynb", "examples/#*#"]
+
+[tool.ruff.lint]
+# Deliberately narrow: error-class rules only, all of which pass as of this
+# commit, so the hook goes on without a mass edit and without a single
+# `# noqa`. Its job is to stop regressions, not to relitigate style.
+#
+#   E9    syntax / IO errors -- caught examples/example_03_planet.py, which
+#         had never parsed since the file was added
+#   F821  undefined name -- caught three in test_mmexofast.py, hidden behind
+#         a skipTest
+#   F632  `is` compared against a literal (always a bug, never intent)
+#   F502  `%`-format with a dict where a tuple is required
+#   F522  .format() given keys the string never uses
+#   F701  `break` outside a loop
+#   F702  `continue` outside a loop
+#   B002  `++x`, which is two unary plusses and does nothing
+#   PLE   pylint's error (not style) category
+#   I     import sorting
+select = [
+    "E9", "F821", "F632", "F502", "F522", "F701", "F702", "B002", "PLE", "I",
+]
+
+# NOT enabled, with counts measured on this tree, so nobody has to re-derive
+# them:
+#
+# E501 (line too long), 790 hits before the formatter runs. The formatter wraps
+#   what it can; what survives is long string literals, URLs and comments it
+#   cannot split, so enabling this means noqa comments rather than fixes.
+# F401 (unused import), 24 hits. Auto-fixable, which is exactly why it is not
+#   on: `--fix` would delete re-exports from mmexofast/__init__.py, which
+#   exist to be imported by name and are referenced only via __all__.
+# F841 (unused variable), 17 hits -- worth a pass, none urgent.
+# BLE001 (blind except), 8 hits. Six wrap a fit or grid point that is allowed
+#   to fail: five warn or log, and results.py:534 falls back to sigmas=None
+#   silently, which is the one worth a look. The other two are in examples/
+#   and print the exception type.
+# UP* (modernization), ~200 hits across 12 rules, no bugs: %-format to
+#   .format(), Optional[X] to X | None, and similar churn.
+
+[tool.ruff.lint.isort]
+known-first-party = ["mmexofast"]

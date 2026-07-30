@@ -1,0 +1,23 @@
+# Install with:  pre-commit install
+#
+# The rev is pinned exactly, and must stay that way. Everyone has to produce
+# byte-identical output, or a collaborator formatting with a different version
+# turns a merge into a whitespace conflict instead of a content one. Dependabot
+# tracks this file, so version bumps arrive as reviewable PRs.
+#
+# ruff-check runs BEFORE ruff-format: the linter's import sorting (rule `I`)
+# decides which lines exist, the formatter decides how they wrap.
+#
+# `args: [--fix]` is deliberately limited to the import rule (`--fixable I`).
+# NEVER broaden it. F401 is the obvious next rule to reach for, and ruff
+# considers it auto-fixable -- `--fix` would delete the re-exports in
+# mmexofast/__init__.py, which exist to be imported by name and are referenced
+# only through __all__. A linter that silently deletes code is not worth the
+# seconds it saves.
+repos:
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+    -   id: ruff-check
+        args: [--fix, --fixable, I]
+    -   id: ruff-format

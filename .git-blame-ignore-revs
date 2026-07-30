@@ -1,0 +1,17 @@
+# Commits listed here are skipped by `git blame`, so a mechanical reformat does
+# not show up as the last author of every line in the repository.
+#
+# GitHub honours this file automatically in its blame view. Locally it needs one
+# opt-in, once per clone:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only ever add commits that are PURELY mechanical -- no logic changes mixed in.
+# A commit listed here becomes invisible to blame, so anything real hidden
+# inside it is effectively lost to archaeology.
+
+# Apply ruff import sorting and format across the tree (65 files). Verified
+# that the only differences from the parent revision, once import statements
+# and the names inside them are sorted, are three docstring re-indents; every
+# other AST node is identical. Touches nothing but .py.
+f3702513fb4d3dab4073eec84685a542c7a061b3
