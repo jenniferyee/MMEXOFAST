@@ -1,0 +1,59 @@
+name: Publish
+
+# Publishing is driven by GitHub Releases: cut a release and the tagged commit
+# is built and uploaded to PyPI. Nothing is published on an ordinary push.
+#
+# Authentication is PyPI Trusted Publishing (OIDC), so there is no API token
+# to store or rotate. It requires a one-time publisher registration on PyPI
+# for this repository, environment, and workflow filename.
+on:
+  release:
+    types: [published]
+  # Lets you build and inspect the artifacts without publishing anything.
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: "3.12"
+
+      - name: Build sdist and wheel
+        run: uv build --sdist --wheel --out-dir dist
+
+      - name: Check metadata renders on PyPI
+        run: uvx twine check --strict dist/*
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: distributions
+          path: dist/
+
+  publish:
+    name: Publish to PyPI
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Only a published release uploads; workflow_dispatch stops after build.
+    if: github.event_name == 'release'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/mmexofast
+    permissions:
+      # Required for Trusted Publishing; mints the short-lived OIDC token.
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: distributions
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1

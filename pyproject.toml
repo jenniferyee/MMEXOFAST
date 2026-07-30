@@ -2,9 +2,21 @@
 name = "mmexofast"
 version = "0.1.0"
 description = "Automated fitting of microlensing light curves"
+readme = "README.md"
 license = "BSD-3-Clause"
 license-files = ["LICENSE"]
 requires-python = ">=3.12"
+authors = [{ name = "Jennifer Yee" }]
+keywords = ["astronomy", "microlensing", "exoplanets", "light curves"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering :: Astronomy",
+]
 dependencies = [
   "numpy",
   "scipy",
@@ -13,13 +25,17 @@ dependencies = [
   "astropy",
   "emcee",
   "pyyaml",
-  "MulensModel",
-  # Not on PyPI, so it has to be a direct reference.
-  "sfit_minimizer @ git+https://github.com/jenniferyee/sfit_minimizer.git",
+  "MulensModel>=3",
+  "sfit_minimizer>=1.0.3",
 ]
 
 [project.optional-dependencies]
 test = ["pytest"]
+
+[project.urls]
+Homepage = "https://github.com/jenniferyee/MMEXOFAST"
+Repository = "https://github.com/jenniferyee/MMEXOFAST"
+Issues = "https://github.com/jenniferyee/MMEXOFAST/issues"
 
 [build-system]
 requires = ["setuptools>=77"]
