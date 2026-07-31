@@ -130,3 +130,36 @@ jobs:
           name: dist
           path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  # Pushing a tag publishes to PyPI but does NOT create a GitHub Release -- that
+  # is a separate object -- so the Releases page silently falls behind the tags.
+  # Create it here from the annotated tag's own message so the two never
+  # diverge. Tags containing a/b/rc are marked as pre-releases. Same job as
+  # exoplanet-core, sfit_minimizer, and EXOZIPPy.
+  github_release:
+    needs: [pypi]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          # Body = the annotated tag message minus its first line (the title).
+          git tag -l "$tag" --format='%(contents)' | tail -n +2 > notes.md
+          prerelease=""
+          case "$tag" in
+            *a*|*b*|*rc*) prerelease="--prerelease" ;;
+          esac
+          gh release create "$tag" --verify-tag --title "$tag" \
+            --notes-file notes.md $prerelease dist/*
