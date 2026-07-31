@@ -956,9 +956,7 @@ class EmceeLCFitter(MulensFitter):
                 and not isinstance(self.pool, bool)
                 else cpu_count()
             )
-            n_proc = min(
-                n_proc, max(1, self.emcee_settings["n_walkers"] // 2)
-            )
+            n_proc = min(n_proc, max(1, self.emcee_settings["n_walkers"] // 2))
             print("{0} CPUs ({1} pool processes)".format(cpu_count(), n_proc))
             os.environ["OMP_NUM_THREADS"] = "1"
             # initializer ships the fitter to each worker exactly once;
