@@ -61,11 +61,13 @@ jobs:
       - name: Check metadata renders on PyPI
         run: uvx twine check --strict dist/*
 
-      # The version here is static in pyproject.toml, so tagging without
-      # bumping it builds artifacts named after the OLD version. PyPI would
-      # reject that as a duplicate if the old version is already up, and
-      # publish silently-wrong artifacts if it is not. A version can never be
-      # reused, so check before uploading rather than after.
+      # The version is derived from the tag by setuptools-scm, so the original
+      # reason for this check -- tagging without remembering to bump a static
+      # version in pyproject.toml -- can no longer happen. It is kept because
+      # it still catches two tags landing on one commit, where `git describe`
+      # picks between them non-deterministically and can name the artifacts
+      # after the wrong one. A PyPI version can never be reused, so check
+      # before uploading rather than after.
       - name: Version matches the tag
         if: startsWith(github.ref, 'refs/tags/')
         run: |

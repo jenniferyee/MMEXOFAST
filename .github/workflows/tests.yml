@@ -15,7 +15,7 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: ${{ matrix.timeout }}
     strategy:
       # Do not cancel the other combinations when one fails. When a new Python
@@ -25,16 +25,19 @@ jobs:
       matrix:
         include:
           - session: test
+            os: ubuntu-latest
             python-version: "3.12"
             uv-extra-args: "--extra test"
             pytest-args: "--fast"
             timeout: 15
           - session: test
+            os: ubuntu-latest
             python-version: "3.13"
             uv-extra-args: "--extra test"
             pytest-args: "--fast"
             timeout: 15
           - session: test
+            os: ubuntu-latest
             python-version: "3.14"
             uv-extra-args: "--extra test"
             pytest-args: "--fast"
@@ -43,10 +46,24 @@ jobs:
           # locally vs ~6 s for the rest), so they run once rather than on
           # every interpreter in the matrix.
           - session: test_slow
+            os: ubuntu-latest
             python-version: "3.12"
             uv-extra-args: "--extra test"
             pytest-args: ""
             timeout: 60
+
+          # macOS on one interpreter, matching EXOZIPPy and sfit_minimizer.
+          # Actions minutes are free on public repositories and matrix
+          # combinations run concurrently, so the cost is wall clock only. It
+          # runs the --fast subset: the point is catching platform differences
+          # (matplotlib backends, path handling), not re-running the grid
+          # searches on a second OS.
+          - session: test
+            os: macos-latest
+            python-version: "3.12"
+            uv-extra-args: "--extra test"
+            pytest-args: "--fast"
+            timeout: 20
 
     steps:
       - uses: actions/checkout@v7

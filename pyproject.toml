@@ -1,6 +1,6 @@
 [project]
 name = "mmexofast"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Automated fitting of microlensing light curves"
 readme = "README.md"
 license = "BSD-3-Clause"
@@ -39,8 +39,25 @@ Repository = "https://github.com/jenniferyee/MMEXOFAST"
 Issues = "https://github.com/jenniferyee/MMEXOFAST/issues"
 
 [build-system]
-requires = ["setuptools>=77"]
+requires = ["setuptools>=77", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
+
+# The version comes from `git describe`, i.e. from the tags, matching
+# sfit_minimizer and EXOZIPPy. There is no version string to bump by hand, so
+# the failure mode publish.yml's "Version matches the tag" step was written to
+# catch -- tagging without remembering to edit pyproject -- can no longer
+# happen. That check is kept anyway, since it still catches two tags landing on
+# one commit, where `git describe` picks between them non-deterministically.
+#
+# This repository has NO TAGS YET, so builds are versioned 0.1.dev<N>+g<sha>
+# until the first `git tag -a v0.1.0` is pushed, at which point that tag builds
+# exactly 0.1.0. Nothing is published yet, so the temporary dip below the old
+# static 0.1.0 has no consequence.
+#
+# version_file is REGENERATED on every build, so it is gitignored rather than
+# tracked, and __init__.py imports it defensively for the fresh-clone case.
+[tool.setuptools_scm]
+version_file = "source/mmexofast/version.py"
 
 [tool.setuptools]
 package-dir = { "" = "source" }
