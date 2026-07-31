@@ -124,12 +124,16 @@ EXPECTED_STEPS_PL_RENORM = (
     + _STEPS_RENORM
     + _STEPS_PARALLAX_GRIDS
 )
+# Renormalization runs AFTER the anomaly search in the binary workflow, so
+# its outlier rejection can protect the anomaly window (anomaly_lc_params
+# does not exist earlier; the old renorm-first order flagged the planetary
+# anomaly itself as bad data).
 EXPECTED_STEPS_BINARY = (
     _STEPS_EVENT_SEARCH
     + _STEPS_STATIC_PL
     + _STEPS_PL_PARALLAX
-    + _STEPS_RENORM
     + _STEPS_SEARCH_ANOMALY
+    + _STEPS_RENORM
     + _STEPS_FIT_BINARY
     + _STEPS_CHECK_BINARY_RENORM
     + _STEPS_PARALLAX_GRIDS
@@ -574,7 +578,9 @@ class TestBinaryLensWorkflow(unittest.TestCase):
         with self._patch_fit_methods(fitter):
             fitter.fit()
 
-        expected = steps_through(EXPECTED_STEPS_BINARY, "refit_all")
+        # Renormalization now runs after the anomaly search, so stopping
+        # before the search means the parallax fits are the last completed.
+        expected = steps_through(EXPECTED_STEPS_BINARY, "fit_parallax_u0-")
         actual = [(step.name, step.stage) for step in fitter.completed_steps]
         self.assertEqual(actual, expected)
 
@@ -817,8 +823,11 @@ class TestBinaryLensRestartFromPointLens(unittest.TestCase):
         parallax_grid=False) with fit_type='binary_lens' produces a step
         queue that starts at search_for_anomaly.
         """
+        # A completed POINT-LENS run: its workflow keeps renormalize right
+        # after the parallax fits (only the binary workflow defers it past
+        # the anomaly search).
         pl_completed = _make_noop_steps(
-            steps_through(EXPECTED_STEPS_BINARY, "refit_all")
+            steps_through(EXPECTED_STEPS_PL_RENORM, "refit_all")
         )
 
         pkl_path = os.path.join(self.tmp_path, "fake.pkl")

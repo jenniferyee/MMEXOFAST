@@ -578,6 +578,7 @@ class MMEXOFASTFitter:
         output_config=None,
         verbose: bool = False,
         log_file=None,
+        pool=None,
     ) -> None:
         # Mutually exclusive input validation
         if files is not None and datasets is not None:
@@ -622,6 +623,11 @@ class MMEXOFASTFitter:
         self.dry_run = dry_run
         self.stop_before = stop_before
         self.stop_after = stop_after
+        # Multiprocessing for the emcee-based fitters (MulensFitter's `pool`
+        # option): None/False = serial, True = one process per CPU, int = that
+        # many processes (use the int form on shared cluster nodes, where
+        # cpu_count() sees the whole node rather than the job's grant).
+        self.pool = pool
 
         # WorkflowStep tracking
         self.completed_steps: list[WorkflowStep] = []
@@ -1032,7 +1038,9 @@ class MMEXOFASTFitter:
 
         return [s for s in all_steps if (s.name, s.stage) not in completed_ids]
 
-    def _build_common_point_lens_steps(self) -> list[WorkflowStep]:
+    def _build_common_point_lens_steps(
+        self, include_renormalize: bool = True
+    ) -> list[WorkflowStep]:
         """
         Build the point-lens steps shared by both the point-lens and
         binary-lens workflows.
@@ -1050,7 +1058,7 @@ class MMEXOFASTFitter:
         steps.extend(self._build_static_fit_steps())
         steps.extend(self._build_parallax_steps())
 
-        if self.renormalize_errors:
+        if self.renormalize_errors and include_renormalize:
             steps.extend(self._build_renormalize_steps())
         return steps
 
@@ -1078,12 +1086,24 @@ class MMEXOFASTFitter:
         """
 
         if self._initial_entry_point != "search_for_anomaly":
-            steps = self._build_common_point_lens_steps()
+            # Renormalization is deferred until AFTER the anomaly search:
+            # its outlier rejection protects the anomaly window via
+            # intermediate_results.anomaly_lc_params, which does not exist
+            # yet at the common-steps position -- running it there flagged
+            # the planetary anomaly itself as bad data (the points survive
+            # into dataset.bad and the exozippy-init excluded_points).
+            steps = self._build_common_point_lens_steps(
+                include_renormalize=False
+            )
         else:
             steps: list[WorkflowStep] = []
 
-        # TODO: Update this builder to insert tha anomaly search steps before renormalize steps.
         steps.extend(self._build_anomaly_search_steps())
+        if (
+            self.renormalize_errors
+            and self._initial_entry_point != "search_for_anomaly"
+        ):
+            steps.extend(self._build_renormalize_steps())
         steps.extend(self._build_binary_fit_steps())
         if self.renormalize_errors:
             steps.extend(self._build_check_binary_renorm_steps())
@@ -1630,7 +1650,12 @@ class MMEXOFASTFitter:
         """
         params = self.intermediate_results.anomaly_lc_params
         if params is not None:
-            t_pl, dt = params.get("t_0"), params.get("dt")
+            # The anomaly epoch is 't_pl'; 't_0' in the same dict is the
+            # underlying point-lens peak. Reading t_0 here centered the
+            # protection window on the event peak and left the planetary
+            # anomaly itself exposed to outlier rejection.
+            t_pl = params.get("t_pl", params.get("t_0"))
+            dt = params.get("dt")
             if t_pl is not None and dt is not None:
                 t0, t1 = t_pl - dt, t_pl + dt
                 logger.info(
@@ -1689,8 +1714,102 @@ class MMEXOFASTFitter:
                 else 1.0
             )
 
+        def solve_fluxes(mag, flux, err, good):
+            """Chi2-minimizing (f_s, f_b) on the good points.
+
+            Weighted linear regression in flux space -- the same problem
+            ``event.fit_fluxes()`` solves for a single-source model --
+            honoring a fixed source or blend flux when the event was built
+            with one.
+            """
+            w = 1.0 / err[good] ** 2
+            a, f = mag[good], flux[good]
+            # MulensModel convention: a value of False means "fit this flux"
+            # (the dicts are populated with False per dataset), while a
+            # NUMBER -- including 0.0 -- means "fix it there". Identity
+            # comparison keeps a legitimate fix at 0.0 working.
+            fs_fix = event.fix_source_flux.get(dataset)
+            fb_fix = event.fix_blend_flux.get(dataset)
+            if fs_fix is False:
+                fs_fix = None
+            if fb_fix is False:
+                fb_fix = None
+            if fs_fix is not None and fb_fix is not None:
+                return float(fs_fix), float(fb_fix)
+            if fs_fix is not None:
+                return float(fs_fix), float(
+                    np.sum(w * (f - fs_fix * a)) / np.sum(w)
+                )
+            if fb_fix is not None:
+                return (
+                    float(np.sum(w * a * (f - fb_fix)) / np.sum(w * a**2)),
+                    float(fb_fix),
+                )
+            s_aa = np.sum(w * a**2)
+            s_a = np.sum(w * a)
+            s_1 = np.sum(w)
+            s_af = np.sum(w * a * f)
+            s_f = np.sum(w * f)
+            det = s_aa * s_1 - s_a**2
+            fs = (s_af * s_1 - s_f * s_a) / det
+            fb = (s_aa * s_f - s_a * s_af) / det
+            return float(fs), float(fb)
+
         def remove_outliers() -> None:
-            """Iteratively flag the worst outlier until none exceed max_sig."""
+            """Iteratively flag the worst outlier until none exceed max_sig.
+
+            Semantics are IDENTICAL to the original loop (one worst point
+            per iteration, ``errfac``/``max_sig`` re-derived after every
+            rejection -- the criterion is self-referential and can have
+            multiple fixed points, so batching rejections would change the
+            result). What changed is the cost: the reference model is FIXED
+            here (only the fluxes are refit; the nonlinear refit happens
+            once afterward, in ``refit_all``), so the model magnification
+            is computed ONCE and each iteration is a closed-form linear
+            flux solve -- instead of ``fit_fluxes``/``get_residuals``
+            recomputing the full (binary-lens) magnification for every
+            rejected point, which made dense light curves (e.g. Roman DC18
+            W149, 38k epochs, hundreds of rejections) take hours.
+            Multi-source models report per-source magnifications; the
+            closed-form solve below is single-source, so those fall back
+            to the original loop.
+            """
+            event.fit_fluxes()
+            mag = event.fits[i].get_data_magnification(bad=True)
+            if np.ndim(mag) != 1:
+                remove_outliers_slow()
+                return
+            flux, err = dataset.flux, dataset.err_flux
+            bad = dataset.bad.copy()
+            while True:
+                good = ~bad
+                dof = int(np.sum(good)) - n_params
+                if dof <= 0:
+                    break
+                max_sig = max(np.sqrt(2.0) * erfcinv(1.0 / dof), 3.0)
+                fs, fb = solve_fluxes(mag, flux, err, good)
+                res = flux - (fs * mag + fb)
+                clean = good & ~protected_mask
+                cdof = int(np.sum(clean)) - n_params
+                errfac = (
+                    float(
+                        np.sqrt(np.sum((res[clean] / err[clean]) ** 2) / cdof)
+                    )
+                    if cdof > 0
+                    else 1.0
+                )
+                sigma = np.abs(res / (err * errfac))
+                candidate = good & ~protected_mask
+                if not np.any(sigma[candidate] > max_sig):
+                    break
+                worst = np.where(candidate)[0][np.argmax(sigma[candidate])]
+                bad[worst] = True
+            if np.any(bad != dataset.bad):
+                dataset.bad = bad
+
+        def remove_outliers_slow() -> None:
+            """Original one-worst-point-per-iteration loop (multi-source
+            fallback; kept verbatim)."""
             bad_index: Any = -1
             while bad_index is not None:
                 event.fit_fluxes()
@@ -2174,6 +2293,7 @@ class MMEXOFASTFitter:
                 mag_methods_parameters=params.mag_methods_parameters,
                 model_config=self.model_config,
                 event_config=self.event_config,
+                pool=self.pool,
             )
             logger.debug(f"initial sigmas: {anomaly_fitter.sigmas}")
             msg = anomaly_fitter.run()
