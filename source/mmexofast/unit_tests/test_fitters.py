@@ -150,8 +150,12 @@ class TestAnomalyFitter(unittest.TestCase):
         )
         theta = 9 + np.arange(len(fitter.parameters_to_fit), dtype=int)
         # print(dict(zip(fitter.parameters_to_fit, theta)))
-        with self.assertRaises(AttributeError):
-            fitter.event = theta
+        # Assigning theta before initialize_event() lazily builds the event
+        # (a multiprocessing pool worker arrives with _event=None, since
+        # __getstate__ drops it; it must not raise).
+        assert fitter._event is None
+        fitter.event = theta
+        assert fitter._event is not None
 
         fitter.initialize_event()
         fitter.event = theta

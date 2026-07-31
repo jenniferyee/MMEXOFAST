@@ -9,6 +9,35 @@ import sfit_minimizer as sfit
 from .estimate_params import WidePlanetEnsembleInitializer
 from .mulens_object_config import EventConfig, ModelConfig
 
+# --------------------------------------------------------------------- #
+# Multiprocessing support for the emcee fitters.
+#
+# emcee's pool path pickles its log_prob_fn into the workers on EVERY
+# pool.map task chunk. With a bound method (self.ln_prob) that means
+# re-serializing the whole fitter -- datasets included -- twice per emcee
+# step, and each unpickled copy arrives with _event of None (see
+# __getstate__) and rebuilds its Event per chunk. In practice the parent
+# process saturates one CPU pickling while every worker idles, which is
+# SLOWER than no pool at all. The standard fix: ship the fitter to each
+# worker ONCE via the Pool initializer, and hand emcee a tiny module-level
+# function that closes over nothing -- only the theta vectors travel per
+# call. Each worker keeps its lazily-initialized Event for the whole run.
+# --------------------------------------------------------------------- #
+
+_POOL_FITTER = None
+
+
+def _pool_worker_init(fitter):
+    """Pool initializer: install the (once-pickled) fitter in this worker."""
+    global _POOL_FITTER
+    _POOL_FITTER = fitter
+
+
+def _pool_ln_prob(theta):
+    """Module-level ln_prob proxy (picklable by reference, unlike a bound
+    method); evaluates against the worker's resident fitter."""
+    return _POOL_FITTER.ln_prob(theta)
+
 
 class EmceeFitResults:
     """
@@ -777,9 +806,12 @@ class EmceeLCFitter(MulensFitter):
             conversion.
         """
         if self._event is None:
-            raise AttributeError(
-                "Event has not been created. Call initialize_event() first."
-            )
+            # Lazily (re)build rather than raise: __getstate__ drops _event
+            # (it cannot be pickled), so a multiprocessing pool worker --
+            # emcee pickles ln_prob's bound fitter into the workers -- arrives
+            # here with _event of None on its first likelihood call. Each
+            # worker builds its own Event once and reuses it afterward.
+            self.initialize_event()
         for parameter, value in zip(self.parameters_to_fit, theta):
             key = self.get_parameter_name(parameter)
             if key != parameter:  # log_ prefix
@@ -912,14 +944,35 @@ class EmceeLCFitter(MulensFitter):
             self.initialize_event()
 
         if self.pool:
-            ncpu = cpu_count()
-            print("{0} CPUs".format(ncpu))
+            # `pool` as an int caps the process count (essential on shared
+            # cluster nodes, where cpu_count() sees the whole node rather
+            # than the job's slot grant); any other truthy value keeps the
+            # historical one-process-per-CPU behavior. Note emcee's stretch
+            # move evaluates half the ensemble per batch, so more than
+            # n_walkers/2 processes cannot help.
+            n_proc = (
+                self.pool
+                if isinstance(self.pool, int)
+                and not isinstance(self.pool, bool)
+                else cpu_count()
+            )
+            n_proc = min(
+                n_proc, max(1, self.emcee_settings["n_walkers"] // 2)
+            )
+            print("{0} CPUs ({1} pool processes)".format(cpu_count(), n_proc))
             os.environ["OMP_NUM_THREADS"] = "1"
-            pool = Pool()
+            # initializer ships the fitter to each worker exactly once;
+            # _pool_ln_prob is what emcee pickles per call (a no-op by
+            # reference). See the module-level note above.
+            pool = Pool(
+                processes=n_proc,
+                initializer=_pool_worker_init,
+                initargs=(self,),
+            )
             self.sampler = emcee.EnsembleSampler(
                 self.emcee_settings["n_walkers"],
                 self.emcee_settings["n_dim"],
-                self.ln_prob,
+                _pool_ln_prob,
                 pool=pool,
             )
         else:
