@@ -546,6 +546,13 @@ class MMEXOFASTFitter:
 
     RENORM_THRESHOLD = 0.02
 
+    # Renormalization's outlier rejection compares the data to a point-lens
+    # reference model; points the model magnifies above this are protected
+    # from rejection, because there the true (binary, finite-source) light
+    # curve can deviate from the reference by far more than the ~3-sigma
+    # threshold at space-photometry precision. See _build_protected_mask.
+    PEAK_PROTECTION_MAG = 1.1
+
     # ------------------------------------------------------------------
     # Initialization
     # ------------------------------------------------------------------
@@ -1579,11 +1586,13 @@ class MMEXOFASTFitter:
         and ``_apply_error_renormalization``.  Rebuilds ``fix_blend_flux_map``
         and ``fix_source_flux_map`` after replacing dataset objects.
 
-        If ``self.intermediate_results.anomaly_lc_params`` is set and contains
-        ``'t_0'`` and ``'dt'`` keys, data points whose timestamps fall within
-        the window ``[t_0 - dt, t_0 + dt]`` are **protected from outlier
-        rejection**.  The anomaly signal should not be treated as a systematic
-        and removed.
+        Two regions are **protected from outlier rejection**: the anomaly
+        window ``[t_pl - dt, t_pl + dt]`` (when
+        ``self.intermediate_results.anomaly_lc_params`` is set), and every
+        point the reference model magnifies above ``PEAK_PROTECTION_MAG``.
+        Neither the anomaly signal nor the reference model's mismatch near
+        peak should be treated as a systematic and removed; see
+        :meth:`_build_protected_mask`.
         """
         event = self._build_renorm_event()
         new_datasets = []
@@ -1627,27 +1636,42 @@ class MMEXOFASTFitter:
         event.fit_fluxes()
         return event
 
-    def _build_protected_mask(self, dataset) -> np.ndarray:
+    def _build_protected_mask(self, dataset, event, index) -> np.ndarray:
         """
         Return a boolean mask of points that must survive outlier rejection.
 
-        Reads ``intermediate_results.anomaly_lc_params`` for ``t_0`` and
-        ``dt``; if either is absent the mask is all-False (no protection).
+        Two regions are protected, and the mask is their union:
 
-        Points inside the window ``[t_0 - dt, t_0 + dt]`` are protected
-        because the reference (point-lens) model cannot describe the planetary
-        anomaly, so those points would otherwise be the first to be flagged as
-        outliers.
+        * The anomaly window ``[t_pl - dt, t_pl + dt]`` from
+          ``intermediate_results.anomaly_lc_params`` (skipped if unset) --
+          the reference (point-lens) model cannot describe the planetary
+          anomaly, so those points would otherwise be the first to be
+          flagged as outliers.
+        * Every point where the reference model's magnification exceeds
+          ``PEAK_PROTECTION_MAG``. The reference is a point-lens model, and
+          wherever it magnifies appreciably the true (binary, finite-source)
+          light curve can deviate by far more than the rejection threshold
+          at space-photometry precision -- on DC18 event 128 the >3-sigma
+          mismatch extended to |t - t_0| ~ 15 d and rejection consumed the
+          entire peak. Protection follows the model rather than a fixed
+          time window, so it scales with each event.
 
         Parameters
         ----------
         dataset : MulensModel.MulensData
+        event : MulensModel.Event
+            Reference event, already flux-fitted.
+        index : int
+            Index of *dataset* within ``event.datasets``.
 
         Returns
         -------
         np.ndarray of bool
             Same length as ``dataset.time``.
         """
+        label = dataset.plot_properties["label"]
+        mask = np.zeros(len(dataset.time), dtype=bool)
+
         params = self.intermediate_results.anomaly_lc_params
         if params is not None:
             # The anomaly epoch is 't_pl'; 't_0' in the same dict is the
@@ -1666,11 +1690,26 @@ class MMEXOFASTFitter:
                 if n > 0:
                     logger.info(
                         "  %s: %d point(s) inside anomaly window are protected.",
-                        dataset.plot_properties["label"],
+                        label,
                         n,
                     )
-                return mask
-        return np.zeros(len(dataset.time), dtype=bool)
+
+        mag = np.asarray(event.fits[index].get_data_magnification(bad=True))
+        if mag.ndim > 1:
+            # Multi-source: protect where ANY source is magnified.
+            mag = mag.max(axis=0)
+        peak = mag > self.PEAK_PROTECTION_MAG
+        n_peak = int(np.sum(peak & dataset.good & ~mask))
+        if n_peak > 0:
+            logger.info(
+                "  %s: %d additional point(s) with model magnification > "
+                "%.2f are protected.",
+                label,
+                n_peak,
+                self.PEAK_PROTECTION_MAG,
+            )
+
+        return mask | peak
 
     def _process_single_dataset(
         self, i: int, event
@@ -1684,9 +1723,11 @@ class MMEXOFASTFitter:
         argument threading.  ``remove_outliers`` mutates ``dataset.bad`` in
         place and has no meaningful use in isolation.
 
-        The scatter estimate in ``compute_errfac`` is anchored to non-anomaly
-        good points only, preventing the planetary signal from inflating the
-        error bars of the whole dataset.
+        The scatter estimate in ``compute_errfac`` is anchored to
+        unprotected good points only (outside both the anomaly window and
+        the magnified peak), preventing the planetary signal and the
+        reference model's near-peak mismatch from inflating the error bars
+        of the whole dataset.
 
         Parameters
         ----------
@@ -1702,7 +1743,7 @@ class MMEXOFASTFitter:
         """
         dataset = event.datasets[i]
         n_params = len(event.model.parameters.as_dict())
-        protected_mask = self._build_protected_mask(dataset)
+        protected_mask = self._build_protected_mask(dataset, event, i)
 
         def compute_errfac(res: np.ndarray, err: np.ndarray) -> float:
             """Chi2-based scatter estimate using non-anomaly good points only."""
