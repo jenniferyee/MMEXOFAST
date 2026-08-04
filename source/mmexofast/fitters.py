@@ -399,9 +399,7 @@ class MulensFitter:
         Returns
         -------
         bool
-            True if the fit was successful, False otherwise. Returns None if no
-            fit has been run yet.
-
+            True if the fit was successful, False otherwise. 
         Notes
         -----
         The definition of "success" may vary between subclasses. For example,
@@ -411,10 +409,7 @@ class MulensFitter:
         if self.results is None:
             return False
         else:
-            if self.results.success is not None:
-                return self.results.success
-
-        return True
+            return True
 
     @property
     def parameters_to_fit(self):
