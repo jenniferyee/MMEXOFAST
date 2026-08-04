@@ -962,7 +962,7 @@ class MMEXOFASTFitter:
                 self._save_restart_state()
 
             # Lookahead uses the queue *after* any dynamic insertions
-            remaining = self.planned_steps[i + 1 :]
+            remaining = self.planned_steps[i + 1:]
             if self.stop_after is not None and self._matches_stop_point(
                 self.stop_after, step, mode="after", remaining_steps=remaining
             ):

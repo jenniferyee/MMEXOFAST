@@ -254,8 +254,8 @@ class MMEXOFASTFitResults(BaseFitResults):
             Columns: ``'parameter_names'``, ``'values'``, ``'sigmas'``.
         """
         parameters = list(self.parameters_to_fit)
-        values = list(self.results.x[0 : len(parameters)])
-        sigmas = list(self.results.sigmas[0 : len(parameters)])
+        values = list(self.results.x[0: len(parameters)])
+        sigmas = list(self.results.sigmas[0: len(parameters)])
 
         return pd.DataFrame(
             {

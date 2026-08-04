@@ -399,7 +399,7 @@ class MulensFitter:
         Returns
         -------
         bool
-            True if the fit was successful, False otherwise. 
+            True if the fit was successful, False otherwise.
         Notes
         -----
         The definition of "success" may vary between subclasses. For example,
@@ -877,7 +877,7 @@ class EmceeLCFitter(MulensFitter):
             chi2 = self.event.get_chi2()
             if "temperature" in self.emcee_settings:
                 chi2 /= self.emcee_settings["temperature"] ** 2
-        except:
+        except Exception:
             return -np.inf
         return -0.5 * chi2
 
