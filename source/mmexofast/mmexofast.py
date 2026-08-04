@@ -1494,32 +1494,51 @@ class MMEXOFASTFitter:
                     "A static PSPL fit must exist before fitting FSPL."
                 )
             initial_params = dict(pspl_record.params)
-            initial_params["rho"] = 1.5 * initial_params["u_0"]
-
+            initial_params["rho"] = 0.001 #1.5 * initial_params["u_0"]
+        self._set_magnification_methods_FSPL(initial_params=initial_params)  
         fitter = SFitFitter(
             initial_model_params=initial_params,
             datasets=self.datasets,
-            **self._get_fitter_kwargs(),
+            **self._get_fitter_kwargs(source_type=SourceType.FINITE),
         )
         fitter.run()
-        logger.info("Static FSPL: %s", fitter.best)
-        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
+        if fitter.success:
+            logger.info("Static FSPL: %s", fitter.best)
+            logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
-        key = FitKey(
-            lens_type=LensType.POINT,
-            source_type=SourceType.FINITE,
-            parallax_branch=ParallaxBranch.NONE,
-            lens_orb_motion=LensOrbMotion.NONE,
-        )
-        self.all_fit_results.set(
-            FitRecord.from_full_result(
-                model_key=key,
-                full_result=MMEXOFASTFitResults(fitter),
-                renorm_factors=self.renorm_factors,
-                fixed=False,
+            key = FitKey(
+                lens_type=LensType.POINT,
+                source_type=SourceType.FINITE,
+                parallax_branch=ParallaxBranch.NONE,
+                lens_orb_motion=LensOrbMotion.NONE,
             )
-        )
+            self.all_fit_results.set(
+                FitRecord.from_full_result(
+                    model_key=key,
+                    full_result=MMEXOFASTFitResults(fitter),
+                    renorm_factors=self.renorm_factors,
+                    fixed=False,
+                )
+            )
+        else:
+            logger.warning(
+                "Static FSPL fit failed: %s", fitter.get_diagnostic_str()
+            )
+            self.FSPL = False
 
+    def _set_magnification_methods_FSPL(self, initial_params=None):
+        """
+        Set the magnification methods for FSPL model.
+        """
+        if self.mag_methods is not None:
+            return
+        if initial_params is None:
+            self.mag_methods = "finite_source_uniform_Gould94"
+        else:
+            t_0 = initial_params["t_0"]
+            t_E = initial_params["t_E"]
+            self.mag_methods = [t_0-0.5*t_E, "finite_source_uniform_Gould94", t_0+0.5*t_E]
+            
     def fit_parallax(self, branch=None) -> None:
         """
         Fit a parallax model for the given branch.
