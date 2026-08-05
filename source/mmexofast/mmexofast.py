@@ -24,6 +24,7 @@ from scipy.special import erfcinv
 
 from .classifier import AnomalyClassifier
 from .estimate_params import (
+    ParameterEstimator, 
     AnomalyPropertyEstimator,
     BinaryLensParams,
     CloseLowerBinaryGridSearchEstimator,
@@ -400,6 +401,8 @@ class MMEXOFASTFitter:
     finite_source_point_lens : bool or ``u_0<float``
         If True, include FSPL fitting steps after PSPL.
         if e.g.``u_0<0.001`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.01.
+    source_type : str
+        ``'dwarf'`` or ``'giant'``. Default is ``'giant'``.  Used to set a initial value of rho for FSPL fitting.
     mag_methods : list, optional
         Magnification methods in MulensModel convention.
     vbbl_accuracy : float, optional
@@ -521,6 +524,7 @@ class MMEXOFASTFitter:
         "fit_type",
         "coords",
         "finite_source_point_lens",
+        "source_type",
         "mag_methods",
         "vbbl_accuracy",
         "limb_darkening_coeffs_u",
@@ -556,6 +560,7 @@ class MMEXOFASTFitter:
         datasets=None,
         files=None,
         coords=None,
+        source_type: str = "giant",
         fit_type: str = "point_lens",
         finite_source_point_lens: bool = False,
         mag_methods=None,
@@ -1495,7 +1500,7 @@ class MMEXOFASTFitter:
                     "A static PSPL fit must exist before fitting FSPL."
                 )
             initial_params = dict(pspl_record.params)
-            initial_params["rho"] = 0.001
+            initial_params["rho"] = ParameterEstimator(initial_params, limit=self.source_type).get_rho()
 
         if self._check_FSPL_condition(initial_params):
             self._set_magnification_methods_FSPL(initial_params=initial_params)
