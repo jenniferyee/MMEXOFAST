@@ -399,7 +399,7 @@ class EFSFitFunction(FlatSFitFunction):
             fs = self.theta[2 * i]
             fb = self.theta[2 * i + 1]
             mag = self.magnification[
-                self.data_indices[i] : self.data_indices[i + 1]
+                self.data_indices[i]:self.data_indices[i + 1]
             ]
             model_fluxes = fs * mag + fb
             if i == 0:

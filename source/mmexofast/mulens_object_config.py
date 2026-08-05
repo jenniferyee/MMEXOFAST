@@ -115,7 +115,10 @@ class ModelConfig:
         default_magnification_method : str, optional
         """
         if magnification_methods is not None:
-            model.set_magnification_methods(magnification_methods)
+            if isinstance(magnification_methods, str):
+                model.default_magnification_method = magnification_methods
+            else:
+                model.set_magnification_methods(magnification_methods)
         if magnification_methods_parameters is not None:
             # Copy the per-method dicts. MulensModel passes them straight
             # through to the magnification objects and injects a

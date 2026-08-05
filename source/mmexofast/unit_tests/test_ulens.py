@@ -25,38 +25,38 @@ class TestGRAVITYEvent(unittest.TestCase):
         self.coords = "05:07:42.72 24:47:56.4"  # RA, Dec
 
         # From Table 4
-        ## Inputs
+        # Inputs
         self.M_L = 0.495
         self.D_L = 0.429
         self.D_S = 0.692
         self.mu_L = [-28.89, 13.39]  # N, E, helio
         self.mu_S = [-6.42, -0.80]
-        ## Outputs
+        # Outputs
         self.mu_rel_hel = [-22.45, 14.18]
         self.mu_rel_geo = [-22.73, 9.83]
 
         # Table 1, w/Lens light
-        ## Inputs
+        # Inputs
         self.t_0 = 2458058.76
-        ## Outputs
+        # Outputs
         self.t_E = 27.89
         self.pi_E_vec = [-0.430, 0.186]  # N, E
         self.pi_E = 0.469
 
         # From Section 4.2
-        ## Outputs
+        # Outputs
         self.theta_E = 1.891
         self.v_earth_perp = [1.47, 23.29]  # km/s
 
         # From Section 4.3
-        ## Outputs
+        # Outputs
         self.pi_L = 2.332
 
         # From RP - r_source and rho are based also on Fukui et al. 2019
         # https://ui.adsabs.harvard.edu/abs/2019AJ....158..206F/abstract
-        ## Inputs
+        # Inputs
         self.r_source = 1.284
-        ## Outputs
+        # Outputs
         self.v_L_hel = [-58.75, 27.23]  # N, E
         self.v_S_hel = [-21.06, -2.624]
         self.rho = 4.567e-3
@@ -180,38 +180,38 @@ class TestStar(unittest.TestCase):
     def setUp(self):
         self.coords = "05:07:42.72 24:47:56.4"  # RA, Dec
         # From Table 4
-        ## Inputs
+        # Inputs
         self.M_L = 0.495
         self.D_L = 0.429
         self.D_S = 0.692
         self.mu_L = [-28.89, 13.39]  # N, E, helio
         self.mu_S = [-6.42, -0.80]
-        ## Outputs
+        # Outputs
         self.mu_rel_hel = [-22.45, 14.18]
         self.mu_rel_geo = [-22.73, 9.83]
 
         # Table 1, w/Lens light
-        ## Inputs
+        # Inputs
         self.t_0 = 2458058.76
-        ## Outputs
+        # Outputs
         self.t_E = 27.89
         self.pi_E_vec = [-0.430, 0.186]  # N, E
         self.pi_E = 0.469
 
         # From Section 4.2
-        ## Outputs
+        # Outputs
         self.theta_E = 1.891
         self.v_earth_perp = [1.47, 23.29]  # km/s
 
         # From Section 4.3
-        ## Outputs
+        # Outputs
         self.pi_L = 2.332
 
         # From RP - r_source and rho are based also on Fukui et al. 2019
         # https://ui.adsabs.harvard.edu/abs/2019AJ....158..206F/abstract
-        ## Inputs
+        # Inputs
         self.r_source = 1.284
-        ## Outputs
+        # Outputs
         self.v_L_hel = [-58.75, 27.23]  # N, E
         self.v_S_hel = [-21.06, -2.624]
         self.rho = 4.567e-3

@@ -392,6 +392,26 @@ class MulensFitter:
         self._initial_model_params = params_dict
 
     @property
+    def success(self):
+        """
+        Boolean indicating whether the fit was successful.
+
+        Returns
+        -------
+        bool
+            True if the fit was successful, False otherwise.
+        Notes
+        -----
+        The definition of "success" may vary between subclasses. For example,
+        ``SFitFitter`` considers a fit successful if ``sfit.minimize()`` returns
+        with ``result.success == True``.
+        """
+        if self.results is None:
+            return False
+        else:
+            return True
+
+    @property
     def parameters_to_fit(self):
         """
         List of model parameters to be fitted.
@@ -483,26 +503,35 @@ class SFitFitter(MulensFitter):
             initial_guess.append(event.fits[i].source_flux)
             initial_guess.append(event.fits[i].blend_flux)
 
-        result = sfit.minimize(
-            my_func,
-            x0=initial_guess,
-            tol=1e-5,
-            options={"step": "adaptive"},
-            verbose=self.verbose,
-        )
+        try:
+            result = sfit.minimize(
+                my_func,
+                x0=initial_guess,
+                tol=1e-5,
+                options={"step": "adaptive"},
+                verbose=self.verbose,
+            )
+        except Exception as e:
+            print(f"Error during sfit.minimize with adaptive step: {e}")
+            return
 
         if self.verbose:
             print(result)
 
         if not result.success:
-            result = sfit.minimize(
-                my_func,
-                x0=initial_guess,
-                tol=1e-5,
-                max_iter=10000,
-                options={"step": 0.001},
-                verbose=self.verbose,
-            )
+            try:
+                result = sfit.minimize(
+                    my_func,
+                    x0=initial_guess,
+                    tol=1e-5,
+                    max_iter=10000,
+                    options={"step": 0.001},
+                    verbose=self.verbose,
+                )
+            except Exception as e:
+                print(f"Error during sfit.minimize with fixed step: {e}")
+                return
+
             if self.verbose:
                 print(result)
 
@@ -848,7 +877,7 @@ class EmceeLCFitter(MulensFitter):
             chi2 = self.event.get_chi2()
             if "temperature" in self.emcee_settings:
                 chi2 /= self.emcee_settings["temperature"] ** 2
-        except:
+        except Exception:
             return -np.inf
         return -0.5 * chi2
 
