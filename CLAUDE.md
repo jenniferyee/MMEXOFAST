@@ -54,11 +54,13 @@ fitter = mmexo.MMEXOFASTFitter(
     files=['data.dat'],
     fit_type='point_lens',
     finite_source_point_lens=True,
+    source_type='giant',
 )
 results = fitter.fit()
 ```
 
 For point-lens finite-source fitting, use `finite_source_point_lens` (with `True` or a conditional `u_0` threshold) rather than the older `finite_source` name.
+Use `source_type='dwarf'` or `source_type='giant'` to control the initial rho seed used for FSPL fitting.
 
 ### Workflow stages
 
