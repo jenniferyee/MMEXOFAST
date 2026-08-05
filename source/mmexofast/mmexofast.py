@@ -399,7 +399,7 @@ class MMEXOFASTFitter:
         ``'point_lens'`` or ``'binary_lens'``.
     finite_source_point_lens : bool or ``u_0<float``
         If True, include FSPL fitting steps after PSPL.
-        if e.g.``u_0<0.01`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.01.
+        if e.g.``u_0<0.001`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.01.
     mag_methods : list, optional
         Magnification methods in MulensModel convention.
     vbbl_accuracy : float, optional

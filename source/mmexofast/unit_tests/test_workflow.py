@@ -319,6 +319,20 @@ class TestPointLensWorkflow(unittest.TestCase):
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, EXPECTED_STEPS)
 
+    def test_finite_source_point_lens_adds_fspl_step(self):
+        """
+        Enabling finite_source_point_lens adds the static FSPL step to the
+        point-lens workflow.
+        """
+        fitter = self._make_fitter(dry_run=True, finite_source_point_lens=True)
+        fitter.fit()
+
+        actual = [(step.name, step.stage) for step in fitter.planned_steps]
+        self.assertIn(
+            ("fit_static_finite_source_point_lens", "fit_static_point_lens"),
+            actual,
+        )
+
     # --- stop_before stage:step ---
 
     def test_stop_before_first_step_of_stage(self):

@@ -50,9 +50,15 @@ The public API is `MMEXOFASTFitter` (or the convenience wrapper `mmexofast.fit()
 
 ```python
 import mmexofast as mmexo
-fitter = mmexo.MMEXOFASTFitter(files=['data.dat'], fit_type='point_lens')
+fitter = mmexo.MMEXOFASTFitter(
+    files=['data.dat'],
+    fit_type='point_lens',
+    finite_source_point_lens=True,
+)
 results = fitter.fit()
 ```
+
+For point-lens finite-source fitting, use `finite_source_point_lens` (with `True` or a conditional `u_0` threshold) rather than the older `finite_source` name.
 
 ### Workflow stages
 
