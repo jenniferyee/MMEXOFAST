@@ -1148,7 +1148,8 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         named in stop_before, the workflow has gone past the intended
         stopping point; planned_steps is empty.
         """
-        # Pickle records fit_static_point_source_point_lens as done; stop_before points to fit_static_point_source_point_lens
+        # Pickle records fit_static_point_source_point_lens as done;
+        # stop_before points to fit_static_point_source_point_lens
         # → all steps admissible under the stop_before constraint are
         # already completed.
         completed = _make_noop_steps(
