@@ -2209,6 +2209,7 @@ class MMEXOFASTFitter:
         classifier = AnomalyClassifier()
         self.intermediate_results.anomaly_type = classifier.classify(self.residuals,
             self.intermediate_results.anomaly_lc_params)
+        logger.info(
             "Anomaly classified as anomaly_type = %s",
             self.intermediate_results.anomaly_type,
         )
