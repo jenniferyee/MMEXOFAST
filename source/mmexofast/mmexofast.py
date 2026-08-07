@@ -24,13 +24,15 @@ from scipy.special import erfcinv
 
 from .classifier import AnomalyClassifier
 from .estimate_params import (
-    ParameterEstimator, 
+    ParameterEstimator,
     AnomalyPropertyEstimator,
     BinaryLensParams,
-    CloseLowerBinaryGridSearchEstimator,
-    ClosePlanetGridSearchEstimator,
-    CloseUpperBinaryGridSearchEstimator,
-    WidePlanetGridSearchEstimator,
+    CloseLowerGridSearchEstimator,
+    CloseAxisGridSearchEstimator,
+    CloseUpperGridSearchEstimator,
+    WideLowerGridSearchEstimator,
+    WideAxisGridSearchEstimator,
+    WideUpperGridSearchEstimator,
     get_PSPL_params,
 )
 from .fit_types import (
@@ -2234,15 +2236,20 @@ class MMEXOFASTFitter:
         est_params = {}
         estimator_classes = None
         # TODO: Consider running all Estimators in all cases
-        if self.intermediate_results.anomaly_type == "wide":
+        if self.intermediate_results.anomaly_type == "bump":
             estimator_classes = [
-                WidePlanetGridSearchEstimator,
-                CloseUpperBinaryGridSearchEstimator,
-                CloseLowerBinaryGridSearchEstimator,
+                WideUpperGridSearchEstimator,
+                WideLowerGridSearchEstimator,
+                CloseUpperGridSearchEstimator,
+                CloseLowerGridSearchEstimator,
             ]
             # TODO: Implement checking for large vs. small rho solutions. Maybe add a second estimator?
-        elif self.intermediate_results.anomaly_type == "close":
-            estimator_classes = [ClosePlanetGridSearchEstimator]
+        elif self.intermediate_results.anomaly_type == "caustic_crossing":
+            estimator_classes = [
+                WideAxisParameterEstimator,
+            ]
+        elif self.intermediate_results.anomaly_type == "dip":
+            estimator_classes = [CloseAxisGridSearchEstimator]
         else:
             logger.info(
                 "Binary params estimate not implemented for %s",

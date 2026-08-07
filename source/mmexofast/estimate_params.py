@@ -254,7 +254,7 @@ def get_wide_params(params, limit="GG97"):
     :class:`BinaryLensParams`
         Wide binary lens model parameters.
     """
-    estimator = WidePlanetParameterEstimator(params, limit=limit)
+    estimator = WideAxisParameterEstimator(params, limit=limit)
 
     return estimator.binary_params
 
@@ -527,10 +527,11 @@ class ParameterEstimator:
         self._rho = value
 
 
-class WidePlanetParameterEstimator(ParameterEstimator):
+class WideAxisParameterEstimator(ParameterEstimator):
     """
-    Analytic parameter estimator for wide binary lens models.
-
+    Analytic parameter estimator for wide binary lens models with caustic crossings.
+    It assumes that source at t_pl is in the vicinity of the planetary caustic
+    on the axis between primary and secondary lens.
     Extends :class:`ParameterEstimator` to compute binary lens parameters
     appropriate for a wide planet (s > 1) from anomaly light curve properties.
     Implements the ``'GG97'`` limit for estimating rho in addition to the
@@ -699,11 +700,11 @@ class WidePlanetParameterEstimator(ParameterEstimator):
         return self._delta_A
 
 
-class WidePlanetGridSearchEstimator(WidePlanetParameterEstimator):
+class WideAxisGridSearchEstimator(WideAxisParameterEstimator):
     """
-    Estimates wide planet binary lens parameters by performing a chi2 grid
+    Estimates wide caustic crossing binary lens parameters by performing a chi2 grid
     search centered on the analytic parameter estimates from
-    WidePlanetParameterEstimator.
+    WideCausticCrossingParameterEstimator.
 
     The grid spans alpha, s, log_q, and log_rho. The best-fit parameters
     are identified by minimizing chi2 over the grid.
@@ -1921,7 +1922,7 @@ class WidePlanetEnsembleInitializer:
             ax.minorticks_on()
 
 
-class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
+class CloseUpperParameterEstimator(WideAxisParameterEstimator):
     """
     Analytic parameter estimator for close binary lens models (upper caustic).
 
@@ -1929,7 +1930,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
     following Mroz (2026), with the center-of-magnification to
     center-of-mass transformation of Skowron et al. (2011).
 
-    Extends :class:`WidePlanetParameterEstimator` to compute binary lens
+    Extends :class:`WideAxisParameterEstimator` to compute binary lens
     parameters appropriate for a close binary (s < 1). The binary lens
     separation uses the close-topology solution, and ``alpha`` is computed
     using the upper caustic geometry.
@@ -2062,17 +2063,21 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             if self._trajectory_1L is None:
                 self.setup_trajectory_of_single_lens()
 
-            # from center of magnification to center of mass,
-            # A.18 in Skowron et al. (2011)
-            shift = (1.0 + 2.0 * self.q) / (1.0 + self.q)
-            # from center of light to cusp
             distance = -np.sqrt(
                 self._trajectory_1L.x[0] ** 2 + self._trajectory_1L.y[0] ** 2
             )
-            p = 0.5 * distance / shift
+            p = 0.5 * distance / self.shift
             self._s = p + np.sqrt(p**2 + 1.0)
 
         return self._s
+
+    @property
+    def shift(self):
+        """
+        Center-of-magnification to center-of-mass shift factor.
+        A.18 in Skowron et al. (2011)
+        """
+        return (1.0 + 2.0 * self.q) / (1.0 + self.q)
 
     @property
     def q(self):
@@ -2116,10 +2121,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
             Angle in radians.
         """
         if self._mu is None:
-            self._mu = np.arctan2(
-                self.eta_not,
-                (self.s - 1 / self.s) * (1.0 + 2.0 * self.q) / (1.0 + self.q),
-            )
+            self._mu = np.arctan2(self.eta_not, (self.s - 1 / self.s) * self.shift)
 
         return self._mu
 
@@ -2168,7 +2170,7 @@ class CloseUpperBinaryParameterEstimator(WidePlanetParameterEstimator):
         return self._alpha
 
 
-class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
+class CloseLowerParameterEstimator(CloseUpperParameterEstimator):
     """
     Analytic parameter estimator for close binary lens models (lower caustic).
 
@@ -2197,9 +2199,27 @@ class CloseLowerBinaryParameterEstimator(CloseUpperBinaryParameterEstimator):
 
         return self._alpha
 
+class WideUpperParameterEstimator(CloseUpperParameterEstimator):
+    """Analytic parameter estimator for wide binary lens models (upper cusp approach)."""
+    @property
+    def shift(self):
+        """
+        Opposite shift for wide binary lens models.
+        """
+        return 1/(1.+self.q)
 
-class CloseUpperBinaryGridSearchEstimator(
-    WidePlanetGridSearchEstimator, CloseUpperBinaryParameterEstimator
+class WideLowerParameterEstimator(CloseLowerParameterEstimator):
+    """Analytic parameter estimator for wide binary lens models (lower cusp approach)."""
+    @property
+    def shift(self):
+        """
+        Opposite shift for wide binary lens models.
+        """
+        return 1/(1.+self.q)
+    
+
+class CloseUpperGridSearchEstimator(
+    WideAxisGridSearchEstimator, CloseUpperParameterEstimator
 ):
     """
     Grid search estimator for close binary lens models (upper caustic).
@@ -2212,8 +2232,8 @@ class CloseUpperBinaryGridSearchEstimator(
     pass
 
 
-class CloseLowerBinaryGridSearchEstimator(
-    WidePlanetGridSearchEstimator, CloseLowerBinaryParameterEstimator
+class CloseLowerGridSearchEstimator(
+    WideAxisGridSearchEstimator, CloseLowerParameterEstimator
 ):
     """
     Grid search estimator for close binary lens models (lower caustic).
@@ -2221,6 +2241,32 @@ class CloseLowerBinaryGridSearchEstimator(
     Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
     Nelder-Mead refinement) with :class:`CloseLowerBinaryParameterEstimator`
     (close-topology analytic parameter estimates and lower caustic ``alpha``).
+    """
+
+    pass
+
+class WideUpperGridSearchEstimator(
+    WideAxisGridSearchEstimator, WideUpperParameterEstimator
+):
+    """
+    Grid search estimator for wide binary lens models (upper cusp approach).
+
+    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`WideUpperParameterEstimator`
+    (wide-topology analytic parameter estimates and upper cusp ``alpha``).
+    """
+
+    pass
+
+class WideLowerGridSearchEstimator(
+    WideAxisGridSearchEstimator, WideLowerParameterEstimator
+):
+    """
+    Grid search estimator for wide binary lens models (lower cusp approach).
+
+    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`WideLowerParameterEstimator`
+    (wide-topology analytic parameter estimates and lower cusp ``alpha``).
     """
 
     pass
@@ -2250,17 +2296,17 @@ def get_close_params(params, q=None, rho=None):
         lens1, lens2 : *tuple of BinaryLensParams*
             Two instances of BinaryLensParams representing close model parameters.
     """
-    estimator_upper = CloseUpperBinaryParameterEstimator(params=params, q=q)
-    estimator_lower = CloseLowerBinaryParameterEstimator(params=params, q=q)
+    estimator_upper = CloseUpperParameterEstimator(params=params, q=q)
+    estimator_lower = CloseLowerParameterEstimator(params=params, q=q)
 
     return estimator_upper.binary_params, estimator_lower.binary_params
 
 
-class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
+class CloseAxisParameterEstimator(WideAxisParameterEstimator):
     """
     Analytic parameter estimator for close planet models.
 
-    Extends :class:`WidePlanetParameterEstimator` to compute binary lens
+    Extends :class:`WideAxisParameterEstimator` to compute binary lens
     parameters appropriate for a close planet (s < 1), based on matching
     the dip in the light curve to the center of the demagnified region
     (mid-point between the planetary caustics). ``q`` is estimated from
@@ -2338,14 +2384,14 @@ class ClosePlanetParameterEstimator(WidePlanetParameterEstimator):
         return self._alpha
 
 
-class ClosePlanetGridSearchEstimator(
-    WidePlanetGridSearchEstimator, ClosePlanetParameterEstimator
+class CloseAxisGridSearchEstimator(
+    WideAxisGridSearchEstimator, CloseAxisParameterEstimator
 ):
     """
     Grid search estimator for close planet models.
 
-    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
-    Nelder-Mead refinement) with :class:`ClosePlanetParameterEstimator`
+    Combines :class:`WideAxisGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`CloseAxisParameterEstimator`
     (close-topology analytic parameter estimates).
     """
 
@@ -2358,7 +2404,7 @@ class ClosePlanetGridSearchEstimator(
         Otherwise, constructs a uniform grid of ``n_s=7`` points centered
         on the analytic ``s`` estimate with step size ``d_s=0.05 * s``,
         then filters to only include values less than 1. The wider default
-        grid (compared to :class:`WidePlanetGridSearchEstimator`) accounts
+        grid (compared to :class:`WideAxisGridSearchEstimator`) accounts
         for the broader range of possible s values in non-caustic-crossing
         close planet geometries.
 
