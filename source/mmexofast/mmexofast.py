@@ -2207,13 +2207,20 @@ class MMEXOFASTFitter:
         ``self.intermediate_results.anomaly_type``.
         """
         classifier = AnomalyClassifier()
-        self.intermediate_results.anomaly_type = classifier.classify(
-            self.intermediate_results.anomaly_lc_params
-        )
-        logger.info(
+        self.intermediate_results.anomaly_type = classifier.classify(self.residuals,
+            self.intermediate_results.anomaly_lc_params)
             "Anomaly classified as anomaly_type = %s",
             self.intermediate_results.anomaly_type,
         )
+        if self._output_config is not None and self._output_config.save_plots:
+            fig = classifier.plot_bell_fits()
+            fig.savefig(self._output_config.plot_path("anomaly_classifier_fits"))
+            fig.show()
+            plt.close(fig)
+            logger.info(
+                "Saved anomaly classification fits plot to %s.",
+                self._output_config.plot_path("anomaly_classifier_fits"),
+            )
 
     def estimate_binary_lens_parameters(self) -> None:
         """

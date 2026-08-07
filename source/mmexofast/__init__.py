@@ -8,6 +8,7 @@ except ImportError:
 
 # Import classes
 from mmexofast.classifier import AnomalyClassifier
+from mmexofast.classifier import BellTemplateFitter
 
 # Re-exported so `mmexofast.DATA_PATH` keeps working; defined in config.py
 # rather than duplicated here. DATA_PATH is the packaged data and is always
@@ -50,6 +51,7 @@ __all__ = [
     "OutputConfig",
     "fit",
     "AnomalyClassifier",
+    "BellTemplateFitter",
     "fetch_dc18_light_curves",
     "MODULE_PATH",
     "PACKAGE_DATA_PATH",
