@@ -704,7 +704,7 @@ class WideAxisGridSearchEstimator(WideAxisParameterEstimator):
     """
     Estimates wide caustic crossing binary lens parameters by performing a chi2 grid
     search centered on the analytic parameter estimates from
-    WideCausticCrossingParameterEstimator.
+    WideAxisParameterEstimator.
 
     The grid spans alpha, s, log_q, and log_rho. The best-fit parameters
     are identified by minimizing chi2 over the grid.
