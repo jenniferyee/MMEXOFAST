@@ -8,7 +8,7 @@ except ImportError:
 
 # Import classes
 from mmexofast.classifier import AnomalyClassifier
-
+from mmexofast.fitters import BellTemplateFitter
 # Re-exported so `mmexofast.DATA_PATH` keeps working; defined in config.py
 # rather than duplicated here. DATA_PATH is the packaged data and is always
 # present; SAMPLE_DATA_PATH is None for an installed package.

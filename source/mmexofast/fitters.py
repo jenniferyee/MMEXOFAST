@@ -5,6 +5,8 @@ import emcee
 import MulensModel
 import numpy as np
 import sfit_minimizer as sfit
+from scipy.optimize import curve_fit
+import matplotlib.pyplot as plt
 
 from .estimate_params import WidePlanetEnsembleInitializer
 from .mulens_object_config import EventConfig, ModelConfig
@@ -1489,6 +1491,7 @@ class BellTemplateFitter:
         self.fit_centers = bool(fit_centers)
         self.t_pl = float(lc_parameters.get("t_pl", None))
         self.best = None
+        self._fit_parameters = self._get_fit_parameters()
 
     def _bell_centers(self, t_pl, dt):
         if self.n_bells == 1:
@@ -1550,8 +1553,8 @@ class BellTemplateFitter:
         """Set initial guess for the fit parameters based on the residuals and lightcurve parameters."""
         centers = self._bell_centers(t_pl, dt_0)
         baseline = 0.0
-        amplitudes = [float(self._flux[np.argmin(np.abs(self._time - center))] - baseline) for center in centers]
-        width = max(dt_0 / 4.0, np.median(np.diff(self._time)) if len(self._time) > 1 else dt_0)
+        amplitudes = [max(0.001, float(self._flux[np.argmin(np.abs(self._time - center))] - baseline)) for center in centers]
+        width = max(dt_0 / self.n_bells/ self.n_bells, np.median(np.diff(self._time)) if len(self._time) > 1 else dt_0)
         return centers, amplitudes, width, baseline
 
     def _set_initial_guess(self, amplitudes, centers, width, baseline, dt_0):
@@ -1560,6 +1563,7 @@ class BellTemplateFitter:
         if self.fit_centers:
             p0 += [float(value) for value in centers]
         p0 += [width, baseline, dt_0]
+        # print(f"Initial guess: {p0}")
         return p0
 
     def _set_bounds(self, t_pl, dt_0):
@@ -1570,12 +1574,15 @@ class BellTemplateFitter:
 
         if self.fit_centers:
             center_low, center_high = self._center_bounds(t_pl, dt_0)
-            lower_bounds += [float(value) for value in center_low]
-            upper_bounds += [float(value) for value in center_high]
-
-        lower_bounds += [1.0e-6, -np.inf, 0.5 * dt_0]
-        upper_bounds += [dt_0 / self.n_bells/self.n_bells, np.inf, 5.0 * dt_0]
+            lower_bounds += [float(value) - 1.0e-6 for value in center_low]
+            upper_bounds += [float(value) + 1.0e-6 for value in center_high]
+            lower_bounds += [1.0e-6, -np.inf, 0.5 * dt_0]
+            upper_bounds += [dt_0 / 2, np.inf, 5.0 * dt_0]
+        else:
+            lower_bounds += [1.0e-6, -np.inf, 0.5 * dt_0]
+            upper_bounds += [dt_0 / self.n_bells/self.n_bells, np.inf, 5.0 * dt_0]
         bounds = (lower_bounds, upper_bounds)
+        # print(f"Bounds: {bounds}")
         return bounds
 
     def _set_results(self, popt, pcov, centers, model_flux):
@@ -1601,6 +1608,21 @@ class BellTemplateFitter:
             self.best[f"t_{bell_index}"] = float(center)
             self.best[f"amp_{bell_index}"] = float(popt[bell_index - 1])
 
+    def _check_bounds(self, p0, bounds):
+        """Check if the initial guess is within the bounds."""
+        lower_bounds, upper_bounds = bounds
+        for i, (param, low, high) in enumerate(zip(p0, lower_bounds, upper_bounds)):
+            if not (low <= param <= high):
+                raise ValueError(f"Initial guess for anomaly classifier parameter {self._fit_parameters[i]} ({param}) is out of bounds ({low}, {high}).")
+
+    def _get_fit_parameters(self):
+        """Get the names of the fit parameters based on the number of bells and whether centers are fitted."""
+        fit_parameters = ["amplitude_" + str(i + 1) for i in range(self.n_bells)]
+        if self.fit_centers:
+            fit_parameters += [f"t_{i + 1}" for i in range(self.n_bells)]
+        fit_parameters += ["width", "offset", "dt"]
+        return fit_parameters
+
     def run(self):
         """Run the fit and store the best-fit parameters."""
         time, flux, err = self._stack_pspl_residuals()
@@ -1610,7 +1632,7 @@ class BellTemplateFitter:
         centers, amplitudes, width, baseline = self._set_shape_parameters(t_pl, dt_0)
         p0 = self._set_initial_guess(amplitudes, centers, width, baseline, dt_0)
         bounds = self._set_bounds(t_pl, dt_0)
-
+        self._check_bounds(p0, bounds)
         # print(f"Initial guess: {p0}")
         # print(f"Bounds: {bounds}")
 

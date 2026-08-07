@@ -54,7 +54,7 @@ class AnomalyClassifier(object):
         Returns
         -------
         str
-            One of 'bump', 'caustic_crossing', 'high_mag'
+            One of 'bump', 'dip', 'caustic_crossing', 'high_mag'
         """
 
         self.lc_parameters = lc_parameters
@@ -85,4 +85,4 @@ class AnomalyClassifier(object):
                 return "high_mag"
 
         if lc_parameters["dmag"] > 0:
-            return "close"
+            return "dip"
