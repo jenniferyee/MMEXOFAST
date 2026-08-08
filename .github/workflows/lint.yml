@@ -30,17 +30,3 @@ jobs:
 
       - name: ruff format
         run: uvx ruff@0.16.0 format --check --diff .
-
-  flake8:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - run: pip install flake8
-
-      - run: flake8 ./source/mmexofast
