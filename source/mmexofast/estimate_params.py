@@ -2201,6 +2201,30 @@ class CloseLowerParameterEstimator(CloseUpperParameterEstimator):
 class WideUpperParameterEstimator(CloseUpperParameterEstimator):
     """Analytic parameter estimator for wide binary lens models (upper cusp approach)."""
     @property
+    def s(self):
+        """
+        Binary lens separation in Einstein radius units.
+
+        Computed from the single-lens model trajectory at ``t_pl``.
+        This is the close-topology solution (s < 1).
+
+        Returns
+        -------
+        float
+        """
+        if self._s is None:
+            if self._trajectory_1L is None:
+                self.setup_trajectory_of_single_lens()
+
+            distance = np.sqrt(
+                self._trajectory_1L.x[0] ** 2 + self._trajectory_1L.y[0] ** 2
+            )
+            p = 0.5 * distance / self.shift
+            self._s = p + np.sqrt(p**2 + 1.0)
+
+        return self._s
+
+    @property
     def shift(self):
         """
         Opposite shift for wide binary lens models.
@@ -2209,6 +2233,30 @@ class WideUpperParameterEstimator(CloseUpperParameterEstimator):
 
 class WideLowerParameterEstimator(CloseLowerParameterEstimator):
     """Analytic parameter estimator for wide binary lens models (lower cusp approach)."""
+    @property
+    def s(self):
+        """
+        Binary lens separation in Einstein radius units.
+
+        Computed from the single-lens model trajectory at ``t_pl``.
+        This is the close-topology solution (s < 1).
+
+        Returns
+        -------
+        float
+        """
+        if self._s is None:
+            if self._trajectory_1L is None:
+                self.setup_trajectory_of_single_lens()
+
+            distance = np.sqrt(
+                self._trajectory_1L.x[0] ** 2 + self._trajectory_1L.y[0] ** 2
+            )
+            p = 0.5 * distance / self.shift
+            self._s = p + np.sqrt(p**2 + 1.0)
+
+        return self._s
+
     @property
     def shift(self):
         """
