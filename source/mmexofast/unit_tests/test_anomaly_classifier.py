@@ -3,12 +3,11 @@ import unittest
 import matplotlib
 
 matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 import MulensModel
 import numpy as np
-import matplotlib.pyplot as plt
 
-from mmexofast import AnomalyClassifier
-from mmexofast import BellTemplateFitter
+from mmexofast import AnomalyClassifier, BellTemplateFitter
 
 
 class TestAnomalyClassifier(unittest.TestCase):
@@ -71,6 +70,29 @@ class TestAnomalyClassifier(unittest.TestCase):
 
         result = self.classifier.classify(residuals, hm_params)
         assert result == "high_mag"
+
+    def test_caustic_crossing(self):
+        params = {
+            "t_0": 2453582.7281740606,
+            "u_0": 0.2,
+            "t_E": 11.106795114521415,
+            "dmag": -0.2,
+            "dt": 1.4,
+            "t_pl": 2453592.85,
+        }
+        time = np.linspace(params["t_pl"] - 4.0 * params["dt"], params["t_pl"] + 4.0 * params["dt"], 400)
+        width = 0.3
+        amp_1 = 0.8
+        amp_2 = 0.6
+        flux = (
+            amp_1 * np.exp(-0.5 * ((time - (params["t_pl"] - 0.5 * params["dt"])) / width) ** 2)
+            + amp_2 * np.exp(-0.5 * ((time - (params["t_pl"] + 0.5 * params["dt"])) / width) ** 2)
+        )
+        err = np.full_like(time, 0.01)
+        residuals = MulensModel.MulensData([time, flux, err], phot_fmt="flux")
+
+        result = self.classifier.classify(residuals, params)
+        assert result == "caustic_crossing"
 
 
 class TestTwoBellTemplateFitter(unittest.TestCase):

@@ -8,11 +8,11 @@ from mmexofast.fitters import BellTemplateFitter
 
 class AnomalyClassifier(object):
     """
-    Classifies a microlensing event anomaly as 'close', 'wide', or 'high_mag'.
+    Classify a microlensing anomaly into one of the supported labels.
 
-    Uses lightcurve and anomaly parameters from
-    AnomalyPropertyEstimator.get_anomaly_lc_parameters() to determine
-    the classification of the event.
+    The classifier returns one of ``'bump'``, ``'dip'``,
+    ``'caustic_crossing'``, or ``'high_mag'`` based on the anomaly light
+    curve and parameters.
     """
 
     def __init__(self):
