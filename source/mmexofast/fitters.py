@@ -402,9 +402,9 @@ class MulensFitter:
             True if the fit was successful, False otherwise.
         Notes
         -----
-        The definition of "success" may vary between subclasses. For example,
-        ``SFitFitter`` considers a fit successful if ``sfit.minimize()`` returns
-        with ``result.success == True``.
+        The definition of "success" may vary between subclasses.
+        ``SFitFitter`` considers a fit successful if
+        ``sfit.minimize()`` returns not None.
         """
         if self.results is None:
             return False

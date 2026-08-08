@@ -400,7 +400,7 @@ class MMEXOFASTFitter:
         ``'point_lens'`` or ``'binary_lens'``.
     finite_source_point_lens : bool or ``u_0<float``
         If True, include FSPL fitting steps after PSPL.
-        if e.g.``u_0<0.001`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.01.
+        if e.g.``u_0<0.001`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.001.
     source_type : str
         ``'dwarf'`` or ``'giant'``. Default is ``'giant'``.  Used to set a initial value of rho for FSPL fitting.
     mag_methods : list, optional
@@ -700,10 +700,51 @@ class MMEXOFASTFitter:
                 self._initial_entry_point = (
                     self._infer_entry_point_from_initial_results()
                 )
-
+        self.finite_source_point_lens = self._parse_finite_source_point_lens(finite_source_point_lens)
     # ------------------------------------------------------------------
     # Initialization helpers
     # ------------------------------------------------------------------
+
+    def _parse_finite_source_point_lens(self, value):
+        """
+        Parse the finite_source_point_lens argument.
+
+        Parameters
+        ----------
+        value : bool or float
+            If True, include FSPL fitting steps after PSPL.
+            If float, include FSPL only if fitted u_0 from PSPL is less than this value.
+            if str, must be in the format 'parameter_name < value' or 'parameter_name > value',
+            where parameter_name is one of 'u_0' or 't_E'.
+
+        Returns
+        -------
+        bool or float
+            Parsed value.
+        """
+        allowed_parameters = ['u_0', 't_E']
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, (int, float)):
+            if value < 0:
+                raise ValueError("finite_source_point_lens must be non-negative.")
+
+            return ["u_0", np.less, value]
+        elif isinstance(value, str):
+            if len(value.split('<')) == 3:
+                parts = value.split('<')
+                function = np.less
+            elif len(value.split('>')) == 3:
+                parts = value.split('>')
+                function = np.greater
+            else:
+                raise ValueError("finite_source_point_lens string must be in the format" +
+                                 " 'parameter_name < value' or 'parameter_name > value'.")
+            if parts[0].strip() not in allowed_parameters:
+                raise ValueError(f"finite_source_point_lens parameter name must be one of {allowed_parameters}.")
+            return [parts[0].strip(), function, float(parts[2].strip())]
+        else:
+            raise TypeError("finite_source_point_lens must be a bool or a non-negative float.")
 
     def _load_restart_data(self, restart_file) -> tuple[dict, dict]:
         """
@@ -1448,7 +1489,7 @@ class MMEXOFASTFitter:
             **self._get_fitter_kwargs(source_type=SourceType.POINT),
         )
         fitter.run()
-        
+
         if fitter.success:
             logger.info("Static PSPL: %s", fitter.best)
             logger.info("    sigmas:  %s", list(fitter.results.sigmas))
@@ -1480,10 +1521,7 @@ class MMEXOFASTFitter:
         ----------
         initial_params : dict, optional
             Starting parameter values.  If None, seeds from the PSPL
-            result in ``self.all_fit_results`` with
-            ``rho = 0.001.
-
-        Notes
+            result in ``self.all_fit_results`` with ``rho = 0.05`` (giant source)
         -----
         Stores the resulting ``FitRecord`` in ``self.all_fit_results``.
         Requires a static PSPL result to already exist.
@@ -1559,21 +1597,23 @@ class MMEXOFASTFitter:
         """
         if isinstance(self.finite_source_point_lens, bool):
             return self.finite_source_point_lens
-        elif isinstance(self.finite_source_point_lens, str):
-            u_0 = initial_params["u_0"]
-            limit = float(self.finite_source_point_lens.split("<")[-1])
-            if u_0 < limit:
+        elif isinstance(self.finite_source_point_lens, list):
+            param_name = self.finite_source_point_lens[0]
+            function = self.finite_source_point_lens[1]
+            limit = self.finite_source_point_lens[2]
+            value = initial_params[param_name]
+            if function(value, limit):
                 logger.info(
-                    "FSPL condition satisfied (u_0=%.4f < %s); enabling FSPL fit.",
-                    u_0,
-                    limit)
+                    "FSPL condition satisfied (%s=%.4f %s %s); enabling FSPL fit.",
+                    param_name, value, function.__name__, limit)
                 return True
             else:
                 self.finite_source_point_lens = False
                 return False
         else:
             raise ValueError(
-                "FSPL parameter must be a boolean or a string of the form 'u_0<value'."
+                "FSPL parameter must be a boolean or a string of the form 'u_0<value', 'u_0>value'," +
+                " 't_E<value', or 't_E>value'."
             )
 
     def fit_parallax(self, branch=None) -> None:
