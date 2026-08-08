@@ -8,7 +8,7 @@ except ImportError:
 
 # Import classes
 from mmexofast.classifier import AnomalyClassifier
-from mmexofast.fitters import BellTemplateFitter
+
 # Re-exported so `mmexofast.DATA_PATH` keeps working; defined in config.py
 # rather than duplicated here. DATA_PATH is the packaged data and is always
 # present; SAMPLE_DATA_PATH is None for an installed package.
@@ -19,6 +19,7 @@ from mmexofast.config import (
     SAMPLE_DATA_PATH,
 )
 from mmexofast.dc18 import fetch_light_curves as fetch_dc18_light_curves
+from mmexofast.fitters import BellTemplateFitter
 from mmexofast.gridsearches import (
     AnomalyFinderGridSearch,
     EventFinderGridSearch,
