@@ -24,14 +24,15 @@ from scipy.special import erfcinv
 
 from .classifier import AnomalyClassifier
 from .estimate_params import (
-    ParameterEstimator,
     AnomalyPropertyEstimator,
     BinaryLensParams,
-    CloseLowerGridSearchEstimator,
     CloseAxisGridSearchEstimator,
+    CloseLowerGridSearchEstimator,
     CloseUpperGridSearchEstimator,
-    WideLowerGridSearchEstimator,
+    ParameterEstimator,
     WideAxisGridSearchEstimator,
+    WideAxisParameterEstimator,
+    WideLowerGridSearchEstimator,
     WideUpperGridSearchEstimator,
     get_PSPL_params,
 )

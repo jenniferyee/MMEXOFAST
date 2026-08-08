@@ -1,8 +1,10 @@
-import numpy as np
-import MulensModel
 import matplotlib.pyplot as plt
+import MulensModel
+import numpy as np
 from scipy.optimize import curve_fit
+
 from mmexofast.fitters import BellTemplateFitter
+
 
 class AnomalyClassifier(object):
     """
@@ -63,13 +65,13 @@ class AnomalyClassifier(object):
         if lc_parameters["dmag"] < 0:
             self._template_fit1 = BellTemplateFitter(residuals, lc_parameters, n_bells=1)
             self._template_fit1.run()
-            print(f"{1}-bell template fit results: {self._template_fit1.best['chi2']}")
+            print(f"1-bell template fit results: {self._template_fit1.best['chi2']}")
             # print(f"best: {self._template_fit1.best}")
 
             self._template_fit2 = BellTemplateFitter(self.residuals, self.lc_parameters, n_bells=2)
             self._template_fit2.run()
-            print(f"{2}-bell template fit results: {self._template_fit2.best['chi2']}")
-            # print(f"best: {self._template_fit2.best}")
+            print(f"2-bell template fit results: {self._template_fit2.best['chi2']}")
+                    # print(f"best: {self._template_fit2.best}")
 
 
         if np.abs(lc_parameters["u_0"]) < 0.01:

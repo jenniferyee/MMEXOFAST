@@ -2,11 +2,11 @@ import os
 from multiprocessing import Pool, cpu_count
 
 import emcee
+import matplotlib.pyplot as plt
 import MulensModel
 import numpy as np
 import sfit_minimizer as sfit
 from scipy.optimize import curve_fit
-import matplotlib.pyplot as plt
 
 from .estimate_params import WidePlanetEnsembleInitializer
 from .mulens_object_config import EventConfig, ModelConfig
@@ -1617,7 +1617,7 @@ class BellTemplateFitter:
 
     def _get_fit_parameters(self):
         """Get the names of the fit parameters based on the number of bells and whether centers are fitted."""
-        fit_parameters = ["amplitude_" + str(i + 1) for i in range(self.n_bells)]
+        fit_parameters = [f"amplitude_{str(i + 1)}" for i in range(self.n_bells)]
         if self.fit_centers:
             fit_parameters += [f"t_{i + 1}" for i in range(self.n_bells)]
         fit_parameters += ["width", "offset", "dt"]

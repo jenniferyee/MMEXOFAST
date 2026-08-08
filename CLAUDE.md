@@ -102,7 +102,7 @@ Human-readable labels like `"PSPL static"`, `"FSPL par u0+"`, `"2L1S Wide static
 
 ### Parameter estimation (`estimate_params.py`)
 
-After the anomaly grid search, `AnomalyClassifier` (`classifier.py`) classifies the anomaly as `'close'`, `'wide'`, or `'high_mag'`. Based on the classification, one or more estimator classes (`WidePlanetGridSearchEstimator`, `ClosePlanetGridSearchEstimator`, etc.) seed initial binary-lens parameters for emcee.
+After the anomaly grid search, `AnomalyClassifier` (`classifier.py`) classifies the anomaly as `'dip'`,  `'bump'`, `'caustic_crossing'`, or `'high_mag'`. Based on the classification, one or more estimator classes (`WideAxisGridSearchEstimator`, `CloseAxisGridSearchEstimator`, etc.) seed initial binary-lens parameters for emcee.
 
 ### Model/Event construction (`mulens_object_config.py`)
 

@@ -291,13 +291,15 @@ def get_possible_bump_anomaly_solutions(params):
     solutions = {}
 
     for limit in ["GG97", "dwarf", "giant"]:
-        estimator = WidePlanetParameterEstimator(params, limit=limit)
-        solutions[f"Wide {limit}"] = estimator.get_binary_ulens_params()
+        estimator = WideUpperParameterEstimator(params, limit=limit)
+        solutions[f"Wideupper {limit}"] = estimator.get_binary_ulens_params()
+        estimator = WideLowerParameterEstimator(params, limit=limit)
+        solutions[f"Widelower {limit}"] = estimator.get_binary_ulens_params()
 
-    close_upper = CloseUpperBinaryParameterEstimator(params)
+    close_upper = CloseUpperParameterEstimator(params)
     solutions["CloseUpper"] = close_upper.get_binary_lens_params()
 
-    close_lower = CloseLowerBinaryParameterEstimator(params)
+    close_lower = CloseLowerParameterEstimator(params)
     solutions["CloseLower"] = close_lower.get_binary_lens_params()
 
     solutions["BinarySource"] = get_binary_source_params(params)
@@ -1619,7 +1621,7 @@ class WidePlanetEnsembleInitializer:
         self, params, log_q_values=None, log_rho_values=None
     ):
         """
-        Run a single WidePlanetGridSearchEstimator for the given params.
+        Run a single WideAxisGridSearchEstimator for the given params.
 
         Override to use different estimator settings.
 
@@ -1641,7 +1643,7 @@ class WidePlanetEnsembleInitializer:
         mag_methods : list
             Magnification methods from this estimator.
         """
-        estimator = WidePlanetGridSearchEstimator(
+        estimator = WideAxisGridSearchEstimator(
             datasets=self.datasets,
             params=params,
             model_config=self.model_config,
