@@ -377,14 +377,14 @@ class TestWideParameterEstimatorOB180383(
     def test_q(self):
         self.skipTest(
             "this test fails because of the large negative blending"+
-            "in the event, which affects the calculation of delta_A."
+            " in the event, which affects the calculation of delta_A."
         )
         np.testing.assert_allclose(self.estimator.q, self.q_est, rtol=self.tol)
 
     def test_delta_A(self):
         self.skipTest(
             "this test fails because of the large negative blending"+
-            "in the event, which affects the calculation of delta_A."
+            " in the event, which affects the calculation of delta_A."
         )
         np.testing.assert_allclose(
             self.estimator.delta_A, self.delta_A, rtol=self.tol
