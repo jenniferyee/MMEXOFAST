@@ -1448,23 +1448,29 @@ class MMEXOFASTFitter:
             **self._get_fitter_kwargs(source_type=SourceType.POINT),
         )
         fitter.run()
-        logger.info("Static PSPL: %s", fitter.best)
-        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
+        
+        if fitter.success:
+            logger.info("Static PSPL: %s", fitter.best)
+            logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
-        key = FitKey(
-            lens_type=LensType.POINT,
-            source_type=SourceType.POINT,
-            parallax_branch=ParallaxBranch.NONE,
-            lens_orb_motion=LensOrbMotion.NONE,
-        )
-        self.all_fit_results.set(
-            FitRecord.from_full_result(
-                model_key=key,
-                full_result=MMEXOFASTFitResults(fitter),
-                renorm_factors=self.renorm_factors,
-                fixed=False,
+            key = FitKey(
+                lens_type=LensType.POINT,
+                source_type=SourceType.POINT,
+                parallax_branch=ParallaxBranch.NONE,
+                lens_orb_motion=LensOrbMotion.NONE,
             )
-        )
+            self.all_fit_results.set(
+                FitRecord.from_full_result(
+                    model_key=key,
+                    full_result=MMEXOFASTFitResults(fitter),
+                    renorm_factors=self.renorm_factors,
+                    fixed=False,
+                )
+            )
+        else:
+            logger.warning(
+                "Static PSPL fit failed: %s", fitter.get_diagnostic_str()
+            )
 
     def fit_static_finite_source_point_lens(self, initial_params=None) -> None:
         """
@@ -1563,6 +1569,7 @@ class MMEXOFASTFitter:
                     limit)
                 return True
             else:
+                self.finite_source_point_lens = False
                 return False
         else:
             raise ValueError(
@@ -2500,9 +2507,13 @@ class MMEXOFASTFitter:
                 "Parallax fit failed:\n{0}: {1}".format(type(e).__name__, e)
             )
             return None
-
-        logger.info("Parallax fit: %s", fitter.best)
-        logger.info("      sigmas: %s", list(fitter.results.sigmas))
+        if fitter.success:
+            logger.info("Parallax fit: %s", fitter.best)
+            logger.info("      sigmas: %s", list(fitter.results.sigmas))
+        else:
+            logger.warning(
+                " fit failed: %s", fitter.get_diagnostic_str()
+            )
         return MMEXOFASTFitResults(fitter)
 
     def _get_parallax_seed_params(self, key: FitKey) -> dict:

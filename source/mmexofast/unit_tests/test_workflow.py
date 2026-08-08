@@ -385,6 +385,40 @@ class TestPointLensWorkflow(unittest.TestCase):
             0.001,
         )
 
+    def test_unmet_fspl_condition_falls_back_to_point_source_parallax(self):
+        """
+        When the FSPL condition is not met, later parallax fitting should use
+        point-source keys instead of leaving the workflow in an FSPL state.
+        """
+        fitter = self._make_fitter(finite_source_point_lens="u_0<0.1")
+
+        pspl_key = fit_types.FitKey(
+            lens_type=fit_types.LensType.POINT,
+            source_type=fit_types.SourceType.POINT,
+            parallax_branch=fit_types.ParallaxBranch.NONE,
+            lens_orb_motion=fit_types.LensOrbMotion.NONE,
+        )
+        fitter.all_fit_results.set(
+            mmexo.FitRecord(
+                model_key=pspl_key,
+                params={**STATIC_PSPL_PARAMS, "u_0": 0.2},
+            )
+        )
+
+        fitter.fit_static_finite_source_point_lens(
+            initial_params={**STATIC_PSPL_PARAMS, "u_0": 0.2}
+        )
+
+        self.assertFalse(fitter.finite_source_point_lens)
+
+        with patch.object(fitter, "_do_parallax_fit", return_value=None) as mock:
+            fitter.fit_parallax(branch=fit_types.ParallaxBranch.U0_PLUS)
+
+        self.assertEqual(
+            mock.call_args.kwargs["source_type"],
+            fit_types.SourceType.POINT,
+        )
+
     # --- stop_before stage:step ---
 
     def test_stop_before_first_step_of_stage(self):
