@@ -2089,19 +2089,18 @@ class CloseUpperParameterEstimator(WideAxisParameterEstimator):
         """
         Vertical distance of the planetary caustic from the binary axis.
 
-        Computed as ``(q^0.5 / s) * (1/sqrt(1 + s^2) + sqrt(1 - s^2))``.
+        Computed as ``(2 * sqrt(q) / (sqrt(1 + s^2) * s))``.
         Used to calculate :attr:`mu`.
 
-        See Han 2006 https://ui.adsabs.harvard.edu/abs/2006ApJ...638.1080H/abstract
+        See Eqs 7 and 12. in Han 2006 https://ui.adsabs.harvard.edu/abs/2006ApJ...638.1080H/abstract
 
         Returns
         -------
         float
         """
         if self._eta_not is None:
-            self._eta_not = (self.q**0.5 / self.s) * (
-                1 / (np.sqrt(1 + self.s**2)) + np.sqrt(1 - self.s**2)
-            )
+            self._eta_not = ((2 * np.sqrt(self.q) /
+                                     np.sqrt(1 + self.s*self.s) / self.s))
 
         return self._eta_not
 
