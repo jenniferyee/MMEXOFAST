@@ -731,10 +731,10 @@ class MMEXOFASTFitter:
 
             return ["u_0", np.less, value]
         elif isinstance(value, str):
-            if len(value.split('<')) == 3:
+            if len(value.split('<')) == 2:
                 parts = value.split('<')
                 function = np.less
-            elif len(value.split('>')) == 3:
+            elif len(value.split('>')) == 2:
                 parts = value.split('>')
                 function = np.greater
             else:
@@ -742,7 +742,7 @@ class MMEXOFASTFitter:
                                  " 'parameter_name < value' or 'parameter_name > value'.")
             if parts[0].strip() not in allowed_parameters:
                 raise ValueError(f"finite_source_point_lens parameter name must be one of {allowed_parameters}.")
-            return [parts[0].strip(), function, float(parts[2].strip())]
+            return [parts[0].strip(), function, float(parts[1].strip())]
         else:
             raise TypeError("finite_source_point_lens must be a bool or a non-negative float.")
 
