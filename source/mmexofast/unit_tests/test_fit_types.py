@@ -377,7 +377,7 @@ class TestFitKeyBinaryModelType(unittest.TestCase):
 
     def test_alt_suffix_is_accepted(self):
         """Each '_alt' variant is independently valid."""
-        for base in ("Wide", "Close", "CloseUpper", "CloseLower"):
+        for base in ("WideAxis", "WideUpper", "WideLower", "CloseAxis", "CloseUpper", "CloseLower"):
             with self.subTest(alt=f"{base}_alt"):
                 key = self._binary_key(binary_model_type=f"{base}_alt")
                 self.assertEqual(key.binary_model_type, f"{base}_alt")
@@ -734,7 +734,7 @@ class TestLabelConversionsBinaryModelType(unittest.TestCase):
             binary_model_type="WideAxis_alt",
         )
         self.assertEqual(
-            fit_types.model_key_to_label(key), "2L1S Wide_alt static"
+            fit_types.model_key_to_label(key), "2L1S WideAxis_alt static"
         )
 
     def test_generate_closeupper_with_2d_motion_and_parallax(self):
