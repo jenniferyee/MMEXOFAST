@@ -1552,7 +1552,7 @@ class BellTemplateFitter:
         centers = self._bell_centers(t_pl, dt_0)
         baseline = 0.0
         amplitudes = [max(0.001, float(self._flux[np.argmin(np.abs(self._time - center))] - baseline)) for center in centers]
-        width = max(dt_0 / self.n_bells/ self.n_bells, np.median(np.diff(self._time)) if len(self._time) > 1 else dt_0)
+        width = dt_0 / self.n_bells/ self.n_bells if len(self._time) > 1 else dt_0
         return centers, amplitudes, width, baseline
 
     def _set_initial_guess(self, amplitudes, centers, width, baseline, dt_0):
