@@ -514,8 +514,7 @@ class SFitFitter(MulensFitter):
                 verbose=self.verbose,
             )
         except Exception as e:
-            print(f"Error during sfit.minimize with adaptive step: {e}")
-            return
+            raise ValueError(f"Error during sfit.minimize with adaptive step: {e}")
 
         if self.verbose:
             print(result)
@@ -531,8 +530,7 @@ class SFitFitter(MulensFitter):
                     verbose=self.verbose,
                 )
             except Exception as e:
-                print(f"Error during sfit.minimize with fixed step: {e}")
-                return
+                raise ValueError(f"Error during sfit.minimize with fixed step: {e}")
 
             if self.verbose:
                 print(result)
