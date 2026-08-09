@@ -1,3 +1,4 @@
+import logging
 import os
 from multiprocessing import Pool, cpu_count
 
@@ -27,6 +28,7 @@ from .mulens_object_config import EventConfig, ModelConfig
 # --------------------------------------------------------------------- #
 
 _POOL_FITTER = None
+logger = logging.getLogger(__name__)
 
 
 def _pool_worker_init(fitter):
@@ -514,7 +516,7 @@ class SFitFitter(MulensFitter):
                 verbose=self.verbose,
             )
         except Exception as e:
-            raise ValueError(f"Error during sfit.minimize with adaptive step: {e}")
+            logger.warning(f"Error during sfit.minimize with adaptive step: {e}")
 
         if self.verbose:
             print(result)
@@ -530,7 +532,7 @@ class SFitFitter(MulensFitter):
                     verbose=self.verbose,
                 )
             except Exception as e:
-                raise ValueError(f"Error during sfit.minimize with fixed step: {e}")
+                logger.warning(f"Error during sfit.minimize with fixed step: {e}")
 
             if self.verbose:
                 print(result)
