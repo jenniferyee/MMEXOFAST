@@ -741,7 +741,7 @@ class MMEXOFASTFitter:
             return ["u_0", np.less, value]
         elif isinstance(value, str):
             if len(value.split('<')) == 2:
-                parts = value.split('<')non
+                parts = value.split('<')
                 function = np.less
             elif len(value.split('>')) == 2:
                 parts = value.split('>')
