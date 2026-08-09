@@ -405,8 +405,8 @@ class MulensFitter:
         Notes
         -----
         The definition of "success" may vary between subclasses. For example,
-        ``SFitFitter`` considers a fit successful if ``sfit.minimize()`` returns
-        with ``result.success == True``.
+        ``SFitFitter`` considers a fit successful if ``sfit.minimize()`` returns not None.
+
         """
         if self.results is None:
             return False
