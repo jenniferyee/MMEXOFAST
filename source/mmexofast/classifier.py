@@ -17,10 +17,13 @@ class AnomalyClassifier(object):
 
     def __init__(self):
         pass
+
     def plot_bell_fits(self):
         """
         Plot the best-fit 1- and 2-bell templates for the anomaly classification.
         """
+        if not hasattr(self, "_template_fit1") or not hasattr(self, "_template_fit2"):
+            return None
         # Use one shared fit panel and separate residual panels for each model.
         fig1, axes = plt.subplots(3, 1, figsize=(8, 8), sharex=True, gridspec_kw={"height_ratios": [3, 1, 1]})
         fig1, ax_fit1, ax_resid1 = self._template_fit1.plot_fit(show=False,
