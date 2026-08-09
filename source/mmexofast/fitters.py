@@ -517,7 +517,7 @@ class SFitFitter(MulensFitter):
             )
         except Exception as e:
             logger.warning(f"Error during sfit.minimize with adaptive step: {e}")
-
+            result = None
         if self.verbose:
             print(result)
 
@@ -533,6 +533,7 @@ class SFitFitter(MulensFitter):
                 )
             except Exception as e:
                 logger.warning(f"Error during sfit.minimize with fixed step: {e}")
+                result = None                results= Mpnm
 
             if self.verbose:
                 print(result)
