@@ -2595,6 +2595,8 @@ class MMEXOFASTFitter:
             logger.warning(
                 " fit failed: %s", fitter.get_diagnostic_str()
             )
+            return None
+
         return MMEXOFASTFitResults(fitter)
 
     def _get_parallax_seed_params(self, key: FitKey) -> dict:
