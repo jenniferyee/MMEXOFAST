@@ -19,6 +19,7 @@ from mmexofast.config import (
     SAMPLE_DATA_PATH,
 )
 from mmexofast.dc18 import fetch_light_curves as fetch_dc18_light_curves
+from mmexofast.fitters import BellTemplateFitter
 from mmexofast.gridsearches import (
     AnomalyFinderGridSearch,
     EventFinderGridSearch,
@@ -50,6 +51,7 @@ __all__ = [
     "OutputConfig",
     "fit",
     "AnomalyClassifier",
+    "BellTemplateFitter",
     "fetch_dc18_light_curves",
     "MODULE_PATH",
     "PACKAGE_DATA_PATH",

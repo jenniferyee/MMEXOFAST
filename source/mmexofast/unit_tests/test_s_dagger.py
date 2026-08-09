@@ -152,10 +152,10 @@ class TestKB161105SDagger(SDaggerTestBase, unittest.TestCase):
     event = KB161105
     solutions = ["Wide C", "Wide D"]
     parameter_estimator_class = (
-        mmexo.estimate_params.WidePlanetParameterEstimator
+        mmexo.estimate_params.WideAxisParameterEstimator
     )
     grid_search_estimator_class = (
-        mmexo.estimate_params.WidePlanetGridSearchEstimator
+        mmexo.estimate_params.WideAxisGridSearchEstimator
     )
 
 
@@ -163,10 +163,10 @@ class TestKB170428SDagger(SDaggerTestBase, unittest.TestCase):
     event = KB170428
     solutions = ["Inner", "Outer"]
     parameter_estimator_class = (
-        mmexo.estimate_params.ClosePlanetParameterEstimator
+        mmexo.estimate_params.CloseAxisParameterEstimator
     )
     grid_search_estimator_class = (
-        mmexo.estimate_params.ClosePlanetGridSearchEstimator
+        mmexo.estimate_params.CloseAxisGridSearchEstimator
     )
 
 
@@ -175,8 +175,8 @@ class TestKB171003SDagger(SDaggerTestBase, unittest.TestCase):
     event = KB171003
     solutions = ["Inner", "Outer"]
     parameter_estimator_class = (
-        mmexo.estimate_params.ClosePlanetParameterEstimator
+        mmexo.estimate_params.CloseAxisParameterEstimator
     )
     grid_search_estimator_class = (
-        mmexo.estimate_params.ClosePlanetGridSearchEstimator
+        mmexo.estimate_params.CloseAxisGridSearchEstimator
     )

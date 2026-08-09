@@ -353,7 +353,7 @@ class TestWideParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.WidePlanetParameterEstimator(
+        self.estimator = estimate_params.WideAxisParameterEstimator(
             self.params, limit="GG97"
         )
 
@@ -368,7 +368,7 @@ class TestWideParameterEstimatorOB180383(
         )
 
     def test_q_manual_dA(self):
-        estimator = estimate_params.WidePlanetParameterEstimator(
+        estimator = estimate_params.WideAxisParameterEstimator(
             self.params, limit="GG97"
         )
         estimator._delta_A = self.delta_A
@@ -396,7 +396,7 @@ class TestCloseUpperParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseUpperBinaryParameterEstimator(
+        self.estimator = estimate_params.CloseUpperParameterEstimator(
             self.params, limit="point"
         )
 
@@ -433,7 +433,7 @@ class TestCloseLowerParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseLowerBinaryParameterEstimator(
+        self.estimator = estimate_params.CloseLowerParameterEstimator(
             self.params, limit="point"
         )
 
@@ -741,7 +741,7 @@ class TestBinaryLensParams(unittest.TestCase):
         """The estimator's tolerance reaches the BinaryLensParams it
         builds, so a fitter-level override is not silently dropped."""
         case = KB160625()
-        estimator = estimate_params.WidePlanetParameterEstimator(case.params)
+        estimator = estimate_params.WideAxisParameterEstimator(case.params)
         self.assertEqual(
             estimator.get_binary_lens_params().vbbl_accuracy, 0.01
         )

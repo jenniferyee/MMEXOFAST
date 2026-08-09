@@ -25,8 +25,14 @@ jobs:
       # Version pinned to match .pre-commit-config.yaml exactly. If these two
       # drift, CI and the hook disagree about formatting and every PR fights
       # the difference.
-      - name: ruff check
-        run: uvx ruff@0.16.0 check --output-format github .
+      - name: ruff check source
+        run: uvx ruff@0.16.0 check --output-format github ./source
 
-      - name: ruff format
-        run: uvx ruff@0.16.0 format --check --diff .
+      - name: ruff format source  
+        run: uvx ruff@0.16.0 format --check --diff ./source
+      
+      - name: ruff check examples
+        run: uvx ruff@0.16.0 check --output-format github ./examples
+
+      - name: ruff format examples  
+        run: uvx ruff@0.16.0 format --check --diff ./examples

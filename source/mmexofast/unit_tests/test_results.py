@@ -785,7 +785,7 @@ class TestIntermediateResults(unittest.TestCase):
         """
         ir = results.IntermediateResults()
         value = {
-            "wide": {
+            "caustic_crossing": {
                 "t_0": 2453582.7281740606,
                 "u_0": 0.355227507989543,
                 "t_E": 11.106795114521415,
@@ -806,7 +806,7 @@ class TestIntermediateResults(unittest.TestCase):
         """
         self.assertEqual(
             results.IntermediateResults.VALID_ANOMALY_TYPES,
-            {"close", "wide", "high_mag"},
+            {"bump", "dip", "caustic_crossing", "high_mag"},
         )
 
     def test_anomaly_type_accepts_valid_values(self):
@@ -859,7 +859,7 @@ class TestIntermediateResults(unittest.TestCase):
             "u_0": 1.012,
             "t_E": 21.48,
         }
-        ir.anomaly_type = "close"
+        ir.anomaly_type = "dip"
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
         restored = pickle.loads(pickle.dumps(ir))
@@ -928,7 +928,7 @@ class TestIntermediateResults(unittest.TestCase):
             "u_0": 1.012,
             "t_E": 21.48,
         }
-        ir.anomaly_type = "wide"
+        ir.anomaly_type = "caustic_crossing"
         ir.anomaly_lc_params = ANOMALY_LC_PARAMS
 
         fitter._restore_state({"intermediate_results": ir})
@@ -940,7 +940,7 @@ class TestIntermediateResults(unittest.TestCase):
             fitter.intermediate_results.estimate_point_lens_parameters,
             {"t_0": 2456836.0, "u_0": 1.012, "t_E": 21.48},
         )
-        self.assertEqual(fitter.intermediate_results.anomaly_type, "wide")
+        self.assertEqual(fitter.intermediate_results.anomaly_type, "caustic_crossing")
         self.assertEqual(
             fitter.intermediate_results.anomaly_lc_params, ANOMALY_LC_PARAMS
         )
