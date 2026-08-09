@@ -31,7 +31,6 @@ from .estimate_params import (
     CloseUpperGridSearchEstimator,
     ParameterEstimator,
     WideAxisGridSearchEstimator,
-    WideAxisParameterEstimator,
     WideLowerGridSearchEstimator,
     WideUpperGridSearchEstimator,
     get_PSPL_params,
@@ -1513,11 +1512,13 @@ class MMEXOFASTFitter:
             initial_params["rho"] = ParameterEstimator(initial_params, limit=self.source_type).get_rho()
 
         if self._check_FSPL_condition(initial_params):
-            self._set_magnification_methods_FSPL(initial_params=initial_params)
+            mag_methods = self._get_magnification_methods_FSPL(initial_params=initial_params)
+            fitter_kwargs = self._get_fitter_kwargs(source_type=SourceType.FINITE)
+            fitter_kwargs['mag_methods'] = mag_methods
             fitter = SFitFitter(
                 initial_model_params=initial_params,
                 datasets=self.datasets,
-                **self._get_fitter_kwargs(source_type=SourceType.FINITE),
+                **fitter_kwargs,
             )
             fitter.run()
             if fitter.success:
@@ -1544,18 +1545,22 @@ class MMEXOFASTFitter:
                 )
                 self.finite_source_point_lens = False
 
-    def _set_magnification_methods_FSPL(self, initial_params=None):
+    def _get_magnification_methods_FSPL(self, initial_params=None):
         """
-        Set the magnification methods for FSPL model.
+        Get the magnification methods for FSPL model.
         """
         if self.mag_methods is not None:
-            return
+            for mag_method in self.mag_methods:
+                if mag_method not in ["finite_source_uniform_Gould94"] or isinstance(mag_method, (float, int)):
+                    raise ValueError("Invalid magnification method for FSPL. Only 'finite_source_uniform_Gould94' is alowed by MulensModel")            
+                mag_methods = self.mag_methods
         if initial_params is None:
-            self.mag_methods = "finite_source_uniform_Gould94"
+            mag_methods = "finite_source_uniform_Gould94"
         else:
             t_0 = initial_params["t_0"]
             t_E = initial_params["t_E"]
-            self.mag_methods = [t_0-0.5*t_E, "finite_source_uniform_Gould94", t_0+0.5*t_E]
+            mag_methods = [t_0-0.5*t_E, "finite_source_uniform_Gould94", t_0+0.5*t_E]
+        return mag_methods
 
     def _check_FSPL_condition(self, initial_params):
         """
@@ -1573,6 +1578,7 @@ class MMEXOFASTFitter:
                     limit)
                 return True
             else:
+                self.finite_source_point_lens = False
                 return False
         else:
             raise ValueError(
@@ -2289,7 +2295,7 @@ class MMEXOFASTFitter:
             # TODO: Implement checking for large vs. small rho solutions. Maybe add a second estimator?
         elif self.intermediate_results.anomaly_type == "caustic_crossing":
             estimator_classes = [
-                WideAxisParameterEstimator,
+                WideAxisGridSearchEstimator,
             ]
         elif self.intermediate_results.anomaly_type == "dip":
             estimator_classes = [CloseAxisGridSearchEstimator]
@@ -2545,11 +2551,14 @@ class MMEXOFASTFitter:
                 if ("rho" in params or "t_star" in params)
                 else SourceType.POINT
             )
-
+        fitter_kwargs = self._get_fitter_kwargs(source_type=source_type)
+        if source_type == SourceType.FINITE:
+            mag_methods = self._get_magnification_methods_FSPL(initial_params=params)
+            fitter_kwargs["mag_methods"] = mag_methods
         fitter = SFitFitter(
             initial_model_params=params,
             datasets=self.datasets,
-            **self._get_fitter_kwargs(source_type=source_type),
+            **fitter_kwargs,
         )
         try:
             fitter.run()
