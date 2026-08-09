@@ -8,7 +8,7 @@ import numpy as np
 import sfit_minimizer as sfit
 from scipy.optimize import curve_fit
 
-from .estimate_params import WidePlanetEnsembleInitializer
+from .estimate_params import WideAxisEnsembleInitializer
 from .mulens_object_config import EventConfig, ModelConfig
 
 # --------------------------------------------------------------------- #
@@ -1161,7 +1161,7 @@ class AnomalyFitter(EmceeLCFitter):
     --------
     EmceeLCFitter : Parent class providing the full emcee mechanism.
     AnomalyFitterEnsembleInitialization : Subclass using
-        ``WidePlanetEnsembleInitializer`` for the starting ensemble.
+        ``WideAxisEnsembleInitializer`` for the starting ensemble.
     """
 
     default_parameters_to_fit = [
@@ -1270,13 +1270,13 @@ class AnomalyFitter(EmceeLCFitter):
 # TODO: ADD child class of AnomalyFitter that uses dxsi parameter.
 
 
-class WidePlanetEnsembleInitialization(AnomalyFitter):
+class WideAxisEnsembleInitialization(AnomalyFitter):
     """
-    Anomaly fitter using ``WidePlanetEnsembleInitializer`` for the starting
+    Anomaly fitter using ``WideAxisEnsembleInitializer`` for the starting
     ensemble.
 
     Extends :class:`AnomalyFitter` for the wide-planet geometry.  Overrides
-    :meth:`make_starting_vector` to drive ``WidePlanetEnsembleInitializer`` and
+    :meth:`make_starting_vector` to drive ``WideAxisEnsembleInitializer`` and
     :meth:`initialize_event` to use the resulting ``initial_model`` and
     ``mag_methods``.
 
@@ -1287,14 +1287,14 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
     ``initial_guess`` is built lazily as a side-effect of the first call to
     :meth:`make_starting_vector`; ``None`` is passed to the parent to suppress
     automatic sigma computation.  Sigmas passed explicitly (typically PSPL fit
-    sigmas) are forwarded to ``WidePlanetEnsembleInitializer`` for PSPL
+    sigmas) are forwarded to ``WideAxisEnsembleInitializer`` for PSPL
     perturbation; when none are provided they default to ``{}`` (no
     perturbation).
 
     Parameters
     ----------
     anomaly_lc_params : dict, optional
-        Passed to ``WidePlanetEnsembleInitializer``.  Also inspected by the
+        Passed to ``WideAxisEnsembleInitializer``.  Also inspected by the
         parent :meth:`AnomalyFitter._compute_sigmas` — but since
         ``initial_guess`` is ``None`` at construction time, automatic sigma
         computation is suppressed and ``anomaly_lc_params`` is used only by
@@ -1315,7 +1315,7 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
     --------
     AnomalyFitter : Parent class providing default parameters and sigma tiers.
     EmceeLCFitter : Grandparent providing the full emcee run loop.
-    WidePlanetEnsembleInitializer : Builds the starting ensemble.
+    WideAxisEnsembleInitializer : Builds the starting ensemble.
     """
 
     def __init__(self, anomaly_lc_params=None, emcee_settings=None, **kwargs):
@@ -1328,7 +1328,7 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
             **kwargs,
         )
 
-        # Sigmas are forwarded to WidePlanetEnsembleInitializer for PSPL
+        # Sigmas are forwarded to WideAxisEnsembleInitializer for PSPL
         # perturbation.  Default to {} (no perturbation) when not provided;
         # automatic sigma computation was suppressed above because
         # initial_guess=None.
@@ -1382,9 +1382,9 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
 
     def make_starting_vector(self):
         """
-        Build the starting ensemble using ``WidePlanetEnsembleInitializer``.
+        Build the starting ensemble using ``WideAxisEnsembleInitializer``.
 
-        Runs ``n_walkers`` ``WidePlanetGridSearchEstimators`` with perturbed
+        Runs ``n_walkers`` ``WideAxisGridSearchEstimators`` with perturbed
         PSPL parameters, sorts results by chi2, and converts the best
         ``n_walkers`` rows to emcee parameter vectors.  Sets
         :attr:`initial_model` and :attr:`mag_methods` as side-effects and
@@ -1399,7 +1399,7 @@ class WidePlanetEnsembleInitialization(AnomalyFitter):
         if self._starting_vector is not None:
             return self._starting_vector
 
-        self._initializer = WidePlanetEnsembleInitializer(
+        self._initializer = WideAxisEnsembleInitializer(
             datasets=self.datasets,
             anomaly_params=self.anomaly_lc_params,
             sigmas=self.sigmas,

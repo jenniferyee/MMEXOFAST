@@ -229,7 +229,7 @@ def get_wide_params(params, limit="GG97"):
     """
     Transform initial anomaly parameters into wide binary lens model parameters.
 
-    Wrapper for :class:`WidePlanetParameterEstimator`.
+    Wrapper for :class:`WideAxisParameterEstimator`.
 
     Parameters
     ----------
@@ -283,8 +283,8 @@ def get_possible_bump_anomaly_solutions(params):
     Returns
     -------
     dict
-        Keys are solution types (``'Wide GG97'``, ``'Wide dwarf'``,
-        ``'Wide giant'``, ``'CloseUpper'``, ``'CloseLower'``,
+        Keys are solution types (``'WideUpper GG97'``, ``'WideLower dwarf'``,
+        ``'WideUpper giant'``, ``'CloseUpper'``, ``'CloseLower'``,
         ``'BinarySource'``), values are :class:`BinaryLensParams` or
         :class:`BinarySourceParams` objects.
     """
@@ -292,9 +292,9 @@ def get_possible_bump_anomaly_solutions(params):
 
     for limit in ["GG97", "dwarf", "giant"]:
         estimator = WideUpperParameterEstimator(params, limit=limit)
-        solutions[f"Wideupper {limit}"] = estimator.get_binary_ulens_params()
+        solutions[f"WideUpper {limit}"] = estimator.get_binary_ulens_params()
         estimator = WideLowerParameterEstimator(params, limit=limit)
-        solutions[f"Widelower {limit}"] = estimator.get_binary_ulens_params()
+        solutions[f"WideLower {limit}"] = estimator.get_binary_ulens_params()
 
     close_upper = CloseUpperParameterEstimator(params)
     solutions["CloseUpper"] = close_upper.get_binary_lens_params()
@@ -1492,10 +1492,10 @@ class WideAxisGridSearchEstimator(WideAxisParameterEstimator):
             plt.tight_layout()
 
 
-class WidePlanetEnsembleInitializer:
+class WideAxisEnsembleInitializer:
     """
     Builds an ensemble of starting points for emcee by running multiple
-    WidePlanetGridSearchEstimators with perturbed PSPL parameters.
+    WideAxisGridSearchEstimators with perturbed PSPL parameters.
 
     The first estimator uses a broad default grid. Its best log_q and
     log_rho are used to seed a narrower grid for all subsequent estimators.
@@ -2042,7 +2042,7 @@ class CloseUpperParameterEstimator(WideAxisParameterEstimator):
         -------
         numpy.ndarray
         """
-        # TODO: Does this go here or in CloseUpperBinaryGridSearchEstimator?
+        # TODO: Does this go here or in CloseUpperGridSearchEstimator?
         return (
             self.log_q_values
             if self.log_q_values is not None
@@ -2175,7 +2175,7 @@ class CloseLowerParameterEstimator(CloseUpperParameterEstimator):
     """
     Analytic parameter estimator for close binary lens models (lower caustic).
 
-    Identical to :class:`CloseUpperBinaryParameterEstimator` except that
+    Identical to :class:`CloseUpperParameterEstimator` except that
     ``alpha`` uses the lower caustic geometry, computed as
     ``180 - deg(phi + mu)``.
     """
@@ -2273,8 +2273,8 @@ class CloseUpperGridSearchEstimator(
     """
     Grid search estimator for close binary lens models (upper caustic).
 
-    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
-    Nelder-Mead refinement) with :class:`CloseUpperBinaryParameterEstimator`
+    Combines :class:`WideAxisGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`CloseUpperParameterEstimator`
     (close-topology analytic parameter estimates and upper caustic ``alpha``).
     """
 
@@ -2287,8 +2287,8 @@ class CloseLowerGridSearchEstimator(
     """
     Grid search estimator for close binary lens models (lower caustic).
 
-    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
-    Nelder-Mead refinement) with :class:`CloseLowerBinaryParameterEstimator`
+    Combines :class:`WideAxisGridSearchEstimator` (chi2 grid search and
+    Nelder-Mead refinement) with :class:`CloseLowerParameterEstimator`
     (close-topology analytic parameter estimates and lower caustic ``alpha``).
     """
 
@@ -2300,7 +2300,7 @@ class WideUpperGridSearchEstimator(
     """
     Grid search estimator for wide binary lens models (upper cusp approach).
 
-    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Combines :class:`WideAxisGridSearchEstimator` (chi2 grid search and
     Nelder-Mead refinement) with :class:`WideUpperParameterEstimator`
     (wide-topology analytic parameter estimates and upper cusp ``alpha``).
     """
@@ -2313,7 +2313,7 @@ class WideLowerGridSearchEstimator(
     """
     Grid search estimator for wide binary lens models (lower cusp approach).
 
-    Combines :class:`WidePlanetGridSearchEstimator` (chi2 grid search and
+    Combines :class:`WideAxisGridSearchEstimator` (chi2 grid search and
     Nelder-Mead refinement) with :class:`WideLowerParameterEstimator`
     (wide-topology analytic parameter estimates and lower cusp ``alpha``).
     """

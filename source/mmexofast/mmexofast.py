@@ -2324,7 +2324,7 @@ class MMEXOFASTFitter:
                 logger.info("mag_methods: %s", params.mag_methods)
                 est_params[class_name] = params
 
-                if self.intermediate_results.anomaly_type in ["close", "wide"]:
+                if self.intermediate_results.anomaly_type in ["dip", "bump", "caustic_crossing"]:
                     if (
                         self.intermediate_results.anomaly_lc_params["u_0"]
                         < 0.05
