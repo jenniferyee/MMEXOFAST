@@ -726,7 +726,7 @@ class MMEXOFASTFitter:
 
         Returns
         -------
-        bool or float
+        bool or list
             Parsed value.
         """
         allowed_parameters = ['u_0', 't_E']
@@ -739,7 +739,7 @@ class MMEXOFASTFitter:
             return ["u_0", np.less, value]
         elif isinstance(value, str):
             if len(value.split('<')) == 2:
-                parts = value.split('<')
+                parts = value.split('<')non
                 function = np.less
             elif len(value.split('>')) == 2:
                 parts = value.split('>')
@@ -751,7 +751,7 @@ class MMEXOFASTFitter:
                 raise ValueError(f"finite_source_point_lens parameter name must be one of {allowed_parameters}.")
             return [parts[0].strip(), function, float(parts[1].strip())]
         else:
-            raise TypeError("finite_source_point_lens must be a bool or a non-negative float.")
+            raise TypeError("finite_source_point_lens must be a bool, string, or a non-negative float.")
 
     def _load_restart_data(self, restart_file) -> tuple[dict, dict]:
         """
@@ -1519,6 +1519,7 @@ class MMEXOFASTFitter:
             logger.warning(
                 "Static PSPL fit failed: %s", fitter.get_diagnostic_str()
             )
+            raise RuntimeError("Static PSPL fit failed. Cannot proceed to FSPL or parallax fitting.")
 
     def fit_static_finite_source_point_lens(self, initial_params=None) -> None:
         """
@@ -1529,6 +1530,7 @@ class MMEXOFASTFitter:
         initial_params : dict, optional
             Starting parameter values.  If None, seeds from the PSPL
             result in ``self.all_fit_results`` with ``rho = 0.05`` (giant source)
+        Notes
         -----
         Stores the resulting ``FitRecord`` in ``self.all_fit_results``.
         Requires a static PSPL result to already exist.
@@ -1615,6 +1617,9 @@ class MMEXOFASTFitter:
                     param_name, value, function.__name__, limit)
                 return True
             else:
+                logger.info(
+                    "FSPL condition not satisfied (%s=%.4f %s %s); disabling FSPL fit.",
+                    param_name, value, function.__name__, limit)
                 self.finite_source_point_lens = False
                 return False
         else:
