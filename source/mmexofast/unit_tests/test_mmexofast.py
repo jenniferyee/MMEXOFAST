@@ -363,3 +363,81 @@ class TestSatelliteData(unittest.TestCase):
         files = [self.ground_data, self.kepler_data, self.spitzer_data]
         self.do_test_file_list(files)
         self.do_test_datasets(files)
+
+
+class TestBuildProtectedMask(unittest.TestCase):
+    """
+    Points protected from renormalization's outlier rejection: the anomaly
+    window and everywhere the reference model magnifies above
+    PEAK_PROTECTION_MAG.
+    """
+
+    T_0, U_0, T_E = 2455500.0, 0.1, 20.0
+
+    def _make_fitter_and_event(self, anomaly_lc_params=None):
+        model = MulensModel.Model(
+            {"t_0": self.T_0, "u_0": self.U_0, "t_E": self.T_E}
+        )
+        times = self.T_0 + np.arange(-100.0, 100.0, 0.5)
+        flux = 10.0 * model.get_magnification(times) + 2.0
+        data = MulensModel.MulensData(
+            [times, flux, 0.01 * np.ones_like(flux)],
+            phot_fmt="flux",
+            plot_properties={"label": "test.dat"},
+        )
+        event = MulensModel.Event(datasets=[data], model=model)
+        event.fit_fluxes()
+        fitter = MMEXOFASTFitter.__new__(MMEXOFASTFitter)
+        fitter.intermediate_results = SimpleNamespace(
+            anomaly_lc_params=anomaly_lc_params
+        )
+        return fitter, event, data
+
+    def test_peak_is_protected_even_without_anomaly_params(self):
+        fitter, event, data = self._make_fitter_and_event(None)
+
+        mask = fitter._build_protected_mask(data, event, 0)
+
+        mag = event.model.get_magnification(data.time)
+        np.testing.assert_array_equal(
+            mask, mag > MMEXOFASTFitter.PEAK_PROTECTION_MAG
+        )
+        self.assertTrue(mask.any())
+        self.assertFalse(mask.all())
+
+    def test_anomaly_window_is_protected(self):
+        t_pl = self.T_0 + 60.0  # on the wing, model magnification < 1.1
+        params = {"t_0": self.T_0, "t_pl": t_pl, "dt": 2.0}
+        fitter, event, data = self._make_fitter_and_event(params)
+
+        mask = fitter._build_protected_mask(data, event, 0)
+
+        window = (data.time >= t_pl - 2.0) & (data.time <= t_pl + 2.0)
+        self.assertTrue(window.any())
+        self.assertTrue(np.all(mask[window]))
+
+    def test_mask_is_union_of_anomaly_window_and_peak(self):
+        t_pl = self.T_0 + 60.0
+        params = {"t_0": self.T_0, "t_pl": t_pl, "dt": 2.0}
+        fitter, event, data = self._make_fitter_and_event(params)
+
+        mask = fitter._build_protected_mask(data, event, 0)
+
+        mag = event.model.get_magnification(data.time)
+        window = (data.time >= t_pl - 2.0) & (data.time <= t_pl + 2.0)
+        expected = window | (mag > MMEXOFASTFitter.PEAK_PROTECTION_MAG)
+        np.testing.assert_array_equal(mask, expected)
+
+    def test_window_centered_on_t_pl_not_t_0(self):
+        t_pl = self.T_0 + 60.0
+        params = {"t_0": self.T_0, "t_pl": t_pl, "dt": 2.0}
+        fitter, event, data = self._make_fitter_and_event(params)
+
+        mask = fitter._build_protected_mask(data, event, 0)
+
+        # Points near t_0 + dt but outside the peak-protection region would
+        # only be masked if the window were (wrongly) centered on t_0; with
+        # u_0=0.1, t_E=20 the A > 1.1 region ends near |t - t_0| ~ 31 d.
+        wing = np.abs(data.time - (self.T_0 + 40.0)) < 1.0
+        self.assertTrue(wing.any())
+        self.assertFalse(np.any(mask[wing]))
