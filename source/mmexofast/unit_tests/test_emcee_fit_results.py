@@ -510,19 +510,39 @@ class TestEmceeLCFitterResultsAfterRun:
         n_params = len(fitter_after_run.parameters_to_fit)
         assert fitter_after_run.best_theta.shape == (n_params,)
 
-    def test_best_theta_is_max_likelihood_post_burnin_sample(
+    def test_best_theta_is_max_likelihood_over_chain_and_start(
         self, fitter_after_run
     ):
-        """best_theta must equal the post-burn-in sample with highest lnprobability."""
-        n_burn = fitter_after_run.emcee_settings["n_burn"]
+        """best_theta is the argmax over the FULL chain plus the start.
+
+        This deliberately replaces an earlier test that required the
+        post-burn-in argmax.  Restricting the search to post-burn-in left the
+        returned best-fit unbounded from below with respect to the seed: a
+        polish whose walkers drifted away after burn-in reported wherever they
+        settled, which on DC2018 event 128 turned a seed at chi2 37988 into a
+        "fit" at 147227.  See test_emcee_polish_never_worse.py.
+        """
         n_dim = fitter_after_run.emcee_settings["n_dim"]
-        samples = fitter_after_run.sampler.chain[:, n_burn:, :].reshape(
-            (-1, n_dim)
+        chain = fitter_after_run.sampler.chain.reshape((-1, n_dim))
+        prob = fitter_after_run.sampler.lnprobability.reshape(-1)
+        start = np.asarray(fitter_after_run.starting_vector_used, dtype=float)
+        start_prob = np.array(
+            [fitter_after_run.ln_prob(theta) for theta in start]
         )
-        prob = fitter_after_run.sampler.lnprobability[:, n_burn:].reshape(-1)
+        cand = np.vstack([chain, start])
+        cand_prob = np.concatenate([prob, start_prob])
+        cand_prob = np.where(np.isfinite(cand_prob), cand_prob, -np.inf)
         np.testing.assert_array_equal(
-            fitter_after_run.best_theta, samples[np.argmax(prob)]
+            fitter_after_run.best_theta, cand[np.argmax(cand_prob)]
         )
+
+    # The "never worse than the seed" guarantee itself is pinned in
+    # test_emcee_polish_never_worse.py, against an analytic likelihood.  It
+    # cannot be asserted here: this class drives the fitter with a mock
+    # sampler whose stored lnprobability values are synthetic and do not
+    # correspond to what the fitter's own ln_prob returns for those vectors,
+    # so re-evaluating the selected point gives -inf regardless of the
+    # selection being correct.
 
 
 # ===========================================================================
