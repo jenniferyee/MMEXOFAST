@@ -6,6 +6,42 @@ import mmexofast as mmexo
 from mmexofast import config, dc18, observatories
 from mmexofast.config import DATA_PATH
 
+# Stand-in for the W149 ephemerides. get_kwargs only checks that the path
+# exists, so any real file serves; the packaged Spitzer ephemerides is used
+# because it is present both in a source checkout and in an installed package.
+STAND_IN_EPHEMERIDES = os.path.join(
+    DATA_PATH, "spitzer_ephemerides_2014_to_2019.txt"
+)
+
+
+def stub_ephemerides(observatory_name):
+    """
+    Patch an observatory's ephemerides loader to return a local file.
+
+    WFIRST18 and DC18 load the real W149 ephemerides. A source checkout has it
+    under data/2018DataChallenge, but an installed package does not -- it is
+    not ours to redistribute -- so dc18.get_ephemerides downloads it. The
+    tests below are about what get_kwargs does with the loader's result, not
+    about obtaining the real file, so they stub the loader. Without this the
+    suite fetches 2.8 MB from raw.githubusercontent.com whenever it runs
+    outside a checkout, and fails whenever that request does.
+
+    Parameters
+    ----------
+    observatory_name : str
+        Key into OBSERVATORIES, e.g. 'WFIRST18'.
+
+    Returns
+    -------
+    context manager
+        Restores the real loader on exit.
+    """
+    return mock.patch.object(
+        observatories.OBSERVATORIES[observatory_name],
+        "ephemerides_loader",
+        lambda: STAND_IN_EPHEMERIDES,
+    )
+
 
 class TestGetTelescopeBandFromFilename(unittest.TestCase):
     """Test filename parsing for telescope and band extraction."""
@@ -118,15 +154,13 @@ class TestObservatory(unittest.TestCase):
         """Test get_kwargs method for WFIRST18."""
         # Get WFIRST from registry
         wfirst = observatories.OBSERVATORIES["WFIRST18"]
-        kwargs = wfirst.get_kwargs()
+        with stub_ephemerides("WFIRST18"):
+            kwargs = wfirst.get_kwargs()
 
         self.assertEqual(kwargs["phot_fmt"], "flux")
         self.assertEqual(kwargs["usecols"], [0, 1, 2])
-        # Resolved by get_dc18_ephemerides: the sample-data copy in a
-        # checkout, a cached download for an installed package.
-        self.assertEqual(
-            kwargs["ephemerides_file"], observatories.get_dc18_ephemerides()
-        )
+        # Whatever the loader returns is passed through as ephemerides_file.
+        self.assertEqual(kwargs["ephemerides_file"], STAND_IN_EPHEMERIDES)
 
     def test_get_kwargs_basic(self):
         """Test get_kwargs method with basic observatory."""
@@ -174,14 +208,13 @@ class TestGetKwargs(unittest.TestCase):
             DATA_PATH, "2018DataChallenge", "n20180816.Z087.WFIRST18.004.txt"
         )
 
-        results = observatories.get_kwargs(filename)
+        with stub_ephemerides("WFIRST18"):
+            results = observatories.get_kwargs(filename)
 
         # Check all non-plot_properties fields
         self.assertEqual(results["phot_fmt"], "flux")
         self.assertEqual(results["usecols"], [0, 1, 2])
-        self.assertEqual(
-            results["ephemerides_file"], observatories.get_dc18_ephemerides()
-        )
+        self.assertEqual(results["ephemerides_file"], STAND_IN_EPHEMERIDES)
         self.assertEqual(results["bandpass"], "Z087")
 
         # Check plot_properties (but label is now filename basename, not TELESCOPE-BAND)
