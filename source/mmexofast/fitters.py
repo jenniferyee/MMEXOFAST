@@ -1,3 +1,4 @@
+import logging
 import os
 from multiprocessing import Pool, cpu_count
 
@@ -8,6 +9,8 @@ import sfit_minimizer as sfit
 
 from .estimate_params import WidePlanetEnsembleInitializer
 from .mulens_object_config import EventConfig, ModelConfig
+
+logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------------- #
 # Multiprocessing support for the emcee fitters.
@@ -738,10 +741,20 @@ class EmceeLCFitter(MulensFitter):
         Build the emcee starting ensemble by Gaussian perturbation of
         :attr:`initial_guess`.
 
-        Each walker is obtained by adding independent ``N(0, sigma)`` noise to
-        every component of :attr:`initial_guess`.  Parameters absent from
-        :attr:`sigmas` (or when :attr:`sigmas` is ``None``) are left at their
-        nominal value for every walker.
+        Walker 0 is the UNPERTURBED :attr:`initial_guess`; every other walker
+        adds independent ``N(0, sigma)`` noise to each component.  Parameters
+        absent from :attr:`sigmas` (or when :attr:`sigmas` is ``None``) are
+        left at their nominal value for every walker.
+
+        Keeping the seed itself in the ensemble matters because the caller
+        treats this fit as a POLISH of a solution estimate.  When every
+        walker was perturbed, the seed was not in the ensemble at all, so a
+        run whose walkers all drifted downhill could return a point far worse
+        than the one it was given -- measured on the 2018 Data Challenge
+        event 128, where a seed at chi2 37988 came back at 147227.  With
+        walker 0 at the seed, the seed is a live member the stretch move can
+        be compared against, and :meth:`run` additionally guarantees the
+        reported best is never worse than the starting ensemble.
 
         Returns
         -------
@@ -750,7 +763,7 @@ class EmceeLCFitter(MulensFitter):
         """
         n_walkers = self.emcee_settings["n_walkers"]
         starting_vector = []
-        for _ in range(n_walkers):
+        for i_walker in range(n_walkers):
             walker = []
             for emcee_param in self.parameters_to_fit:
                 param = self.get_parameter_name(emcee_param)
@@ -761,7 +774,7 @@ class EmceeLCFitter(MulensFitter):
 
                 sigma = (self.sigmas or {}).get(emcee_param)
 
-                if sigma is not None:
+                if sigma is not None and i_walker > 0:
                     value = value + np.random.normal(0.0, sigma)
 
                 walker.append(value)
@@ -921,8 +934,12 @@ class EmceeLCFitter(MulensFitter):
         is invoked.  Sampling aborts early if the mean acceptance fraction
         drops below ``emcee_settings['acceptance_fraction']``.
 
-        On completion, sets :attr:`best` to the highest-probability
-        post-burn sample plus ``'chi2'``.
+        On completion, sets :attr:`best` to the highest-probability point the
+        fit visited anywhere -- full chain including burn-in, plus the
+        starting ensemble -- together with its ``'chi2'``.  The result is
+        therefore never worse than the point the fitter was seeded with.
+        :attr:`results` still derives percentiles and sigmas from the
+        post-burn-in chain alone.
 
         Parameters
         ----------
@@ -937,6 +954,11 @@ class EmceeLCFitter(MulensFitter):
             explains what went wrong.
         """
         starting_vector = self.make_starting_vector()
+
+        # Kept so the best-fit contract below is inspectable after the run:
+        # the reported best is the argmax over the full chain AND this
+        # ensemble, and a caller (or a test) cannot check that without it.
+        self.starting_vector_used = starting_vector
 
         # Subclass make_starting_vector() may initialise the event as a
         # side-effect; only call initialize_event() when that has not happened.
@@ -1035,9 +1057,49 @@ class EmceeLCFitter(MulensFitter):
                     )
                 )
 
-        prob = self.sampler.lnprobability[:, n_burn:].reshape((-1))
-        best_index = np.argmax(prob)
-        self.best_theta = samples[best_index]
+        # Best-fit point: the highest-probability point ANYWHERE this fit has
+        # been -- the full chain (burn-in included) and the starting ensemble
+        # itself -- not just the post-burn-in samples.
+        #
+        # Selecting over `[:, n_burn:]` alone made the returned best-fit
+        # unbounded from below with respect to the input: burn-in is where a
+        # polish does most of its improving, and if the walkers subsequently
+        # wandered to a worse region and stayed there, the reported point was
+        # whatever they had settled on.  On 2018 Data Challenge event 128 that
+        # turned a seed at chi2 37988 into a "fit" at 147227.  For a routine
+        # whose job is to refine a solution estimate, coming back worse than
+        # the input is never the right answer.
+        #
+        # Including the starting ensemble is what makes that a guarantee
+        # rather than a strong tendency: walker 0 is the unperturbed seed (see
+        # make_starting_vector), but emcee's stretch move may Metropolis-accept
+        # a step away from it, and the initial state is not itself stored in
+        # the chain.  n_walkers extra likelihood calls against n_walkers *
+        # n_steps in the run is a rounding error.
+        #
+        # Percentiles/sigmas still come from the post-burn-in chain only
+        # (EmceeFitResults) -- those describe the posterior, and burn-in has
+        # no business in them.  This is a point estimate, which is different.
+        n_walkers_started = len(starting_vector)
+        start_theta = np.asarray(starting_vector, dtype=float)
+        start_prob = np.array(
+            [self.ln_prob(theta) for theta in start_theta], dtype=float
+        )
+        cand_theta = np.vstack(
+            [self.sampler.chain.reshape((-1, n_dim)), start_theta]
+        )
+        cand_prob = np.concatenate(
+            [self.sampler.lnprobability.reshape((-1)), start_prob]
+        )
+        cand_prob = np.where(np.isfinite(cand_prob), cand_prob, -np.inf)
+        best_index = int(np.argmax(cand_prob))
+        self.best_theta = cand_theta[best_index]
+        if best_index >= len(cand_prob) - n_walkers_started:
+            logger.info(
+                "emcee polish did not improve on its starting ensemble; "
+                "returning the best starting point (walker %d).",
+                best_index - (len(cand_prob) - n_walkers_started),
+            )
         self.event = self.best_theta
 
         self.best = self._event.model.parameters.parameters
