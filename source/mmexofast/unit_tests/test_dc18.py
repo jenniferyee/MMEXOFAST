@@ -78,10 +78,17 @@ class TestUpstreamNameTranslation(unittest.TestCase):
         """
         Upstream publishes magnitudes, so fetched files must resolve to the
         DC18 observatory (phot_fmt='mag'), never WFIRST18 (phot_fmt='flux').
+
+        Looks the observatory up directly rather than going through
+        get_kwargs, which would resolve DC18's ephemerides and download it
+        outside a source checkout. See test_observatories for the get_kwargs
+        side of this.
         """
         name = dc18.upstream_to_mmexofast_name("ulwdc1_004_W149.txt")
-        kwargs = observatories.get_kwargs(name)
-        self.assertEqual(kwargs["phot_fmt"], "mag")
+        telescope, _ = observatories.get_telescope_band_from_filename(name)
+        observatory = observatories.OBSERVATORIES[telescope]
+
+        self.assertEqual(observatory.phot_fmt, "mag")
 
 
 class TestExtractAndRename(unittest.TestCase):
