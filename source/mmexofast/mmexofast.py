@@ -45,6 +45,7 @@ from .fitters import AnomalyFitter, EmceeFitResults, SFitFitter
 from .gridsearches import (
     AnomalyFinderGridSearch,
     EventFinderGridSearch,
+    NoAnomalyFoundError,
     ParallaxGridSearch,
 )
 from .mulens_object_config import EventConfig, ModelConfig
@@ -2167,8 +2168,30 @@ class MMEXOFASTFitter:
                 self._output_config.plot_path("ef_grid"),
             )
 
-        logger.info("Best AF grid point: %s", af_grid.best)
-        self.intermediate_results.best_af_grid_point = af_grid.best
+        best = af_grid.best
+        if best is None:
+            # Not a numerical failure: the grid ran to completion and every
+            # window was rejected for having too little data to fit.  That is
+            # the statement "no anomaly is detectable here", and for a
+            # binary-lens fit it is fatal -- every downstream step
+            # (get_anomaly_light_curve_parameters, classify_anomaly,
+            # estimate_binary_lens_parameters) reads best_af_grid_point and
+            # the first of them subscripts it immediately.  Raising a named
+            # error here says so once, in the vocabulary of the problem,
+            # instead of letting None reach AnomalyPropertyEstimator as a
+            # TypeError -- or, before this, letting nanargmax raise
+            # "All-NaN slice encountered" from inside a property.
+            raise NoAnomalyFoundError(
+                "AnomalyFinder found no fittable grid point, so no anomaly "
+                "can be characterized and a binary-lens fit cannot be "
+                "seeded. This usually means the light curve has too few "
+                "points in the anomaly windows (each needs >= 5 good points "
+                "with successive coverage), not that the fit diverged. "
+                "Consider fit_type='point_lens' for this event."
+            )
+
+        logger.info("Best AF grid point: %s", best)
+        self.intermediate_results.best_af_grid_point = best
 
     def get_anomaly_light_curve_parameters(self):
         """
