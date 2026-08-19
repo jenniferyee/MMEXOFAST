@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 import warnings
 from abc import ABC, abstractmethod
@@ -15,6 +16,20 @@ from scipy import stats
 from scipy.ndimage import label, minimum_filter
 
 from .fitters import AnomalyFitter, SFitFitter
+
+logger = logging.getLogger(__name__)
+
+
+class NoAnomalyFoundError(ValueError):
+    """The AnomalyFinder grid completed but found nothing fittable.
+
+    Subclasses ValueError deliberately: before this existed the same
+    situation surfaced as ``ValueError: All-NaN slice encountered`` out of
+    ``numpy.nanargmax``, so any caller already written to catch ValueError
+    keeps working, while a caller that wants to distinguish "this event has
+    no detectable anomaly" from a genuine numerical fault now can -- and can
+    fall back to a point-lens fit rather than treating the event as failed.
+    """
 
 # TODO: Separate EventFinder & AnomalyFinder grid searches from Rectangular grid searches.
 
@@ -649,8 +664,41 @@ class AnomalyFinderGridSearch(EventFinderGridSearch):
 
     @property
     def best(self):
+        """Highest-dchi2_zero grid point, or None if the grid found nothing.
+
+        None has two causes and they are the same answer to the caller: the
+        grid was never run (``results is None``), or it ran and not one grid
+        point was fittable.  ``do_fits`` leaves every chi2 column at NaN for
+        any window its data-sufficiency gate rejects (fewer than 5 good
+        points, or no successive coverage), so a grid on which every window
+        was rejected yields an all-NaN ``anomalies`` column.
+
+        Nearly-all-NaN is NORMAL and must not be treated as an error: measured
+        over 94375-point grids on six DC2018 events, a healthy event has only
+        ~480-500 fittable points, i.e. 99.5% of the grid is NaN.  That is why
+        the selection is ``nanargmax``.  What it had no answer for was the
+        count reaching exactly zero, where ``nanargmax`` raises
+        ``ValueError: All-NaN slice encountered`` from three frames down --
+        an opaque message about float bookkeeping for what is really the
+        physical statement "no anomaly is detectable in these data".  Four of
+        44 DC2018 events died that way with no indication of the cause.
+        """
         if (self.results is not None) and (self._best is None):
-            index = np.nanargmax(self.anomalies[:, 5])
+            anomalies = self.anomalies
+            if not np.any(np.isfinite(anomalies[:, 5])):
+                # self.results.shape[0], NOT anomalies.shape[0]: get_anomalies
+                # stacks the j=1 and j=2 passes, so the latter is twice the
+                # grid size and would misreport it by a factor of two.
+                logger.warning(
+                    "AnomalyFinder found no fittable grid point: all %d "
+                    "grid points were rejected by the data-sufficiency gate "
+                    "(>= 5 good points in the trimmed window, and successive "
+                    "coverage), so no anomaly can be characterized.",
+                    self.results.shape[0],
+                )
+                return None
+
+            index = np.nanargmax(anomalies[:, 5])
             self._best = {
                 "t_0": self.anomalies[index, 0],
                 "t_eff": self.anomalies[index, 1],
