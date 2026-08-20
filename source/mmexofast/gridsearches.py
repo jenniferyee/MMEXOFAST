@@ -31,6 +31,7 @@ class NoAnomalyFoundError(ValueError):
     fall back to a point-lens fit rather than treating the event as failed.
     """
 
+
 # TODO: Separate EventFinder & AnomalyFinder grid searches from Rectangular grid searches.
 
 # ---------------------------------------------------------------------
