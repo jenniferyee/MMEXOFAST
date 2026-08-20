@@ -2184,9 +2184,11 @@ class MMEXOFASTFitter:
             raise NoAnomalyFoundError(
                 "AnomalyFinder found no fittable grid point, so no anomaly "
                 "can be characterized and a binary-lens fit cannot be "
-                "seeded. This usually means the light curve has too few "
-                "points in the anomaly windows (each needs >= 5 good points "
-                "with successive coverage), not that the fit diverged. "
+                "seeded. No grid window held a coherent deviation from the "
+                "point-lens fit -- check_successive requires MORE THAN THREE "
+                "consecutive points at >= 2 sigma. This is a DETECTION "
+                "threshold, not a sparse-data condition: the fit did not "
+                "diverge and the cadence is very unlikely to be the problem. "
                 "Consider fit_type='point_lens' for this event."
             )
 
