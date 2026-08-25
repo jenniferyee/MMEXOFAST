@@ -1494,7 +1494,6 @@ class BellTemplateFitter:
         self.lc_parameters = lc_parameters
         self.n_bells = max(int(n_bells), 1)
         self.fit_centers = bool(fit_centers)
-        self.t_pl = float(lc_parameters.get("t_pl", None))
         self.best = None
         self._fit_parameters = self._get_fit_parameters()
 
@@ -1664,6 +1663,7 @@ class BellTemplateFitter:
         """Run the fit and store the best-fit parameters."""
         time, flux, err = self._stack_pspl_residuals()
         t_pl, dt_0 = self._set_time_parameters(time)
+        self.t_pl = t_pl
         self._time, self._flux, self._err = self._fit_window(
             time, flux, err, t_pl, dt_0
         )
@@ -1696,7 +1696,7 @@ class BellTemplateFitter:
                 fit_offset,
                 fit_amplitudes,
                 fit_dt,
-                self.t_pl,
+                t_pl,
             )
 
         popt, pcov = curve_fit(
