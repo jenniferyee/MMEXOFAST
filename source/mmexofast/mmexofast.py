@@ -2388,6 +2388,7 @@ class MMEXOFASTFitter:
         elif self.intermediate_results.anomaly_type == "caustic_crossing":
             estimator_classes = [
                 WideAxisGridSearchEstimator,
+                CloseAxisGridSearchEstimator,
             ]
         elif self.intermediate_results.anomaly_type == "dip":
             estimator_classes = [CloseAxisGridSearchEstimator]
