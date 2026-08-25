@@ -2457,10 +2457,10 @@ class MMEXOFASTFitter:
         """
         Handle backward compatibility for anomaly classification (old: wide/close -> new: bump/dip).
         """
-        if  self.intermediate_results.anomaly_type == 'close':
-            self.intermediate_results.anomaly_type = 'dip'
-        if self.intermediate_results.anomaly_type == 'wide':
-            self.intermediate_results.anomaly_type = 'bump'
+        if self.intermediate_results.anomaly_type == "close":
+            self.intermediate_results.anomaly_type = "dip"
+        if self.intermediate_results.anomaly_type == "wide":
+            self.intermediate_results.anomaly_type = "bump"
 
     def fit_binary_lens_models(self) -> Optional[list[WorkflowStep]]:
         """
