@@ -146,17 +146,17 @@ class AnomalyClassifier(object):
         """
         keys = ["dmag", "dt"]
         for key in keys:
-            if lc_parameters[key] == 0:
+            if self.lc_parameters[key] == 0:
                 raise ValueError(
-                    f"Invalid value for parameter {key}: {lc_parameters[key]}"
+                    f"Invalid value for parameter {key}: {self.lc_parameters[key]}"
                 )
         keys = ["dmag", "dt", "t_pl"]
         for key in keys:
-            if key not in lc_parameters:
+            if key not in self.lc_parameters:
                 raise ValueError(f"Missing required parameter: {key}")
-            if lc_parameters[key] is None:
+            if self.lc_parameters[key] is None:
                 raise ValueError(f"Missing required parameter: {key}")
-            if lc_parameters[key] is np.nan:
+            if self.lc_parameters[key] is np.nan:
                 raise ValueError(
-                    f"Invalid value for parameter {key}: {lc_parameters[key]}"
+                    f"Invalid value for parameter {key}: {self.lc_parameters[key]}"
                 )
