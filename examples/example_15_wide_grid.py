@@ -6,8 +6,8 @@ Challenge.
 import matplotlib.pyplot as plt
 import MulensModel as mm
 import pandas as pd
-from examples.use_cases.DC18_classes import TestDataSet
-from exozippy.mmexofast.estimate_params import WidePlanetGridSearchEstimator
+from DC18_classes import TestDataSet
+from mmexofast.estimate_params import WideAxisGridSearchEstimator
 
 
 def make_event(binary_params):
@@ -39,7 +39,7 @@ datasets = [
     for f in [data.file_w149, data.file_z087]
 ]
 
-estimator = WidePlanetGridSearchEstimator(
+estimator = WideAxisGridSearchEstimator(
     datasets=datasets, params=anomaly_params
 )
 estimator.run()

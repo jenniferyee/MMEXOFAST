@@ -30,7 +30,7 @@ af_grid_params = {
 anomaly_estimator = mmexo.estimate_params.AnomalyPropertyEstimator(
     datasets=datasets, pspl_params=pspl_params, af_results=af_grid_params
 )
-param_estimator = mmexo.estimate_params.WidePlanetParameterEstimator(
+param_estimator = mmexo.estimate_params.WideAxisParameterEstimator(
     anomaly_estimator.get_anomaly_lc_parameters()
 )
 binary_params = param_estimator.get_binary_lens_params()
