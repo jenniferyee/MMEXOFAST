@@ -50,9 +50,17 @@ The public API is `MMEXOFASTFitter` (or the convenience wrapper `mmexofast.fit()
 
 ```python
 import mmexofast as mmexo
-fitter = mmexo.MMEXOFASTFitter(files=['data.dat'], fit_type='point_lens')
+fitter = mmexo.MMEXOFASTFitter(
+    files=['data.dat'],
+    fit_type='point_lens',
+    finite_source_point_lens=True,
+    source_type='giant',
+)
 results = fitter.fit()
 ```
+
+For point-lens finite-source fitting, use `finite_source_point_lens` (with `True` or a conditional `u_0` threshold) rather than the older `finite_source` name.
+Use `source_type='dwarf'` or `source_type='giant'` to control the initial rho seed used for FSPL fitting.
 
 ### Workflow stages
 
@@ -94,7 +102,7 @@ Human-readable labels like `"PSPL static"`, `"FSPL par u0+"`, `"2L1S Wide static
 
 ### Parameter estimation (`estimate_params.py`)
 
-After the anomaly grid search, `AnomalyClassifier` (`classifier.py`) classifies the anomaly as `'close'`, `'wide'`, or `'high_mag'`. Based on the classification, one or more estimator classes (`WidePlanetGridSearchEstimator`, `ClosePlanetGridSearchEstimator`, etc.) seed initial binary-lens parameters for emcee.
+After the anomaly grid search, `AnomalyClassifier` (`classifier.py`) classifies the anomaly as `'dip'`,  `'bump'`, `'caustic_crossing'`, or `'high_mag'`. Based on the classification, one or more estimator classes (`WideAxisGridSearchEstimator`, `CloseAxisGridSearchEstimator`, etc.) seed initial binary-lens parameters for emcee.
 
 ### Model/Event construction (`mulens_object_config.py`)
 

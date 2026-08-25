@@ -71,7 +71,7 @@ class DC18Answers:
             self.filename,
             names=self.names,
             usecols=range(len(self.names)),
-            sep="\s+",
+            sep=r"\s+",
             skiprows=1,
         )
         self.classes = self._read_classes()

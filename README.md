@@ -50,8 +50,8 @@ named stages:
 | `fit_binary_lens` | Seed binary-lens parameters from the anomaly, then fit with emcee |
 | `parallax_grids` | Grid search over the `(piE_E, piE_N)` plane |
 
-Anomalies are classified as `'close'`, `'wide'`, or `'high_mag'`, which selects
-which estimators seed the binary-lens fit.
+Anomalies are classified as `'bump'`, `'dip'`, `'caustic_crossing'`, or
+`'high_mag'`, which selects which estimators seed the binary-lens fit.
 
 Long runs can be stopped, inspected, and resumed:
 

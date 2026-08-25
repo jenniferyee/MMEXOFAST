@@ -846,7 +846,7 @@ class IntermediateResults:
 
     """
 
-    VALID_ANOMALY_TYPES = {"close", "wide", "high_mag"}
+    VALID_ANOMALY_TYPES = {"high_mag", "bump", "dip", "caustic_crossing"}
 
     best_ef_grid_point: Optional[dict] = None
     best_af_grid_point: Optional[dict] = None

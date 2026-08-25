@@ -319,6 +319,108 @@ class TestPointLensWorkflow(unittest.TestCase):
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, EXPECTED_STEPS)
 
+    def test_finite_source_point_lens_adds_fspl_step(self):
+        """
+        Enabling finite_source_point_lens adds the static FSPL step to the
+        point-lens workflow.
+        """
+        fitter = self._make_fitter(dry_run=True, finite_source_point_lens=True)
+        fitter.fit()
+
+        actual = [(step.name, step.stage) for step in fitter.planned_steps]
+        self.assertIn(
+            ("fit_static_finite_source_point_lens", "fit_static_point_lens"),
+            actual,
+        )
+
+    def test_source_type_controls_fspl_rho_seed(self):
+        """
+        source_type is forwarded into the FSPL rho estimator when the
+        finite-source fit is built.
+        """
+        fitter = self._make_fitter(
+            finite_source_point_lens=True,
+            source_type="dwarf",
+        )
+
+        pspl_key = fit_types.FitKey(
+            lens_type=fit_types.LensType.POINT,
+            source_type=fit_types.SourceType.POINT,
+            parallax_branch=fit_types.ParallaxBranch.NONE,
+            lens_orb_motion=fit_types.LensOrbMotion.NONE,
+        )
+        fitter.all_fit_results.set(
+            mmexo.FitRecord(
+                model_key=pspl_key,
+                params=dict(STATIC_PSPL_PARAMS),
+            )
+        )
+
+        captured = {}
+
+        def fake_get_rho(self):
+            captured["limit"] = self.limit
+            return 0.001 if self.limit == "dwarf" else 0.05
+
+        with ExitStack() as stack:
+            stack.enter_context(
+                patch.object(
+                    fitter, "_check_FSPL_condition", return_value=True
+                )
+            )
+            rho_patch = stack.enter_context(
+                patch(
+                    "mmexofast.estimate_params.ParameterEstimator.get_rho",
+                    fake_get_rho,
+                )
+            )
+            fitter_patch = stack.enter_context(
+                patch("mmexofast.mmexofast.SFitFitter")
+            )
+            fitter.fit_static_finite_source_point_lens()
+
+        self.assertEqual(captured["limit"], "dwarf")
+        self.assertEqual(
+            fitter_patch.call_args.kwargs["initial_model_params"]["rho"],
+            0.001,
+        )
+
+    def test_unmet_fspl_condition_falls_back_to_point_source_parallax(self):
+        """
+        When the FSPL condition is not met, later parallax fitting should use
+        point-source keys instead of leaving the workflow in an FSPL state.
+        """
+        fitter = self._make_fitter(finite_source_point_lens="u_0<0.1")
+
+        pspl_key = fit_types.FitKey(
+            lens_type=fit_types.LensType.POINT,
+            source_type=fit_types.SourceType.POINT,
+            parallax_branch=fit_types.ParallaxBranch.NONE,
+            lens_orb_motion=fit_types.LensOrbMotion.NONE,
+        )
+        fitter.all_fit_results.set(
+            mmexo.FitRecord(
+                model_key=pspl_key,
+                params={**STATIC_PSPL_PARAMS, "u_0": 0.2},
+            )
+        )
+
+        fitter.fit_static_finite_source_point_lens(
+            initial_params={**STATIC_PSPL_PARAMS, "u_0": 0.2}
+        )
+
+        self.assertFalse(fitter.finite_source_point_lens)
+
+        with patch.object(
+            fitter, "_do_parallax_fit", return_value=None
+        ) as mock:
+            fitter.fit_parallax(branch=fit_types.ParallaxBranch.U0_PLUS)
+
+        self.assertEqual(
+            mock.call_args.kwargs["source_type"],
+            fit_types.SourceType.POINT,
+        )
+
     # --- stop_before stage:step ---
 
     def test_stop_before_first_step_of_stage(self):
@@ -1148,7 +1250,8 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         named in stop_before, the workflow has gone past the intended
         stopping point; planned_steps is empty.
         """
-        # Pickle records fit_static_point_source_point_lens as done; stop_before points to fit_static_point_source_point_lens
+        # Pickle records fit_static_point_source_point_lens as done;
+        # stop_before points to fit_static_point_source_point_lens
         # → all steps admissible under the stop_before constraint are
         # already completed.
         completed = _make_noop_steps(

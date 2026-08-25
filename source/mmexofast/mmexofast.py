@@ -26,10 +26,13 @@ from .classifier import AnomalyClassifier
 from .estimate_params import (
     AnomalyPropertyEstimator,
     BinaryLensParams,
-    CloseLowerBinaryGridSearchEstimator,
-    ClosePlanetGridSearchEstimator,
-    CloseUpperBinaryGridSearchEstimator,
-    WidePlanetGridSearchEstimator,
+    CloseAxisGridSearchEstimator,
+    CloseLowerGridSearchEstimator,
+    CloseUpperGridSearchEstimator,
+    ParameterEstimator,
+    WideAxisGridSearchEstimator,
+    WideLowerGridSearchEstimator,
+    WideUpperGridSearchEstimator,
     get_PSPL_params,
 )
 from .fit_types import (
@@ -398,8 +401,11 @@ class MMEXOFASTFitter:
         Sky coordinates of the event.
     fit_type : str
         ``'point_lens'`` or ``'binary_lens'``.
-    finite_source : bool
+    finite_source_point_lens : bool or ``u_0<float``
         If True, include FSPL fitting steps after PSPL.
+        if e.g.``u_0<0.001`` then FSPL is only run if the fitted u_0 from PSPL model is less than 0.001.
+    source_type : str
+        ``'dwarf'`` or ``'giant'``. Default is ``'giant'``.  Used to set a initial value of rho for FSPL fitting.
     mag_methods : list, optional
         Magnification methods in MulensModel convention.
     vbbl_accuracy : float, optional
@@ -520,7 +526,8 @@ class MMEXOFASTFitter:
     CONFIG_KEYS = [
         "fit_type",
         "coords",
-        "finite_source",
+        "finite_source_point_lens",
+        "source_type",
         "mag_methods",
         "vbbl_accuracy",
         "limb_darkening_coeffs_u",
@@ -563,9 +570,10 @@ class MMEXOFASTFitter:
         datasets=None,
         files=None,
         coords=None,
+        source_type: str = "giant",
         fit_type: str = "point_lens",
-        finite_source: bool = False,
-        mag_methods=None,  # TODO: Check whether mag_methods does anything
+        finite_source_point_lens: bool = False,
+        mag_methods=None,
         vbbl_accuracy: float = BinaryLensParams._DEFAULT_VBBL_ACCURACY,
         limb_darkening_coeffs_u=None,
         limb_darkening_coeffs_gamma=None,
@@ -702,10 +710,62 @@ class MMEXOFASTFitter:
                 self._initial_entry_point = (
                     self._infer_entry_point_from_initial_results()
                 )
+        self.finite_source_point_lens = self._parse_finite_source_point_lens(
+            finite_source_point_lens
+        )
 
     # ------------------------------------------------------------------
     # Initialization helpers
     # ------------------------------------------------------------------
+
+    def _parse_finite_source_point_lens(self, value):
+        """
+        Parse the finite_source_point_lens argument.
+
+        Parameters
+        ----------
+        value : bool or float
+            If True, include FSPL fitting steps after PSPL.
+            If float, include FSPL only if fitted u_0 from PSPL is less than this value.
+            if str, must be in the format 'parameter_name < value' or 'parameter_name > value',
+            where parameter_name is one of 'u_0' or 't_E'.
+
+        Returns
+        -------
+        bool or list
+            Parsed value.
+        """
+        allowed_parameters = ["u_0", "t_E"]
+        if isinstance(value, bool):
+            return value
+        elif isinstance(value, (int, float)):
+            if value < 0:
+                raise ValueError(
+                    "finite_source_point_lens must be non-negative."
+                )
+
+            return ["u_0", np.less, value]
+        elif isinstance(value, str):
+            if len(value.split("<")) == 2:
+                parts = value.split("<")
+                function = np.less
+            elif len(value.split(">")) == 2:
+                parts = value.split(">")
+                function = np.greater
+            else:
+                raise ValueError(
+                    "finite_source_point_lens string must be in the format"
+                    + " 'parameter_name < value' or 'parameter_name > value'."
+                )
+            if parts[0].strip() not in allowed_parameters:
+                raise ValueError(
+                    f"finite_source_point_lens parameter name must be one of {allowed_parameters}."
+                )
+            return [parts[0].strip(), function, float(parts[1].strip())]
+        else:
+            raise TypeError(
+                "finite_source_point_lens must be a bool, string, or a non-negative float."
+            )
 
     def _load_restart_data(self, restart_file) -> tuple[dict, dict]:
         """
@@ -1138,7 +1198,7 @@ class MMEXOFASTFitter:
         user-supplied ``initial_results``), its params are passed to
         ``fit_static_point_source_point_lens`` as the initial seed.
 
-        Includes an FSPL step when ``self.finite_source`` is True.
+        Includes an FSPL step when ``self.finite_source_point_lens`` is not False.
 
         Returns
         -------
@@ -1176,7 +1236,7 @@ class MMEXOFASTFitter:
             ),
         )
 
-        if self.finite_source:
+        if self.finite_source_point_lens:
             steps.append(
                 WorkflowStep(
                     name="fit_static_finite_source_point_lens",
@@ -1450,23 +1510,32 @@ class MMEXOFASTFitter:
             **self._get_fitter_kwargs(source_type=SourceType.POINT),
         )
         fitter.run()
-        logger.info("Static PSPL: %s", fitter.best)
-        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
 
-        key = FitKey(
-            lens_type=LensType.POINT,
-            source_type=SourceType.POINT,
-            parallax_branch=ParallaxBranch.NONE,
-            lens_orb_motion=LensOrbMotion.NONE,
-        )
-        self.all_fit_results.set(
-            FitRecord.from_full_result(
-                model_key=key,
-                full_result=MMEXOFASTFitResults(fitter),
-                renorm_factors=self.renorm_factors,
-                fixed=False,
+        if fitter.success:
+            logger.info("Static PSPL: %s", fitter.best)
+            logger.info("    sigmas:  %s", list(fitter.results.sigmas))
+
+            key = FitKey(
+                lens_type=LensType.POINT,
+                source_type=SourceType.POINT,
+                parallax_branch=ParallaxBranch.NONE,
+                lens_orb_motion=LensOrbMotion.NONE,
             )
-        )
+            self.all_fit_results.set(
+                FitRecord.from_full_result(
+                    model_key=key,
+                    full_result=MMEXOFASTFitResults(fitter),
+                    renorm_factors=self.renorm_factors,
+                    fixed=False,
+                )
+            )
+        else:
+            logger.warning(
+                "Static PSPL fit failed: %s", fitter.get_diagnostic_str()
+            )
+            raise RuntimeError(
+                "Static PSPL fit failed. Cannot proceed to FSPL or parallax fitting."
+            )
 
     def fit_static_finite_source_point_lens(self, initial_params=None) -> None:
         """
@@ -1476,9 +1545,7 @@ class MMEXOFASTFitter:
         ----------
         initial_params : dict, optional
             Starting parameter values.  If None, seeds from the PSPL
-            result in ``self.all_fit_results`` with
-            ``rho = 1.5 * u_0``.
-
+            result in ``self.all_fit_results`` with ``rho = 0.05`` (giant source)
         Notes
         -----
         Stores the resulting ``FitRecord`` in ``self.all_fit_results``.
@@ -1502,31 +1569,109 @@ class MMEXOFASTFitter:
                     "A static PSPL fit must exist before fitting FSPL."
                 )
             initial_params = dict(pspl_record.params)
-            initial_params["rho"] = 1.5 * initial_params["u_0"]
+            initial_params["rho"] = ParameterEstimator(
+                initial_params, limit=self.source_type
+            ).get_rho()
 
-        fitter = SFitFitter(
-            initial_model_params=initial_params,
-            datasets=self.datasets,
-            **self._get_fitter_kwargs(),
-        )
-        fitter.run()
-        logger.info("Static FSPL: %s", fitter.best)
-        logger.info("    sigmas:  %s", list(fitter.results.sigmas))
-
-        key = FitKey(
-            lens_type=LensType.POINT,
-            source_type=SourceType.FINITE,
-            parallax_branch=ParallaxBranch.NONE,
-            lens_orb_motion=LensOrbMotion.NONE,
-        )
-        self.all_fit_results.set(
-            FitRecord.from_full_result(
-                model_key=key,
-                full_result=MMEXOFASTFitResults(fitter),
-                renorm_factors=self.renorm_factors,
-                fixed=False,
+        if self._check_FSPL_condition(initial_params):
+            mag_methods = self._get_magnification_methods_FSPL(
+                initial_params=initial_params
             )
-        )
+            fitter_kwargs = self._get_fitter_kwargs(
+                source_type=SourceType.FINITE
+            )
+            fitter_kwargs["mag_methods"] = mag_methods
+            fitter = SFitFitter(
+                initial_model_params=initial_params,
+                datasets=self.datasets,
+                **fitter_kwargs,
+            )
+            fitter.run()
+            if fitter.success:
+                logger.info("Static FSPL: %s", fitter.best)
+                logger.info("    sigmas:  %s", list(fitter.results.sigmas))
+
+                key = FitKey(
+                    lens_type=LensType.POINT,
+                    source_type=SourceType.FINITE,
+                    parallax_branch=ParallaxBranch.NONE,
+                    lens_orb_motion=LensOrbMotion.NONE,
+                )
+                self.all_fit_results.set(
+                    FitRecord.from_full_result(
+                        model_key=key,
+                        full_result=MMEXOFASTFitResults(fitter),
+                        renorm_factors=self.renorm_factors,
+                        fixed=False,
+                    )
+                )
+            else:
+                logger.warning(
+                    "Static FSPL fit failed: %s", fitter.get_diagnostic_str()
+                )
+                self.finite_source_point_lens = False
+
+    def _get_magnification_methods_FSPL(self, initial_params=None):
+        """
+        Get the magnification methods for FSPL model.
+        """
+        if self.mag_methods is not None:
+            for mag_method in self.mag_methods:
+                if (
+                    not isinstance(mag_method, (float, int))
+                    and mag_method != "finite_source_uniform_Gould94"
+                ):
+                    raise ValueError(
+                        "Invalid magnification method for FSPL. Only 'finite_source_uniform_Gould94' is alowed by MulensModel"
+                    )
+            return self.mag_methods
+
+        if initial_params is None:
+            return "finite_source_uniform_Gould94"
+
+        t_0 = initial_params["t_0"]
+        t_E = initial_params["t_E"]
+        return [
+            t_0 - 0.5 * t_E,
+            "finite_source_uniform_Gould94",
+            t_0 + 0.5 * t_E,
+        ]
+
+    def _check_FSPL_condition(self, initial_params):
+        """
+        Check if the FSPL condition is set and satisfied.
+        """
+        if isinstance(self.finite_source_point_lens, bool):
+            return self.finite_source_point_lens
+        elif isinstance(self.finite_source_point_lens, list):
+            param_name = self.finite_source_point_lens[0]
+            function = self.finite_source_point_lens[1]
+            limit = self.finite_source_point_lens[2]
+            value = initial_params[param_name]
+            if function(value, limit):
+                logger.info(
+                    "FSPL condition satisfied (%s=%.4f %s %s); enabling FSPL fit.",
+                    param_name,
+                    value,
+                    function.__name__,
+                    limit,
+                )
+                return True
+            else:
+                logger.info(
+                    "FSPL condition not satisfied (%s=%.4f %s %s); disabling FSPL fit.",
+                    param_name,
+                    value,
+                    function.__name__,
+                    limit,
+                )
+                self.finite_source_point_lens = False
+                return False
+        else:
+            raise ValueError(
+                "FSPL parameter must be a boolean or a string of the form 'u_0<value', 'u_0>value',"
+                + " 't_E<value', or 't_E>value'."
+            )
 
     def fit_parallax(self, branch=None) -> None:
         """
@@ -1545,7 +1690,9 @@ class MMEXOFASTFitter:
         """
         if branch is not None:
             source_type = (
-                SourceType.FINITE if self.finite_source else SourceType.POINT
+                SourceType.FINITE
+                if self.finite_source_point_lens
+                else SourceType.POINT
             )
             keys = [
                 FitKey(
@@ -2225,12 +2372,24 @@ class MMEXOFASTFitter:
         """
         classifier = AnomalyClassifier()
         self.intermediate_results.anomaly_type = classifier.classify(
-            self.intermediate_results.anomaly_lc_params
+            self.residuals, self.intermediate_results.anomaly_lc_params
         )
         logger.info(
             "Anomaly classified as anomaly_type = %s",
             self.intermediate_results.anomaly_type,
         )
+        if self._output_config is not None and self._output_config.save_plots:
+            fig = classifier.plot_bell_fits()
+            if fig is not None:
+                fig.savefig(
+                    self._output_config.plot_path("anomaly_classifier_fits")
+                )
+                fig.show()
+                plt.close(fig)
+                logger.info(
+                    "Saved anomaly classification fits plot to %s.",
+                    self._output_config.plot_path("anomaly_classifier_fits"),
+                )
 
     def estimate_binary_lens_parameters(self) -> None:
         """
@@ -2242,16 +2401,25 @@ class MMEXOFASTFitter:
         """
         est_params = {}
         estimator_classes = None
+        self._anomaly_classification_backward_compatibility()
         # TODO: Consider running all Estimators in all cases
-        if self.intermediate_results.anomaly_type == "wide":
+        if self.intermediate_results.anomaly_type == "bump":
             estimator_classes = [
-                WidePlanetGridSearchEstimator,
-                CloseUpperBinaryGridSearchEstimator,
-                CloseLowerBinaryGridSearchEstimator,
+                WideUpperGridSearchEstimator,
+                WideLowerGridSearchEstimator,
+                CloseUpperGridSearchEstimator,
+                CloseLowerGridSearchEstimator,
             ]
             # TODO: Implement checking for large vs. small rho solutions. Maybe add a second estimator?
-        elif self.intermediate_results.anomaly_type == "close":
-            estimator_classes = [ClosePlanetGridSearchEstimator]
+        elif self.intermediate_results.anomaly_type == "caustic_crossing":
+            estimator_classes = [
+                WideAxisGridSearchEstimator,
+                CloseAxisGridSearchEstimator,
+                CloseUpperGridSearchEstimator,
+                CloseLowerGridSearchEstimator,
+            ]
+        elif self.intermediate_results.anomaly_type == "dip":
+            estimator_classes = [CloseAxisGridSearchEstimator]
         else:
             logger.info(
                 "Binary params estimate not implemented for %s",
@@ -2284,7 +2452,11 @@ class MMEXOFASTFitter:
                 logger.info("mag_methods: %s", params.mag_methods)
                 est_params[class_name] = params
 
-                if self.intermediate_results.anomaly_type in ["close", "wide"]:
+                if self.intermediate_results.anomaly_type in [
+                    "dip",
+                    "bump",
+                    "caustic_crossing",
+                ]:
                     if (
                         self.intermediate_results.anomaly_lc_params["u_0"]
                         < 0.05
@@ -2305,6 +2477,15 @@ class MMEXOFASTFitter:
             self._output_config is not None
         ) and self._output_config.save_plots:
             self._plot_initial_2L1S_guess()
+
+    def _anomaly_classification_backward_compatibility(self):
+        """
+        Handle backward compatibility for anomaly classification (old: wide/close -> new: bump/dip).
+        """
+        if self.intermediate_results.anomaly_type == "close":
+            self.intermediate_results.anomaly_type = "dip"
+        if self.intermediate_results.anomaly_type == "wide":
+            self.intermediate_results.anomaly_type = "bump"
 
     def fit_binary_lens_models(self) -> Optional[list[WorkflowStep]]:
         """
@@ -2504,11 +2685,16 @@ class MMEXOFASTFitter:
                 if ("rho" in params or "t_star" in params)
                 else SourceType.POINT
             )
-
+        fitter_kwargs = self._get_fitter_kwargs(source_type=source_type)
+        if source_type == SourceType.FINITE:
+            mag_methods = self._get_magnification_methods_FSPL(
+                initial_params=params
+            )
+            fitter_kwargs["mag_methods"] = mag_methods
         fitter = SFitFitter(
             initial_model_params=params,
             datasets=self.datasets,
-            **self._get_fitter_kwargs(source_type=source_type),
+            **fitter_kwargs,
         )
         try:
             fitter.run()
@@ -2517,9 +2703,13 @@ class MMEXOFASTFitter:
                 "Parallax fit failed:\n{0}: {1}".format(type(e).__name__, e)
             )
             return None
+        if fitter.success:
+            logger.info("Parallax fit: %s", fitter.best)
+            logger.info("      sigmas: %s", list(fitter.results.sigmas))
+        else:
+            logger.warning(" fit failed: %s", fitter.get_diagnostic_str())
+            return None
 
-        logger.info("Parallax fit: %s", fitter.best)
-        logger.info("      sigmas: %s", list(fitter.results.sigmas))
         return MMEXOFASTFitResults(fitter)
 
     def _get_parallax_seed_params(self, key: FitKey) -> dict:
@@ -2762,7 +2952,9 @@ class MMEXOFASTFitter:
             ]
 
         source_type = (
-            SourceType.FINITE if self.finite_source else SourceType.POINT
+            SourceType.FINITE
+            if self.finite_source_point_lens
+            else SourceType.POINT
         )
         for branch in branches:
             yield FitKey(

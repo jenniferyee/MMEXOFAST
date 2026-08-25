@@ -30,8 +30,8 @@ As a convenience, "<base>" alone is treated as "<base> static".
 
 Valid binary_model_type values
 -------------------------------
-    Wide, Close, CloseUpper, CloseLower
-    Wide_alt, Close_alt, CloseUpper_alt, CloseLower_alt
+    WideAxis, WideUpper, WideLower, CloseAxis, CloseUpper, CloseLower
+    WideAxis_alt, WideUpper_alt, WideLower_alt, CloseAxis_alt, CloseUpper_alt, CloseLower_alt
 
 Examples
 --------
@@ -40,10 +40,10 @@ Examples
     "PSPL par u0+"
     "FSPL par u0-"
     "2L1S static"
-    "2L1S Wide static"
-    "2L1S Close par u0+"
-    "2L1S Wide 2Dorb"
-    "2L1S Close kep par u0--"
+    "2L1S WideAxis static"
+    "2L1S CloseAxis par u0+"
+    "2L1S WideAxis 2Dorb"
+    "2L1S CloseUpper kep par u0--"
     "2L1S par u0+"
     "2L1S 2Dorb par u0+"
     "2L1S kep par u0--"
@@ -95,12 +95,16 @@ class LensOrbMotion(Enum):
 #: four base topology labels plus their ``_alt`` (degenerate-solution) variants.
 BINARY_MODEL_TYPES: FrozenSet[str] = frozenset(
     [
-        "Wide",
-        "Close",
+        "WideAxis",
+        "WideUpper",
+        "WideLower",
+        "CloseAxis",
         "CloseUpper",
         "CloseLower",
-        "Wide_alt",
-        "Close_alt",
+        "WideAxis_alt",
+        "WideUpper_alt",
+        "WideLower_alt",
+        "CloseAxis_alt",
         "CloseUpper_alt",
         "CloseLower_alt",
     ]

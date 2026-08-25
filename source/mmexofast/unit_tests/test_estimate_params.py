@@ -60,7 +60,7 @@ class TestGetWideParams_alpha(unittest.TestCase):
             # plt.suptitle(
             #    'u_0={0}, alpha={1:8.2f}'.format(params.ulens['u_0'], params.ulens['alpha']))
             # plt.subplot(1, 2, 1)
-            ##plt.title('alpha = {0}'.format(planet_model.parameters.alpha))
+            # plt.title('alpha = {0}'.format(planet_model.parameters.alpha))
             # planet_model.plot_trajectory(caustics=True)
             #
             # plt.subplot(1, 2, 2)
@@ -353,7 +353,7 @@ class TestWideParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.WidePlanetParameterEstimator(
+        self.estimator = estimate_params.WideAxisParameterEstimator(
             self.params, limit="GG97"
         )
 
@@ -368,7 +368,7 @@ class TestWideParameterEstimatorOB180383(
         )
 
     def test_q_manual_dA(self):
-        estimator = estimate_params.WidePlanetParameterEstimator(
+        estimator = estimate_params.WideAxisParameterEstimator(
             self.params, limit="GG97"
         )
         estimator._delta_A = self.delta_A
@@ -376,13 +376,15 @@ class TestWideParameterEstimatorOB180383(
 
     def test_q(self):
         self.skipTest(
-            "this test fails because of the large negative blending in the event, which affects the calculation of delta_A."
+            "this test fails because of the large negative blending"
+            + " in the event, which affects the calculation of delta_A."
         )
         np.testing.assert_allclose(self.estimator.q, self.q_est, rtol=self.tol)
 
     def test_delta_A(self):
         self.skipTest(
-            "this test fails because of the large negative blending in the event, which affects the calculation of delta_A."
+            "this test fails because of the large negative blending"
+            + " in the event, which affects the calculation of delta_A."
         )
         np.testing.assert_allclose(
             self.estimator.delta_A, self.delta_A, rtol=self.tol
@@ -394,7 +396,7 @@ class TestCloseUpperParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseUpperBinaryParameterEstimator(
+        self.estimator = estimate_params.CloseUpperParameterEstimator(
             self.params, limit="point"
         )
 
@@ -431,7 +433,7 @@ class TestCloseLowerParameterEstimatorOB180383(
 ):
     def setUp(self):
         OB180383.__init__(self)
-        self.estimator = estimate_params.CloseLowerBinaryParameterEstimator(
+        self.estimator = estimate_params.CloseLowerParameterEstimator(
             self.params, limit="point"
         )
 
@@ -588,7 +590,8 @@ class TestAnomalyParameterEstimator(unittest.TestCase):
         # event = MulensModel.Event(datasets=self.data, model=MulensModel.Model(parameters=test_pspl))
         # event.plot()
         #
-        # event_2 = MulensModel.Event(datasets=estimator.masked_datasets, model=MulensModel.Model(parameters=estimator.refined_pspl_params))
+        # event_2 = MulensModel.Event(datasets=estimator.masked_datasets,
+        #                             model=MulensModel.Model(parameters=estimator.refined_pspl_params))
         # event_2.plot(show_bad=True)
         # plt.show()
 
@@ -738,7 +741,7 @@ class TestBinaryLensParams(unittest.TestCase):
         """The estimator's tolerance reaches the BinaryLensParams it
         builds, so a fitter-level override is not silently dropped."""
         case = KB160625()
-        estimator = estimate_params.WidePlanetParameterEstimator(case.params)
+        estimator = estimate_params.WideAxisParameterEstimator(case.params)
         self.assertEqual(
             estimator.get_binary_lens_params().vbbl_accuracy, 0.01
         )
