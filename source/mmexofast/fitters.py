@@ -521,7 +521,7 @@ class SFitFitter(MulensFitter):
         if self.verbose:
             print(result)
 
-        if not result.success:
+        if results is None or not result.success:
             try:
                 result = sfit.minimize(
                     my_func,
