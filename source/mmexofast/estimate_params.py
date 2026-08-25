@@ -2101,8 +2101,9 @@ class CloseUpperParameterEstimator(WideAxisParameterEstimator):
         float
         """
         if self._eta_not is None:
-            self._eta_not = ((2 * np.sqrt(self.q) /
-                                     np.sqrt(1 + self.s*self.s) / self.s))
+            self._eta_not = (
+                2 * np.sqrt(self.q) / np.sqrt(1 + self.s * self.s) / self.s
+            )
 
         return self._eta_not
 
@@ -2122,7 +2123,9 @@ class CloseUpperParameterEstimator(WideAxisParameterEstimator):
             Angle in radians.
         """
         if self._mu is None:
-            self._mu = np.arctan2(self.eta_not, (self.s - 1 / self.s) * self.shift)
+            self._mu = np.arctan2(
+                self.eta_not, (self.s - 1 / self.s) * self.shift
+            )
 
         return self._mu
 
@@ -2200,8 +2203,10 @@ class CloseLowerParameterEstimator(CloseUpperParameterEstimator):
 
         return self._alpha
 
+
 class WideUpperParameterEstimator(CloseUpperParameterEstimator):
     """Analytic parameter estimator for wide binary lens models (upper cusp approach)."""
+
     @property
     def s(self):
         """
@@ -2231,10 +2236,12 @@ class WideUpperParameterEstimator(CloseUpperParameterEstimator):
         """
         Opposite shift for wide binary lens models.
         """
-        return 1/(1.+self.q)
+        return 1 / (1.0 + self.q)
+
 
 class WideLowerParameterEstimator(CloseLowerParameterEstimator):
     """Analytic parameter estimator for wide binary lens models (lower cusp approach)."""
+
     @property
     def s(self):
         """
@@ -2264,8 +2271,8 @@ class WideLowerParameterEstimator(CloseLowerParameterEstimator):
         """
         Opposite shift for wide binary lens models.
         """
-        return 1/(1.+self.q)
-    
+        return 1 / (1.0 + self.q)
+
 
 class CloseUpperGridSearchEstimator(
     WideAxisGridSearchEstimator, CloseUpperParameterEstimator
@@ -2294,6 +2301,7 @@ class CloseLowerGridSearchEstimator(
 
     pass
 
+
 class WideUpperGridSearchEstimator(
     WideAxisGridSearchEstimator, WideUpperParameterEstimator
 ):
@@ -2306,6 +2314,7 @@ class WideUpperGridSearchEstimator(
     """
 
     pass
+
 
 class WideLowerGridSearchEstimator(
     WideAxisGridSearchEstimator, WideLowerParameterEstimator

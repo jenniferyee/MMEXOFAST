@@ -43,7 +43,11 @@ class TestAnomalyClassifier(unittest.TestCase):
             "t_pl": 2453592.85,
         }  # OB053901,
         # Create a single-bump residual (should prefer 1-bell -> 'bump')
-        time = np.linspace(bump_params["t_pl"] - 10 * bump_params["dt"], bump_params["t_pl"] + 10 * bump_params["dt"], 200)
+        time = np.linspace(
+            bump_params["t_pl"] - 10 * bump_params["dt"],
+            bump_params["t_pl"] + 10 * bump_params["dt"],
+            200,
+        )
         width = 0.2
         amp = 0.2
         flux = amp * np.exp(-0.5 * ((time - bump_params["t_pl"]) / width) ** 2)
@@ -63,7 +67,11 @@ class TestAnomalyClassifier(unittest.TestCase):
             "t_pl": 2453480.6,
         }  # OB05071
         # small-ish u0 leads to high_mag in the classifier logic for dmag<0
-        time = np.linspace(hm_params["t_pl"] - 2.0 * hm_params["dt"], hm_params["t_pl"] + 2.0 * hm_params["dt"], 200)
+        time = np.linspace(
+            hm_params["t_pl"] - 2.0 * hm_params["dt"],
+            hm_params["t_pl"] + 2.0 * hm_params["dt"],
+            200,
+        )
         flux = -0.1 * np.exp(-0.5 * ((time - hm_params["t_pl"]) / 0.3) ** 2)
         err = np.full_like(time, 0.01)
         residuals = MulensModel.MulensData([time, flux, err], phot_fmt="flux")
@@ -80,13 +88,20 @@ class TestAnomalyClassifier(unittest.TestCase):
             "dt": 1.4,
             "t_pl": 2453592.85,
         }
-        time = np.linspace(params["t_pl"] - 4.0 * params["dt"], params["t_pl"] + 4.0 * params["dt"], 400)
+        time = np.linspace(
+            params["t_pl"] - 4.0 * params["dt"],
+            params["t_pl"] + 4.0 * params["dt"],
+            400,
+        )
         width = 0.3
         amp_1 = 0.8
         amp_2 = 0.6
-        flux = (
-            amp_1 * np.exp(-0.5 * ((time - (params["t_pl"] - 0.5 * params["dt"])) / width) ** 2)
-            + amp_2 * np.exp(-0.5 * ((time - (params["t_pl"] + 0.5 * params["dt"])) / width) ** 2)
+        flux = amp_1 * np.exp(
+            -0.5
+            * ((time - (params["t_pl"] - 0.5 * params["dt"])) / width) ** 2
+        ) + amp_2 * np.exp(
+            -0.5
+            * ((time - (params["t_pl"] + 0.5 * params["dt"])) / width) ** 2
         )
         err = np.full_like(time, 0.01)
         residuals = MulensModel.MulensData([time, flux, err], phot_fmt="flux")
@@ -170,7 +185,9 @@ class TestTwoBellTemplateFitter(unittest.TestCase):
         err = np.full_like(time, 0.03)
         data = MulensModel.MulensData([time, flux, err], phot_fmt="flux")
 
-        fitter = BellTemplateFitter([data], {"t_pl": t_pl, "dt": dt}, n_bells=3)
+        fitter = BellTemplateFitter(
+            [data], {"t_pl": t_pl, "dt": dt}, n_bells=3
+        )
         best = fitter.run()
 
         assert len(best["amplitudes"]) == 3

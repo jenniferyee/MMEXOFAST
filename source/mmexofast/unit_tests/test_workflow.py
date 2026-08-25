@@ -411,7 +411,9 @@ class TestPointLensWorkflow(unittest.TestCase):
 
         self.assertFalse(fitter.finite_source_point_lens)
 
-        with patch.object(fitter, "_do_parallax_fit", return_value=None) as mock:
+        with patch.object(
+            fitter, "_do_parallax_fit", return_value=None
+        ) as mock:
             fitter.fit_parallax(branch=fit_types.ParallaxBranch.U0_PLUS)
 
         self.assertEqual(

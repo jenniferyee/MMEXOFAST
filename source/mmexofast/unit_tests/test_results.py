@@ -940,7 +940,9 @@ class TestIntermediateResults(unittest.TestCase):
             fitter.intermediate_results.estimate_point_lens_parameters,
             {"t_0": 2456836.0, "u_0": 1.012, "t_E": 21.48},
         )
-        self.assertEqual(fitter.intermediate_results.anomaly_type, "caustic_crossing")
+        self.assertEqual(
+            fitter.intermediate_results.anomaly_type, "caustic_crossing"
+        )
         self.assertEqual(
             fitter.intermediate_results.anomaly_lc_params, ANOMALY_LC_PARAMS
         )

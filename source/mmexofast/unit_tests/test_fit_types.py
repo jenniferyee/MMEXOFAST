@@ -141,13 +141,27 @@ class TestTagConstants(unittest.TestCase):
 
     def test_binary_model_types_base_values_present(self):
         """Each of the six base types must be in BINARY_MODEL_TYPES."""
-        for base in ("WideAxis", "WideLower", "WideUpper", "CloseAxis", "CloseUpper", "CloseLower"):
+        for base in (
+            "WideAxis",
+            "WideLower",
+            "WideUpper",
+            "CloseAxis",
+            "CloseUpper",
+            "CloseLower",
+        ):
             with self.subTest(base=base):
                 self.assertIn(base, fit_types.BINARY_MODEL_TYPES)
 
     def test_binary_model_types_alt_values_present(self):
         """Each base type must have a corresponding _alt variant."""
-        for base in ("WideAxis", "WideLower", "WideUpper", "CloseAxis", "CloseUpper", "CloseLower"):
+        for base in (
+            "WideAxis",
+            "WideLower",
+            "WideUpper",
+            "CloseAxis",
+            "CloseUpper",
+            "CloseLower",
+        ):
             with self.subTest(alt=f"{base}_alt"):
                 self.assertIn(f"{base}_alt", fit_types.BINARY_MODEL_TYPES)
 
@@ -377,7 +391,14 @@ class TestFitKeyBinaryModelType(unittest.TestCase):
 
     def test_alt_suffix_is_accepted(self):
         """Each '_alt' variant is independently valid."""
-        for base in ("WideAxis", "WideUpper", "WideLower", "CloseAxis", "CloseUpper", "CloseLower"):
+        for base in (
+            "WideAxis",
+            "WideUpper",
+            "WideLower",
+            "CloseAxis",
+            "CloseUpper",
+            "CloseLower",
+        ):
             with self.subTest(alt=f"{base}_alt"):
                 key = self._binary_key(binary_model_type=f"{base}_alt")
                 self.assertEqual(key.binary_model_type, f"{base}_alt")
@@ -689,7 +710,9 @@ class TestLabelConversionsBinaryModelType(unittest.TestCase):
             lens_orb_motion=fit_types.LensOrbMotion.NONE,
             binary_model_type="WideAxis",
         )
-        self.assertEqual(fit_types.model_key_to_label(key), "2L1S WideAxis static")
+        self.assertEqual(
+            fit_types.model_key_to_label(key), "2L1S WideAxis static"
+        )
 
     def test_generate_close_with_parallax(self):
         key = fit_types.FitKey(
@@ -711,7 +734,9 @@ class TestLabelConversionsBinaryModelType(unittest.TestCase):
             lens_orb_motion=fit_types.LensOrbMotion.ORB_2D,
             binary_model_type="WideAxis",
         )
-        self.assertEqual(fit_types.model_key_to_label(key), "2L1S WideAxis 2Dorb")
+        self.assertEqual(
+            fit_types.model_key_to_label(key), "2L1S WideAxis 2Dorb"
+        )
 
     def test_generate_wide_with_kepler_and_parallax(self):
         key = fit_types.FitKey(

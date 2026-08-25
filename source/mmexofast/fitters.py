@@ -516,7 +516,9 @@ class SFitFitter(MulensFitter):
                 verbose=self.verbose,
             )
         except Exception as e:
-            logger.warning(f"Error during sfit.minimize with adaptive step: {e}")
+            logger.warning(
+                f"Error during sfit.minimize with adaptive step: {e}"
+            )
             result = None
         if self.verbose:
             print(result)
@@ -532,7 +534,9 @@ class SFitFitter(MulensFitter):
                     verbose=self.verbose,
                 )
             except Exception as e:
-                logger.warning(f"Error during sfit.minimize with fixed step: {e}")
+                logger.warning(
+                    f"Error during sfit.minimize with fixed step: {e}"
+                )
                 result = None
 
             if self.verbose:
@@ -1506,7 +1510,16 @@ class BellTemplateFitter:
         return edges[:-1], edges[1:]
 
     @staticmethod
-    def _template(time, centers=None, width=None, offset=None, amplitudes=None, dt=None, t_pl=None, **kwargs):
+    def _template(
+        time,
+        centers=None,
+        width=None,
+        offset=None,
+        amplitudes=None,
+        dt=None,
+        t_pl=None,
+        **kwargs,
+    ):
         width = max(float(width), 1.0e-6)
         model = np.full_like(time, offset, dtype=float)
         for amplitude, center in zip(amplitudes, centers):
@@ -1554,8 +1567,19 @@ class BellTemplateFitter:
         """Set initial guess for the fit parameters based on the residuals and lightcurve parameters."""
         centers = self._bell_centers(t_pl, dt_0)
         baseline = 0.0
-        amplitudes = [max(0.001, float(self._flux[np.argmin(np.abs(self._time - center))] - baseline)) for center in centers]
-        width = dt_0 / self.n_bells/ self.n_bells if len(self._time) > 1 else dt_0
+        amplitudes = [
+            max(
+                0.001,
+                float(
+                    self._flux[np.argmin(np.abs(self._time - center))]
+                    - baseline
+                ),
+            )
+            for center in centers
+        ]
+        width = (
+            dt_0 / self.n_bells / self.n_bells if len(self._time) > 1 else dt_0
+        )
         return centers, amplitudes, width, baseline
 
     def _set_initial_guess(self, amplitudes, centers, width, baseline, dt_0):
@@ -1581,7 +1605,11 @@ class BellTemplateFitter:
             upper_bounds += [dt_0 / 2, np.inf, 5.0 * dt_0]
         else:
             lower_bounds += [1.0e-6, -np.inf, 0.5 * dt_0]
-            upper_bounds += [dt_0 / self.n_bells/self.n_bells, np.inf, 5.0 * dt_0]
+            upper_bounds += [
+                dt_0 / self.n_bells / self.n_bells,
+                np.inf,
+                5.0 * dt_0,
+            ]
         bounds = (lower_bounds, upper_bounds)
         # print(f"Bounds: {bounds}")
         return bounds
@@ -1593,7 +1621,9 @@ class BellTemplateFitter:
         index = self.n_bells
         fit_centers = centers
         if self.fit_centers:
-            fit_centers = np.asarray(popt[index: index + self.n_bells], dtype=float)
+            fit_centers = np.asarray(
+                popt[index : index + self.n_bells], dtype=float
+            )
             index += self.n_bells
 
         self.best = {
@@ -1612,13 +1642,19 @@ class BellTemplateFitter:
     def _check_bounds(self, p0, bounds):
         """Check if the initial guess is within the bounds."""
         lower_bounds, upper_bounds = bounds
-        for i, (param, low, high) in enumerate(zip(p0, lower_bounds, upper_bounds)):
+        for i, (param, low, high) in enumerate(
+            zip(p0, lower_bounds, upper_bounds)
+        ):
             if not (low <= param <= high):
-                raise ValueError(f"Initial guess for anomaly classifier parameter {self._fit_parameters[i]} ({param}) is out of bounds ({low}, {high}).")
+                raise ValueError(
+                    f"Initial guess for anomaly classifier parameter {self._fit_parameters[i]} ({param}) is out of bounds ({low}, {high})."
+                )
 
     def _get_fit_parameters(self):
         """Get the names of the fit parameters based on the number of bells and whether centers are fitted."""
-        fit_parameters = [f"amplitude_{str(i + 1)}" for i in range(self.n_bells)]
+        fit_parameters = [
+            f"amplitude_{str(i + 1)}" for i in range(self.n_bells)
+        ]
         if self.fit_centers:
             fit_parameters += [f"t_{i + 1}" for i in range(self.n_bells)]
         fit_parameters += ["width", "offset", "dt"]
@@ -1628,10 +1664,16 @@ class BellTemplateFitter:
         """Run the fit and store the best-fit parameters."""
         time, flux, err = self._stack_pspl_residuals()
         t_pl, dt_0 = self._set_time_parameters(time)
-        self._time, self._flux, self._err = self._fit_window(time, flux, err, t_pl, dt_0)
+        self._time, self._flux, self._err = self._fit_window(
+            time, flux, err, t_pl, dt_0
+        )
 
-        centers, amplitudes, width, baseline = self._set_shape_parameters(t_pl, dt_0)
-        p0 = self._set_initial_guess(amplitudes, centers, width, baseline, dt_0)
+        centers, amplitudes, width, baseline = self._set_shape_parameters(
+            t_pl, dt_0
+        )
+        p0 = self._set_initial_guess(
+            amplitudes, centers, width, baseline, dt_0
+        )
         bounds = self._set_bounds(t_pl, dt_0)
         self._check_bounds(p0, bounds)
         # print(f"Initial guess: {p0}")
@@ -1642,22 +1684,49 @@ class BellTemplateFitter:
             index = self.n_bells
             fit_centers = centers
             if self.fit_centers:
-                fit_centers = params[index: index + self.n_bells]
+                fit_centers = params[index : index + self.n_bells]
                 index += self.n_bells
             fit_width = params[index]
             fit_offset = params[index + 1]
             fit_dt = params[index + 2]
-            return self._template(x, fit_centers, fit_width, fit_offset, fit_amplitudes, fit_dt, self.t_pl)
+            return self._template(
+                x,
+                fit_centers,
+                fit_width,
+                fit_offset,
+                fit_amplitudes,
+                fit_dt,
+                self.t_pl,
+            )
 
-        popt, pcov = curve_fit(model, self._time, self._flux, p0=p0, sigma=self._err,
-                               absolute_sigma=True, bounds=bounds, maxfev=50000)
+        popt, pcov = curve_fit(
+            model,
+            self._time,
+            self._flux,
+            p0=p0,
+            sigma=self._err,
+            absolute_sigma=True,
+            bounds=bounds,
+            maxfev=50000,
+        )
 
         model_flux = model(self._time, *popt)
         self._set_results(popt, pcov, centers, model_flux)
         return self.best
 
-    def plot_fit(self, best=None, fig=None, ax_fit=None, ax_resid=None, show=False, t_range=None, data_color="k",
-                 model_color="C1", vline_color="C2", residual_color="C1",):
+    def plot_fit(
+        self,
+        best=None,
+        fig=None,
+        ax_fit=None,
+        ax_resid=None,
+        show=False,
+        t_range=None,
+        data_color="k",
+        model_color="C1",
+        vline_color="C2",
+        residual_color="C1",
+    ):
         if self.best is None:
             self.run()
 
@@ -1675,24 +1744,60 @@ class BellTemplateFitter:
         fit_residuals = flux - model_flux
 
         if ax_fit is None or ax_resid is None:
-            fig, (ax_fit, ax_resid) = plt.subplots(2, 1, figsize=(8, 6), sharex=True,
-                                                   gridspec_kw={"height_ratios": [3, 1]},)
+            fig, (ax_fit, ax_resid) = plt.subplots(
+                2,
+                1,
+                figsize=(8, 6),
+                sharex=True,
+                gridspec_kw={"height_ratios": [3, 1]},
+            )
         elif fig is None:
             fig = ax_fit.figure
 
-        ax_fit.errorbar(time, flux, yerr=err, fmt=".", color=data_color, alpha=0.6, label="data")
-        ax_fit.plot(time, model_flux, color=model_color, lw=2, label=f"{self.n_bells}-bell fit")
+        ax_fit.errorbar(
+            time,
+            flux,
+            yerr=err,
+            fmt=".",
+            color=data_color,
+            alpha=0.6,
+            label="data",
+        )
+        ax_fit.plot(
+            time,
+            model_flux,
+            color=model_color,
+            lw=2,
+            label=f"{self.n_bells}-bell fit",
+        )
         for center in self.best["centers"]:
             ax_fit.axvline(center, color=vline_color, ls="--", alpha=0.7)
-            ax_fit.axvline(center - self.best["width"], color=vline_color, ls=":", alpha=0.5)
-            ax_fit.axvline(center + self.best["width"], color=vline_color, ls=":", alpha=0.5)
+            ax_fit.axvline(
+                center - self.best["width"],
+                color=vline_color,
+                ls=":",
+                alpha=0.5,
+            )
+            ax_fit.axvline(
+                center + self.best["width"],
+                color=vline_color,
+                ls=":",
+                alpha=0.5,
+            )
         ax_fit.set_ylabel("Residual flux")
         if t_range is not None:
             ax_fit.set_xlim(t_range)
         ax_fit.legend()
 
-        ax_resid.errorbar(time, fit_residuals, yerr=err, fmt=".", color=residual_color, alpha=0.6,
-                          label=f"{self.n_bells}-bell residuals")
+        ax_resid.errorbar(
+            time,
+            fit_residuals,
+            yerr=err,
+            fmt=".",
+            color=residual_color,
+            alpha=0.6,
+            label=f"{self.n_bells}-bell residuals",
+        )
         ax_resid.axhline(0.0, color="0.3", ls="--", lw=1)
         ax_resid.set_xlabel("Time")
         ax_resid.set_ylabel("Data - fit")
