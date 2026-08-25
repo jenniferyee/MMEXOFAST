@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import MulensModel as mm
 import pandas as pd
 from DC18_classes import TestDataSet
+
 from mmexofast.estimate_params import WideAxisGridSearchEstimator
 
 
