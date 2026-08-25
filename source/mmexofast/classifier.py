@@ -93,6 +93,7 @@ class AnomalyClassifier(object):
 
         self.lc_parameters = lc_parameters
         self.residuals = residuals
+        self._check_lc_parameters()
 
         if lc_parameters["dmag"] < 0:
             self._template_fit1 = BellTemplateFitter(
@@ -138,3 +139,20 @@ class AnomalyClassifier(object):
 
         if lc_parameters["dmag"] > 0:
             return "dip"
+
+    def _check_lc_parameters(self):
+        """
+        Check the light curve parameters and raise errors if any are missing or invalid.
+        """
+        keys = ["dmag", "dt"]
+        for key in keys:
+            if lc_parameters[key] == 0:
+                raise ValueError(f"Invalid value for parameter {key}: {lc_parameters[key]}")
+        keys = ["dmag", "dt", "t_pl"]
+        for key in keys:
+            if key not in lc_parameters:
+                raise ValueError(f"Missing required parameter: {key}")
+            if lc_parameters[key] is None:
+                raise ValueError(f"Missing required parameter: {key}")
+            if lc_parameters[key] is np.nan:
+                raise ValueError(f"Invalid value for parameter {key}: {lc_parameters[key]}")
