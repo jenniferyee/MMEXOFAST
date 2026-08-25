@@ -2389,6 +2389,8 @@ class MMEXOFASTFitter:
             estimator_classes = [
                 WideAxisGridSearchEstimator,
                 CloseAxisGridSearchEstimator,
+                CloseUpperGridSearchEstimator,
+                CloseLowerGridSearchEstimator,
             ]
         elif self.intermediate_results.anomaly_type == "dip":
             estimator_classes = [CloseAxisGridSearchEstimator]
