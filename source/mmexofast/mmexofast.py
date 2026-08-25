@@ -1597,16 +1597,16 @@ class MMEXOFASTFitter:
         """
         if self.mag_methods is not None:
             for mag_method in self.mag_methods:
-                if mag_method not in ["finite_source_uniform_Gould94"] or isinstance(mag_method, (float, int)):
-                    raise ValueError("Invalid magnification method for FSPL. Only 'finite_source_uniform_Gould94' is alowed by MulensModel")            
-                mag_methods = self.mag_methods
+                if (not isinstance(mag_method, (float, int)) and mag_method != "finite_source_uniform_Gould94"):
+                    raise ValueError("Invalid magnification method for FSPL. Only 'finite_source_uniform_Gould94' is alowed by MulensModel")
+            return self.mag_methods
+
         if initial_params is None:
-            mag_methods = "finite_source_uniform_Gould94"
-        else:
-            t_0 = initial_params["t_0"]
-            t_E = initial_params["t_E"]
-            mag_methods = [t_0-0.5*t_E, "finite_source_uniform_Gould94", t_0+0.5*t_E]
-        return mag_methods
+            return "finite_source_uniform_Gould94"
+
+        t_0 = initial_params["t_0"]
+        t_E = initial_params["t_E"]
+        return [t_0-0.5*t_E, "finite_source_uniform_Gould94", t_0+0.5*t_E]
 
     def _check_FSPL_condition(self, initial_params):
         """
