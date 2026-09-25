@@ -136,7 +136,6 @@ EXPECTED_STEPS_BINARY = (
     + _STEPS_RENORM
     + _STEPS_FIT_BINARY
     + _STEPS_CHECK_BINARY_RENORM
-    + _STEPS_PARALLAX_GRIDS
 )
 
 # ---------------------------------------------------------------------------
@@ -421,6 +420,39 @@ class TestPointLensWorkflow(unittest.TestCase):
             fit_types.SourceType.POINT,
         )
 
+    def test_binary_lens_parallax_uses_finite_source_keys(self):
+        """
+        Binary-lens parallax fits should keep using finite-source keys while
+        the point-lens finite-source branch remains enabled.
+        """
+        fitter = self._make_fitter(
+            finite_source_point_lens=True,
+            parallax_binary_lens=True,
+        )
+
+        fspl_key = fit_types.FitKey(
+            lens_type=fit_types.LensType.POINT,
+            source_type=fit_types.SourceType.FINITE,
+            parallax_branch=fit_types.ParallaxBranch.NONE,
+            lens_orb_motion=fit_types.LensOrbMotion.NONE,
+        )
+        fitter.all_fit_results.set(
+            mmexo.FitRecord(
+                model_key=fspl_key,
+                params={**STATIC_PSPL_PARAMS, "u_0": 0.2, "rho": 0.01},
+            )
+        )
+
+        with patch.object(
+            fitter, "_do_parallax_fit", return_value=None
+        ) as mock:
+            fitter.fit_parallax(branch=fit_types.ParallaxBranch.U0_PLUS)
+
+        self.assertEqual(
+            mock.call_args.kwargs["source_type"],
+            fit_types.SourceType.FINITE,
+        )
+
     # --- stop_before stage:step ---
 
     def test_stop_before_first_step_of_stage(self):
@@ -576,7 +608,7 @@ class TestPointLensRenormWorkflow(unittest.TestCase):
             coords=COORDS,
             fit_type="point_lens",
             renormalize_errors=True,
-            parallax_grid=True,
+            parallax_point_lens="grid",
         )
         defaults.update(kwargs)
         return MMEXOFASTFitter(**defaults)
@@ -587,7 +619,7 @@ class TestPointLensRenormWorkflow(unittest.TestCase):
     def test_dry_run_planned_steps(self):
         """
         Dry run for ground-only point-lens fit with renormalize_errors=True
-        and parallax_grid=True produces the expected step queue.
+        and parallax_point_lens='grid' produces the expected step queue.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.fit()
@@ -651,7 +683,7 @@ class TestBinaryLensWorkflow(unittest.TestCase):
             coords=COORDS,
             fit_type="binary_lens",
             renormalize_errors=True,
-            parallax_grid=True,
+            parallax_point_lens="grid",
         )
         defaults.update(kwargs)
         return MMEXOFASTFitter(**defaults)
@@ -662,7 +694,7 @@ class TestBinaryLensWorkflow(unittest.TestCase):
     def test_dry_run_planned_steps(self):
         """
         Dry run for ground-only binary lens fit with renormalize_errors=True
-        and parallax_grid=True produces the expected step queue.
+        and point-lens parallax branches enabled produces the expected step queue.
         """
         fitter = self._make_fitter(dry_run=True)
         fitter.fit()
@@ -714,11 +746,7 @@ class TestBinaryLensWorkflow(unittest.TestCase):
         )
         fitter.fit()
 
-        expected = (
-            _STEPS_FIT_BINARY[1:]
-            + _STEPS_CHECK_BINARY_RENORM
-            + _STEPS_PARALLAX_GRIDS
-        )
+        expected = _STEPS_FIT_BINARY[1:] + _STEPS_CHECK_BINARY_RENORM
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, expected)
 
@@ -733,14 +761,14 @@ class TestBinaryLensWorkflow(unittest.TestCase):
         )
         fitter.fit()
 
-        expected = _STEPS_PARALLAX_GRIDS
+        expected = []
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, expected)
 
     def test_check_needs_renorm_inserts_steps_when_true(self):
         """
         When check_needs_renorm returns True, renormalize_datasets and
-        refit_all are inserted and executed before run_parallax_grids.
+        refit_all are inserted and executed as dynamic post-binary steps.
         """
         fitter = self._make_fitter()
         fitter.completed_steps = _make_noop_steps(
@@ -759,18 +787,15 @@ class TestBinaryLensWorkflow(unittest.TestCase):
             stack.enter_context(
                 patch.object(fitter, "refit_all", return_value=None)
             )
-            stack.enter_context(
-                patch.object(fitter, "run_parallax_grids", return_value=None)
-            )
             fitter.fit()
 
         actual_names = [step.name for step in fitter.completed_steps]
         self.assertIn("renormalize_datasets", actual_names)
         self.assertIn("refit_all", actual_names)
-
-        renorm_idx = actual_names.index("renormalize_datasets")
-        grid_idx = actual_names.index("run_parallax_grids")
-        self.assertLess(renorm_idx, grid_idx)
+        self.assertLess(
+            actual_names.index("renormalize_datasets"),
+            actual_names.index("refit_all"),
+        )
 
 
 class TestPointLensWorkflowWithInitialResults(unittest.TestCase):
@@ -998,7 +1023,7 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
             coords=OB05390_COORDS,
             fit_type="binary_lens",
             renormalize_errors=True,
-            parallax_grid=True,
+            parallax_point_lens="grid",
             stop_after="check_binary_renorm:check_needs_renorm",
         )
 
@@ -1043,7 +1068,7 @@ class TestExecutionLoopDynamicSteps(unittest.TestCase):
         names_only = [name for name, _ in planned_names]
         self.assertLess(
             names_only.index("renormalize_datasets"),
-            names_only.index("run_parallax_grids"),
+            names_only.index("refit_all"),
         )
 
 
@@ -1207,7 +1232,7 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
             coords=COORDS,
             fit_type="binary_lens",
             renormalize_errors=True,
-            parallax_grid=True,
+            parallax_point_lens="grid",
         )
         defaults.update(kwargs)
         return MMEXOFASTFitter(restart_file=restart_file, **defaults)
@@ -1297,7 +1322,6 @@ class TestRestartFromPickleWithStopConditions(unittest.TestCase):
         expected = (
             _STEPS_FIT_BINARY[1:]  # fit_binary_lens_models only
             + _STEPS_CHECK_BINARY_RENORM
-            + _STEPS_PARALLAX_GRIDS
         )
         actual = [(step.name, step.stage) for step in fitter.planned_steps]
         self.assertEqual(actual, expected)
